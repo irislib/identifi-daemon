@@ -1,5 +1,7 @@
+/*jshint unused: false */
 'use strict';
 var schema = require('./schema.js');
+var P = require("bluebird");
 
 module.exports = function(knex) {
   schema.init(knex);
@@ -14,11 +16,11 @@ module.exports = function(knex) {
 
   return {
     saveMessage: function(message) {
-      console.log(JSON.stringify(message));
-      return knex('Messages').insert({
+      var queries = [];
+      queries.push(knex('Messages').insert({
         hash:           message.hash,
         signed_data:    JSON.stringify(message.signedData),
-        created:        message.signedData.timestamp || 0,
+        created:        message.signedData.timestamp,
         type:           message.signedData.type || 'rating',
         rating:         message.signedData.rating || 0,
         max_rating:     message.signedData.maxRating || 0,
@@ -28,26 +30,26 @@ module.exports = function(knex) {
         is_latest:      isLatest(message),
         signer_pubkey:  message.signature.signerPubkey,
         signature:      message.signature.signature
-      })
-      .then(function(res) {
-        var i;
-        for (i = 0; i < message.signedData.authors.length; i++) {
-          knex('MessageIdentifiers').insert({
-            message_hash: message.hash,
-            type: message.signedData.authors[i][0],
-            value: message.signedData.authors[i][1],
-            is_recipient: false
-          });
-        }
-        for (i = 0; i < message.signedData.recipients.length; i++) {
-          knex('MessageIdentifiers').insert({
-            message_hash: message.hash,
-            type: message.signedData.recipients[i][0],
-            value: message.signedData.recipients[i][1],
-            is_recipient: true
-          });
-        }
-      });
+      }));
+
+      var i;
+      for (i = 0; i < message.signedData.author.length; i++) {
+        queries.push(knex('MessageIdentifiers').insert({
+          message_hash: message.hash,
+          type: message.signedData.author[i][0],
+          value: message.signedData.author[i][1],
+          is_recipient: false
+        }));
+      }
+      for (i = 0; i < message.signedData.recipient.length; i++) {
+        queries.push(knex('MessageIdentifiers').insert({
+          message_hash: message.hash,
+          type: message.signedData.recipient[i][0],
+          value: message.signedData.recipient[i][1],
+          is_recipient: true
+        }));
+      }
+      return P.all(queries);
     },
     getMessage: function(messageHash) {
       return knex.select('*').from('Messages').where({ hash: messageHash });
@@ -60,10 +62,14 @@ module.exports = function(knex) {
     },
 
     getSent: function(sender, limit, offset, viewpoint) {
-      return [];
+      return knex.from('Messages')
+      .innerJoin('MessageIdentifiers', 'Messages.hash', 'MessageIdentifiers.message_hash')
+      .where({ 'MessageIdentifiers.type': sender[0], 'MessageIdentifiers.value': sender[1], 'MessageIdentifiers.is_recipient': false });
     },
     getReceived: function(recipient, limit, offset, viewpoint) {
-      return [];
+      return knex.from('Messages')
+      .innerJoin('MessageIdentifiers', 'Messages.hash', 'MessageIdentifiers.message_hash')
+      .where({ 'MessageIdentifiers.type': recipient[0], 'MessageIdentifiers.value': recipient[1], 'MessageIdentifiers.is_recipient': true });
     },
     getConnectedIdentifiers: function(id, types, limit, offset, viewpoint) {
       return [];

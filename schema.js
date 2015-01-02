@@ -37,7 +37,7 @@ var init = function(db) {
     t.string('message_hash').references('Messages.hash');
     t.string('type');
     t.string('value');
-    t.primary(['type', 'value']);
+    t.primary(['type', 'value', 'message_hash']);
     t.boolean('is_recipient');
   })
 
