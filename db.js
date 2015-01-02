@@ -82,7 +82,9 @@ module.exports = function(knex) {
       return true;
     },
     identifierSearch: function(query, limit, offset, viewpoint) {
-      return [];
+      return knex.from('MessageIdentifiers')
+      .where('value', 'like', '%' + query + '%')
+      .distinct('type', 'value').select();
     },
     identitySearch: function(query, limit, offset, viewpoint) {
       return [];

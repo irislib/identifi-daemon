@@ -41,15 +41,24 @@ describe('Database', function () {
     db.saveMessage(message).should.eventually.notify(done);
   });
 
+  var hash;
   it('should save another message', function (done) {
     var message = Message.create({ type: 'rating', author: [['email', 'charles@example.com']], recipient: [['email', 'bob@example.com']], message: 'Positive', rating: -1 });
     Message.sign(message, 'pubkey');
+    hash = message.hash;
     db.saveMessage(message).should.eventually.notify(done);
   });
 
-  it('should have 2 message', function (done) {
+  it('should have 2 messages', function (done) {
     db.getMessageCount().then(function(res) {
       res[0].val.should.equal(2);
+      done();
+    });
+  });
+
+  it('should return message by hash', function (done) {
+    db.getMessage(hash).then(function(res) {
+      res.length.should.equal(1);
       done();
     });
   });
@@ -64,6 +73,15 @@ describe('Database', function () {
   it('should return received messages', function (done) {
     db.getReceived(['email', 'bob@example.com']).then(function(res) {
       res.length.should.equal(2);
+      done();
+    });
+  });
+
+  it('should find a saved identifier', function (done) {
+    db.identifierSearch('bob').then(function(res) {
+      res.length.should.equal(1);
+      res[0].type.should.equal('email');
+      res[0].value.should.equal('bob@example.com');
       done();
     });
   });
