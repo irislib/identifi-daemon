@@ -11,7 +11,7 @@ module.exports = function(knex) {
   };
 
   var isLatest = function(message) {
-    return false;
+    return true;
   };
 
   return {
@@ -95,10 +95,10 @@ module.exports = function(knex) {
       sql += "printf('%s:%s:%s:%s:',replace(id1.type,':','::'),replace(id1.value,':','::'),replace(id2.type,':','::'),replace(id2.value,':','::')) AS path_string "; 
       sql += "FROM Messages AS m "; 
       sql += "INNER JOIN MessageIdentifiers AS id1 ON m.hash = id1.message_hash AND id1.is_recipient = 0 "; 
-      sql += "INNER JOIN UniqueIdentifierTypes AS uidt1 ON uidt1.value = id1.type ";
+      sql += "INNER JOIN UniqueIdentifierTypes AS uidt1 ON uidt1.type = id1.type ";
       sql += "INNER JOIN MessageIdentifiers AS id2 ON m.hash = id2.message_hash AND (id1.type != id2.type OR id1.value != id2.value) "; 
-      sql += "INNER JOIN UniqueIdentifierTypes AS uidt2 ON uidt2.value = id2.type ";
-      sql += "WHERE m.is_latest AND m.rating > (m.min_rating + m.max_rating) / 2 AND id1.type = @id1type AND id1.value = @id1 ";
+      sql += "INNER JOIN UniqueIdentifierTypes AS uidt2 ON uidt2.type = id2.type ";
+      sql += "WHERE m.is_latest AND m.rating > (m.min_rating + m.max_rating) / 2 AND id1.type = @id1type AND id1.value = @id1value ";
 
       sql += "UNION ALL "; 
 
@@ -106,18 +106,22 @@ module.exports = function(knex) {
       sql += "printf('%s%s:%s:',tc.path_string,replace(id2.type,':','::'),replace(id2.value,':','::')) AS path_string "; 
       sql += "FROM Messages AS m "; 
       sql += "INNER JOIN MessageIdentifiers AS id1 ON m.hash = id1.message_hash AND id1.is_recipient = 0 "; 
-      sql += "INNER JOIN UniqueIdentifierTypes AS uidt1 ON uidt1.value = id1.type ";
+      sql += "INNER JOIN UniqueIdentifierTypes AS uidt1 ON uidt1.type = id1.type ";
       sql += "INNER JOIN MessageIdentifiers AS id2 ON m.hash = id2.message_hash AND (id1.type != id2.type OR id1.value != id2.value) "; 
-      sql += "INNER JOIN UniqueIdentifierTypes AS uidt2 ON uidt2.value = id2.type ";
+      sql += "INNER JOIN UniqueIdentifierTypes AS uidt2 ON uidt2.type = id2.type ";
       sql += "JOIN transitive_closure AS tc ON id1.type = tc.id2type AND id1.value = tc.id2val "; 
       sql += "WHERE m.is_latest AND m.rating > (m.min_rating + m.max_rating) / 2 AND tc.distance < ? AND tc.path_string NOT LIKE printf('%%%s:%s:%%',replace(id2.type,':','::'),replace(id2.value,':','::')) "; 
       sql += ") "; 
-      sql += "INSERT OR REPLACE INTO TrustDistances (start_id_type, start_id_value, end_id_type, end_id_value, distance) SELECT @id1type, @id1, id2type, id2val, distance FROM transitive_closure "; 
+      sql += "INSERT OR REPLACE INTO TrustDistances (start_id_type, start_id_value, end_id_type, end_id_value, distance) SELECT @id1type, @id1value, id2type, id2val, distance FROM transitive_closure "; 
 
       return knex('TrustDistances')
         .where({ start_id_type: id[0], start_id_value: id[1] }).del()
         .then(function() {
-          return knex.raw(sql);
+          return knex.raw(sql, [id[0], id[1]]);
+        })
+        .then(function() {
+          return knex('TrustDistances').count('* as val')
+            .where({ start_id_type: id[0], start_id_value: id[1] });
         });
     },
     identifierSearch: function(query, limit, offset, viewpoint) {

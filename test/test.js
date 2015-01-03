@@ -98,4 +98,11 @@ describe('Database', function () {
       done();
     });
   });
+
+  it('should generate a trust map', function (done) {
+    db.generateTrustMap(['email', 'alice@example.com']).then(function(res) {
+      res[0].val.should.equal(1);
+      done();
+    });
+  });
 });
