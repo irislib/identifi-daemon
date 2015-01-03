@@ -56,35 +56,74 @@ module.exports = function(knex) {
     },
     dropMessage: function(messageHash) {
       return knex('Messages').where({ hash: messageHash }).del()
-      .then(function() {
-        return knex('MessageIdentifiers').where({ messageHash: messageHash }).del();
-      });
+        .then(function() {
+          return knex('MessageIdentifiers').where({ messageHash: messageHash }).del();
+        });
     },
 
     getSent: function(sender, limit, offset, viewpoint) {
       return knex.from('Messages')
-      .innerJoin('MessageIdentifiers', 'Messages.hash', 'MessageIdentifiers.message_hash')
-      .where({ 'MessageIdentifiers.type': sender[0], 'MessageIdentifiers.value': sender[1], 'MessageIdentifiers.is_recipient': false });
+        .innerJoin('MessageIdentifiers', 'Messages.hash', 'MessageIdentifiers.message_hash')
+        .where({ 'MessageIdentifiers.type': sender[0], 'MessageIdentifiers.value': sender[1], 'MessageIdentifiers.is_recipient': false });
     },
     getReceived: function(recipient, limit, offset, viewpoint) {
       return knex.from('Messages')
-      .innerJoin('MessageIdentifiers', 'Messages.hash', 'MessageIdentifiers.message_hash')
-      .where({ 'MessageIdentifiers.type': recipient[0], 'MessageIdentifiers.value': recipient[1], 'MessageIdentifiers.is_recipient': true });
+        .innerJoin('MessageIdentifiers', 'Messages.hash', 'MessageIdentifiers.message_hash')
+        .where({ 'MessageIdentifiers.type': recipient[0], 'MessageIdentifiers.value': recipient[1], 'MessageIdentifiers.is_recipient': true });
     },
     getConnectedIdentifiers: function(id, types, limit, offset, viewpoint) {
       return [];
     },
     getConnectingMessages: function(id1, id2, limit, offset, viewpoint) {
-      return [];
+      return knex.from('Messages')
+        .innerJoin('MessageIdentifiers as id1', 'Messages.hash', 'id1.message_hash')
+        .innerJoin('MessageIdentifiers as id2', 'id1.message_hash', 'id2.message_hash')
+        .where({ 
+          'id1.type': id1[0],
+          'id1.value': id1[1],
+          'id1.is_recipient': true,
+          'id2.type': id2[0],
+          'id2.value': id2[1],
+          'id2.is_recipient': true
+        });
     },
 
     generateTrustMap: function(id, maxDepth) {
-      return true;
+      var sql = "WITH RECURSIVE transitive_closure(id1type, id1val, id2type, id2val, distance, path_string) AS ";
+      sql += "(";
+      sql += "SELECT id1.type, id1.value, id2.type, id2.value, 1 AS distance, "; 
+      sql += "printf('%s:%s:%s:%s:',replace(id1.type,':','::'),replace(id1.value,':','::'),replace(id2.type,':','::'),replace(id2.value,':','::')) AS path_string "; 
+      sql += "FROM Messages AS m "; 
+      sql += "INNER JOIN MessageIdentifiers AS id1 ON m.hash = id1.message_hash AND id1.is_recipient = 0 "; 
+      sql += "INNER JOIN UniqueIdentifierTypes AS uidt1 ON uidt1.value = id1.type ";
+      sql += "INNER JOIN MessageIdentifiers AS id2 ON m.hash = id2.message_hash AND (id1.type != id2.type OR id1.value != id2.value) "; 
+      sql += "INNER JOIN UniqueIdentifierTypes AS uidt2 ON uidt2.value = id2.type ";
+      sql += "WHERE m.is_latest AND m.rating > (m.min_rating + m.max_rating) / 2 AND id1.type = @id1type AND id1.value = @id1 ";
+
+      sql += "UNION ALL "; 
+
+      sql += "SELECT tc.id1type, tc.id1val, id2.type, id2.value, tc.distance + 1, "; 
+      sql += "printf('%s%s:%s:',tc.path_string,replace(id2.type,':','::'),replace(id2.value,':','::')) AS path_string "; 
+      sql += "FROM Messages AS m "; 
+      sql += "INNER JOIN MessageIdentifiers AS id1 ON m.hash = id1.message_hash AND id1.is_recipient = 0 "; 
+      sql += "INNER JOIN UniqueIdentifierTypes AS uidt1 ON uidt1.value = id1.type ";
+      sql += "INNER JOIN MessageIdentifiers AS id2 ON m.hash = id2.message_hash AND (id1.type != id2.type OR id1.value != id2.value) "; 
+      sql += "INNER JOIN UniqueIdentifierTypes AS uidt2 ON uidt2.value = id2.type ";
+      sql += "JOIN transitive_closure AS tc ON id1.type = tc.id2type AND id1.value = tc.id2val "; 
+      sql += "WHERE m.is_latest AND m.rating > (m.min_rating + m.max_rating) / 2 AND tc.distance < ? AND tc.path_string NOT LIKE printf('%%%s:%s:%%',replace(id2.type,':','::'),replace(id2.value,':','::')) "; 
+      sql += ") "; 
+      sql += "INSERT OR REPLACE INTO TrustDistances (start_id_type, start_id_value, end_id_type, end_id_value, distance) SELECT @id1type, @id1, id2type, id2val, distance FROM transitive_closure "; 
+
+      return knex('TrustDistances')
+        .where({ start_id_type: id[0], start_id_value: id[1] }).del()
+        .then(function() {
+          return knex.raw(sql);
+        });
     },
     identifierSearch: function(query, limit, offset, viewpoint) {
       return knex.from('MessageIdentifiers')
-      .where('value', 'like', '%' + query + '%')
-      .distinct('type', 'value').select();
+        .where('value', 'like', '%' + query + '%')
+        .distinct('type', 'value').select();
     },
     identitySearch: function(query, limit, offset, viewpoint) {
       return [];
@@ -95,6 +134,16 @@ module.exports = function(knex) {
 
     getMessageCount: function() {
       return knex('Messages').count('* as val');
+    },
+
+    importPrivateKey: function(privateKey) {
+      return false;
+    },
+    listMyKeys: function() {
+      return [];
+    },
+    getPrivateKey: function(keyID) {
+      return;
     }
   };
 };

@@ -85,4 +85,17 @@ describe('Database', function () {
       done();
     });
   });
+
+  it('should save a connection', function (done) {
+    var message = Message.create({ type: 'confirm_connection', author: [['email', 'alice@example.com']], recipient: [['email', 'bob@example.com'], ['url', 'http://www.example.com/bob']] });
+    Message.sign(message, 'pubkey');
+    db.saveMessage(message).should.eventually.notify(done);
+  });
+
+  it('should return connecting messages', function (done) {
+    db.getConnectingMessages(['email', 'bob@example.com'], ['url', 'http://www.example.com/bob']).then(function(res) {
+      res.length.should.equal(1);
+      done();
+    });
+  });
 });
