@@ -40,8 +40,11 @@ module.exports = (grunt) ->
           "jshint"
           "mochacli"
         ]
+      tests:
+        files: watchFiles.tests
+        tasks: ["mochacli"]
       coffee:
-        files: ["Gruntfile.coffee", "test/**/*.coffee"]
+        files: watchFiles.gruntfile
         tasks: ["coffeelint", "mochacli"]
 
   grunt.registerTask "test", ["coffeelint", "jshint", "mochacli"]

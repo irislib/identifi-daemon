@@ -18,7 +18,7 @@ describe('Database', function () {
     cleanup(); // After hook fails to execute when errors are thrown
     var knex = require('knex')({
       dialect: 'sqlite3',
-      debug: true,
+      // debug: true,
       connection: {
         filename: './test.db'
       }
@@ -41,17 +41,24 @@ describe('Database', function () {
     db.saveMessage(message).should.eventually.notify(done);
   });
 
-  var hash;
   it('should save another message', function (done) {
-    var message = Message.create({ type: 'rating', author: [['email', 'charles@example.com']], recipient: [['email', 'bob@example.com']], message: 'Positive', rating: -1 });
+    var message = Message.create({ type: 'rating', author: [['email', 'charles@example.com']], recipient: [['email', 'bob@example.com']], message: 'Negative', rating: -1 });
     Message.sign(message, 'pubkey');
     hash = message.hash;
     db.saveMessage(message).should.eventually.notify(done);
   });
 
-  it('should have 2 messages', function (done) {
+  var hash;
+  it('should save yet another message', function (done) {
+    var message = Message.create({ type: 'rating', author: [['email', 'bob@example.com']], recipient: [['email', 'charles@example.com']], message: 'Positive', rating: 1 });
+    Message.sign(message, 'pubkey');
+    hash = message.hash;
+    db.saveMessage(message).should.eventually.notify(done);
+  });
+
+  it('should have 3 messages', function (done) {
     db.getMessageCount().then(function(res) {
-      res[0].val.should.equal(2);
+      res[0].val.should.equal(3);
       done();
     });
   });
@@ -100,8 +107,8 @@ describe('Database', function () {
   });
 
   it('should generate a trust map', function (done) {
-    db.generateTrustMap(['email', 'alice@example.com']).then(function(res) {
-      res[0].val.should.equal(1);
+    db.generateTrustMap(['email', 'alice@example.com'], 3).then(function(res) {
+      res[0].val.should.equal(2);
       done();
     });
   });

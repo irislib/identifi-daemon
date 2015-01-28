@@ -178,14 +178,14 @@ module.exports = function(knex) {
       sql += "INNER JOIN MessageIdentifiers AS id2 ON m.hash = id2.message_hash AND (id1.type != id2.type OR id1.value != id2.value) "; 
       sql += "INNER JOIN UniqueIdentifierTypes AS uidt2 ON uidt2.type = id2.type ";
       sql += "JOIN transitive_closure AS tc ON id1.type = tc.id2type AND id1.value = tc.id2val "; 
-      sql += "WHERE m.is_latest AND m.rating > (m.min_rating + m.max_rating) / 2 AND tc.distance < ? AND tc.path_string NOT LIKE printf('%%%s:%s:%%',replace(id2.type,':','::'),replace(id2.value,':','::')) "; 
+      sql += "WHERE m.is_latest AND m.rating > (m.min_rating + m.max_rating) / 2 AND tc.distance < @maxDepth AND tc.path_string NOT LIKE printf('%%%s:%s:%%',replace(id2.type,':','::'),replace(id2.value,':','::')) "; 
       sql += ") "; 
       sql += "INSERT OR REPLACE INTO TrustDistances (start_id_type, start_id_value, end_id_type, end_id_value, distance) SELECT @id1type, @id1value, id2type, id2val, distance FROM transitive_closure "; 
 
       return knex('TrustDistances')
         .where({ start_id_type: id[0], start_id_value: id[1] }).del()
         .then(function() {
-          return knex.raw(sql, [id[0], id[1]]);
+          return knex.raw(sql, [id[0], id[1], maxDepth]);
         })
         .then(function() {
           return knex('TrustDistances').count('* as val')
