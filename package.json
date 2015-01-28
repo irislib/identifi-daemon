@@ -27,16 +27,18 @@
   "devDependencies": {
     "chai": "*",
     "chai-as-promised": "*",
+    "coffee-script": "^1.8.0",
     "grunt-cli": "^0.1.13",
+    "grunt-coffeelint": "0.0.13",
     "grunt-contrib-jshint": "^0.10.0",
     "grunt-contrib-nodeunit": "^0.4.1",
     "grunt-contrib-watch": "^0.6.1",
-    "load-grunt-tasks": "^1.0.0",
-    "time-grunt": "^1.0.0",
     "grunt-mocha-cli": "^1.11.0",
-    "jshint-stylish": "^1.0.0"
+    "jshint-stylish": "^1.0.0",
+    "load-grunt-tasks": "^1.0.0",
+    "time-grunt": "^1.0.0"
   },
   "scripts": {
-    "test": "grunt"
+    "test": "grunt test"
   }
 }

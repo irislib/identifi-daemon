@@ -51,6 +51,7 @@ var init = function(db) {
   })
 
   .createTable('Identities', function(t) {
+    t.integer('identity_id').unsigned();
     t.string('type');
     t.string('value');
     t.string('viewpoint_type');

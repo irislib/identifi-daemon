@@ -72,7 +72,75 @@ module.exports = function(knex) {
         .where({ 'MessageIdentifiers.type': recipient[0], 'MessageIdentifiers.value': recipient[1], 'MessageIdentifiers.is_recipient': true });
     },
     getConnectedIdentifiers: function(id, types, limit, offset, viewpoint) {
-      return [];
+
+      var sql = "DELETE FROM Identities WHERE identity_id IN ";
+      knex('Identities')
+        .whereRaw('identity_id IN (SELECT identity_id FROM Identities WHERE Type = ? AND Identifier = ? AND ViewpointType = ? AND ViewpointID = ?)');
+      sql += "";
+
+      var countBefore = knex('Identities').count('* as count');
+
+      sql = "WITH RECURSIVE transitive_closure(id1type, id1val, id2type, id2val, distance, path_string, confirmations, refutations) AS ";
+      sql += "( ";
+      sql += "SELECT id1.Type, id1.Identifier, id2.Type, id2.Identifier, 1 AS distance, ";
+      sql += "printf('%s:%s:%s:%s:',replace(id1.Type,':','::'),replace(id1.Identifier,':','::'),replace(id2.Type,':','::'),replace(id2.Identifier,':','::')) AS path_string, ";
+      sql += "SUM(CASE WHEN p.Type = 'confirm_connection' AND id2.IsRecipient THEN 1 ELSE 0 END) AS Confirmations, ";
+      sql += "SUM(CASE WHEN p.Type = 'refute_connection' AND id2.IsRecipient THEN 1 ELSE 0 END) AS Refutations ";
+      sql += "FROM Messages AS p ";
+      sql += "INNER JOIN MessageIdentifiers AS id1 ON p.Hash = id1.MessageHash ";
+      sql += "INNER JOIN MessageIdentifiers AS id2 ON p.Hash = id2.MessageHash AND id2.IsRecipient = id1.IsRecipient AND (id1.Type != id2.Type OR id1.Identifier != id2.Identifier) ";
+      
+      // AddMessageFilterSQL(sql, viewpoint, maxDistance, msgType);
+
+      sql += "WHERE id1.Type = @type AND id1.Identifier = @id ";
+      // AddMessageFilterSQLWhere(sql, viewpoint);
+      sql += "GROUP BY id2.Type, id2.Identifier ";
+
+      sql += "UNION ALL ";
+
+      sql += "SELECT tc.id1type, tc.id1val, id2.Type, id2.Identifier, tc.distance + 1, ";
+      sql += "printf('%s%s:%s:',tc.path_string,replace(id2.Type,':','::'),replace(id2.Identifier,':','::')) AS path_string, ";
+      sql += "SUM(CASE WHEN p.Type = 'confirm_connection' AND id2.IsRecipient THEN 1 ELSE 0 END) AS Confirmations, ";
+      sql += "SUM(CASE WHEN p.Type = 'refute_connection' AND id2.IsRecipient THEN 1 ELSE 0 END) AS Refutations ";
+      sql += "FROM Messages AS p ";
+      sql += "JOIN MessageIdentifiers AS id1 ON p.Hash = id1.MessageHash AND id1.IsRecipient = 1 ";
+      sql += "JOIN UniqueIdentifierTypes AS tpp1 ON tpp1.Value = id1.Type ";
+      sql += "JOIN MessageIdentifiers AS id2 ON p.Hash = id2.MessageHash AND id2.IsRecipient = 1 AND (id1.Type != id2.Type OR id1.Identifier != id2.Identifier) ";
+      sql += "JOIN transitive_closure AS tc ON tc.confirmations > tc.refutations AND id1.Type = tc.id2type AND id1.Identifier = tc.id2val ";
+      sql += "INNER JOIN UniqueIdentifierTypes AS tpp2 ON tpp2.Value = tc.id1type ";
+      
+      // AddMessageFilterSQL(sql, viewpoint, maxDistance, msgType);
+      
+      sql += "WHERE p.Type IN ('confirm_connection','refute_connections') AND tc.distance < 10 ";
+      // AddMessageFilterSQLWhere(sql, viewpoint);
+      sql += "AND tc.path_string NOT LIKE printf('%%%s:%s:%%',replace(id2.Type,':','::'),replace(id2.Identifier,':','::'))";
+      sql += "GROUP BY id2.Type, id2.Identifier ";
+      sql += ") ";
+
+      var identityID = knex.raw("SELECT IFNULL(MAX(identity_id), 0) + 1 FROM Identities");
+      sql += "INSERT INTO Identities ";
+      sql += "SELECT " + identityID + ", id2type, id2val, @viewpointType, @viewpointID, SUM(confirmations), SUM(refutations) FROM transitive_closure ";
+      sql += "GROUP BY id2type, id2val ";
+      sql += "UNION SELECT " + identityID + ", @type, @id, @viewpointType, @viewpointID, 1, 0 ";
+      sql += "FROM MessageIdentifiers AS mi ";
+      sql += "INNER JOIN UniqueIdentifierTypes AS ui ON ui.Value = mi.Type ";
+      sql += "WHERE mi.Type = @type AND mi.Identifier = @id  ";
+
+      if (countBefore === knex('Identities').count('* as val')) {
+        return [];
+      }
+
+      
+      sql = "SELECT Type, Identifier, Confirmations AS c, Refutations AS r, 1 FROM Identities WHERE NOT (Type = @searchedtype AND Identifier = @searchedid) AND identity_id = (SELECT MAX(identity_id) FROM Identities) ";
+      /*if (types && !types.empty()) {
+          vector<string> questionMarks(searchedTypes.size(), "?");
+          sql += "AND Type IN (" += algorithm::join(questionMarks, ", ") += ") ";
+      }*/
+      sql += "GROUP BY Type, Identifier ";
+      sql += "ORDER BY c-r DESC ";
+
+      return knex('Identities')
+        .whereRaw('identity_id = (SELECT MAX(identity_id) FROM Identities)');
     },
     getConnectingMessages: function(id1, id2, limit, offset, viewpoint) {
       return knex.from('Messages')
