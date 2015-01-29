@@ -119,6 +119,13 @@ describe('Database', function () {
     });
   });
 
+  it('should return a trust path', function (done) {
+    db.getTrustPaths(['email', 'alice@example.com'], ['email', 'charles@example.com'], 3).then(function(res) {
+      res.length.should.equal(1);
+      done();
+    });
+  });
+
   it('should find 4 identifiers matching "a"', function (done) {
     db.identifierSearch('a').then(function(res) {
       res.length.should.equal(4);
@@ -154,7 +161,7 @@ describe('Database', function () {
     });
   });
 
-  it('should return an overview', function (done) {
+  it('should return an overview of an identifier', function (done) {
     db.overview(['email', 'bob@example.com'], ['email', 'alice@example.com']).then(function(res) {
       res.length.should.equal(1);
       res[0].sentPositive.should.equal(1);

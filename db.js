@@ -271,7 +271,35 @@ module.exports = function(knex) {
       return knex.raw(sql, params);
     },
     getTrustPaths: function(start, end, maxLength, shortestOnly) {
-      return new P(function(resolve) { resolve([]); });
+      var sql = '';
+      sql += "WITH RECURSIVE transitive_closure(id1type, id1val, id2type, id2val, distance, path_string) AS ";
+      sql += "(";
+      sql += "SELECT id1.type, id1.value, id2.type, id2.value, 1 AS distance, "; 
+      sql += "printf('%s:%s:%s:%s:',replace(id1.type,':','::'),replace(id1.value,':','::'),replace(id2.type,':','::'),replace(id2.value,':','::')) AS path_string "; 
+      sql += "FROM Messages AS m "; 
+      sql += "INNER JOIN MessageIdentifiers AS id1 ON m.Hash = id1.message_hash AND id1.is_recipient = 0 "; 
+      sql += "INNER JOIN UniqueIdentifierTypes AS tpp1 ON tpp1.type = id1.type ";
+      sql += "INNER JOIN MessageIdentifiers AS id2 ON m.Hash = id2.message_hash AND (id1.type != id2.type OR id1.value != id2.value) "; 
+      sql += "INNER JOIN UniqueIdentifierTypes AS tpp2 ON tpp2.type = id2.type ";
+      sql += "WHERE m.is_latest AND m.Rating > (m.min_rating + m.max_rating) / 2 AND id1.type = ? AND id1.value = ? ";
+
+      sql += "UNION ALL "; 
+
+      sql += "SELECT tc.id1type, tc.id1val, id2.type, id2.value, tc.distance + 1, "; 
+      sql += "printf('%s%s:%s:',tc.path_string,replace(id2.type,':','::'),replace(id2.value,':','::')) AS path_string "; 
+      sql += "FROM Messages AS m "; 
+      sql += "INNER JOIN MessageIdentifiers AS id1 ON m.Hash = id1.message_hash AND id1.is_recipient = 0 "; 
+      sql += "INNER JOIN UniqueIdentifierTypes AS tpp1 ON tpp1.type = id1.type ";
+      sql += "INNER JOIN MessageIdentifiers AS id2 ON m.Hash = id2.message_hash AND (id1.type != id2.type OR id1.value != id2.value) "; 
+      sql += "INNER JOIN UniqueIdentifierTypes AS tpp2 ON tpp2.type = id2.type ";
+      sql += "JOIN transitive_closure AS tc ON id1.type = tc.id2type AND id1.value = tc.id2val "; 
+      sql += "WHERE m.is_latest AND m.Rating > (m.min_rating + m.max_rating) / 2 AND tc.distance < ? AND tc.path_string NOT LIKE printf('%%%s:%s:%%',replace(id2.type,':','::'),replace(id2.value,':','::')) "; 
+      sql += ") "; 
+      sql += "SELECT DISTINCT path_string FROM transitive_closure "; 
+      sql += "WHERE id2type = ? AND id2val = ? ";
+      sql += "ORDER BY distance ";
+
+      return knex.raw(sql, [start[0], start[1], maxLength, end[0], end[1]]);
     },
 
     getMessageCount: function() {
@@ -283,8 +311,6 @@ module.exports = function(knex) {
     },
 
     listMyKeys: function() {
-      var sql = "SELECT keys.PubKey, keys.KeyID, priv.PrivateKey FROM Keys AS keys ";
-      sql += "INNER JOIN PrivateKeys AS priv ON priv.PubKey = keys.PubKey";
       return knex.select('*').from('Keys').join('PrivateKeys', 'PrivateKeys.pubkey', 'Keys.pubkey');
     },
 
