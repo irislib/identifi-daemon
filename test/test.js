@@ -105,6 +105,13 @@ describe('Database', function () {
     });
   });
 
+  it('should return connections', function (done) {
+    db.getConnectedIdentifiers(['email', 'bob@example.com'], [], 10, 0, ['email', 'alice@example.com']).then(function(res) {
+      res.length.should.equal(1);
+      done();
+    });
+  });
+
   it('should generate a trust map', function (done) {
     db.generateTrustMap(['email', 'alice@example.com'], 3).then(function(res) {
       res[0].val.should.equal(2);
