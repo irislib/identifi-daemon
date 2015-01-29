@@ -9,7 +9,7 @@ chai.use(chaiAsPromised);
 var Message = require('../message.js');
 
 var cleanup = function() {
-  fs.unlink('./test.db');
+  fs.unlink('./test.db', function(err) {});
 };
 
 describe('Database', function () {
@@ -18,7 +18,7 @@ describe('Database', function () {
     cleanup(); // After hook fails to execute when errors are thrown
     var knex = require('knex')({
       dialect: 'sqlite3',
-      // debug: true,
+      //debug: true,
       connection: {
         filename: './test.db'
       }
@@ -44,7 +44,6 @@ describe('Database', function () {
   it('should save another message', function (done) {
     var message = Message.create({ type: 'rating', author: [['email', 'charles@example.com']], recipient: [['email', 'bob@example.com']], message: 'Negative', rating: -1 });
     Message.sign(message, 'pubkey');
-    hash = message.hash;
     db.saveMessage(message).should.eventually.notify(done);
   });
 
@@ -109,6 +108,46 @@ describe('Database', function () {
   it('should generate a trust map', function (done) {
     db.generateTrustMap(['email', 'alice@example.com'], 3).then(function(res) {
       res[0].val.should.equal(2);
+      done();
+    });
+  });
+
+  it('should find 4 identifiers matching "a"', function (done) {
+    db.identifierSearch('a').then(function(res) {
+      res.length.should.equal(4);
+      done();
+    });
+  });
+
+  it('should find 1 identifier matching "alice"', function (done) {
+    db.identifierSearch('alice').then(function(res) {
+      res.length.should.equal(1);
+      done();
+    });
+  });
+
+  it('should find 4 identities matching "a"', function (done) {
+    db.identitySearch(['', 'a']).then(function(res) {
+      res.length.should.equal(4);
+      done();
+    });
+  });
+
+  it('should find 1 identity matching "alice"', function (done) {
+    db.identitySearch(['', 'alice']).then(function(res) {
+      res.length.should.equal(1);
+      done();
+    });
+  });
+
+  it('should delete a message', function (done) {
+    db.dropMessage(hash)
+    .then(function(res) {
+      res.should.be.true;
+      return db.getMessageCount();
+    })
+    .then(function(res) {
+      res[0].val.should.equal(3);
       done();
     });
   });
