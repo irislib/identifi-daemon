@@ -147,6 +147,27 @@ describe('Database', function () {
     });
   });
 
+  it('should initially have no private keys', function (done) {
+    db.listMyKeys().then(function(res) {
+      res.length.should.equal(0);
+      done();
+    });
+  });
+
+  it('should return an overview', function (done) {
+    db.overview(['email', 'bob@example.com'], ['email', 'alice@example.com']).then(function(res) {
+      res.length.should.equal(1);
+      res[0].sentPositive.should.equal(1);
+      res[0].sentNeutral.should.equal(0);
+      res[0].sentNegative.should.equal(0);
+      res[0].receivedPositive.should.equal(1);
+      res[0].receivedNeutral.should.equal(0);
+      res[0].receivedNegative.should.equal(1);
+      res[0].firstSeen.should.be.above(0);
+      done();
+    });
+  });
+
   it('should delete a message', function (done) {
     db.dropMessage(hash)
     .then(function(res) {

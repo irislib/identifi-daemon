@@ -100,8 +100,8 @@ module.exports = function(knex) {
           sql += "SUM(CASE WHEN p.type = 'confirm_connection' AND id2.is_recipient THEN 1 ELSE 0 END) AS Confirmations, ";
           sql += "SUM(CASE WHEN p.type = 'refute_connection' AND id2.is_recipient THEN 1 ELSE 0 END) AS Refutations ";
           sql += "FROM Messages AS p ";
-          sql += "INNER JOIN MessageIdentifiers AS id1 ON p.Hash = id1.message_hash ";
-          sql += "INNER JOIN MessageIdentifiers AS id2 ON p.Hash = id2.message_hash AND id2.is_recipient = id1.is_recipient AND (id1.type != id2.type OR id1.value != id2.value) ";
+          sql += "INNER JOIN MessageIdentifiers AS id1 ON p.hash = id1.message_hash ";
+          sql += "INNER JOIN MessageIdentifiers AS id2 ON p.hash = id2.message_hash AND id2.is_recipient = id1.is_recipient AND (id1.type != id2.type OR id1.value != id2.value) ";
 
           // AddMessageFilterSQL(sql, viewpoint, maxDistance, msgType);
 
@@ -116,9 +116,9 @@ module.exports = function(knex) {
           sql += "SUM(CASE WHEN p.type = 'confirm_connection' AND id2.is_recipient THEN 1 ELSE 0 END) AS Confirmations, ";
           sql += "SUM(CASE WHEN p.type = 'refute_connection' AND id2.is_recipient THEN 1 ELSE 0 END) AS Refutations ";
           sql += "FROM Messages AS p ";
-          sql += "JOIN MessageIdentifiers AS id1 ON p.Hash = id1.message_hash AND id1.is_recipient = 1 ";
+          sql += "JOIN MessageIdentifiers AS id1 ON p.hash = id1.message_hash AND id1.is_recipient = 1 ";
           sql += "JOIN UniqueIdentifierTypes AS tpp1 ON tpp1.type = id1.type ";
-          sql += "JOIN MessageIdentifiers AS id2 ON p.Hash = id2.message_hash AND id2.is_recipient = 1 AND (id1.type != id2.type OR id1.value != id2.value) ";
+          sql += "JOIN MessageIdentifiers AS id2 ON p.hash = id2.message_hash AND id2.is_recipient = 1 AND (id1.type != id2.type OR id1.value != id2.value) ";
           sql += "JOIN transitive_closure AS tc ON tc.confirmations > tc.refutations AND id1.type = tc.id2type AND id1.value = tc.id2val ";
           sql += "INNER JOIN UniqueIdentifierTypes AS tpp2 ON tpp2.type = tc.id1type ";
 
@@ -271,7 +271,7 @@ module.exports = function(knex) {
       return knex.raw(sql, params);
     },
     getTrustPaths: function(start, end, maxLength, shortestOnly) {
-      return new P(function() { return []; });
+      return new P(function(resolve) { resolve([]); });
     },
 
     getMessageCount: function() {
@@ -279,19 +279,56 @@ module.exports = function(knex) {
     },
 
     importPrivateKey: function(privateKey) {
-      return new P(function() { return []; });
+      return new P(function(resolve) { resolve([]); });
     },
 
     listMyKeys: function() {
-      return new P(function() { return []; });
+      var sql = "SELECT keys.PubKey, keys.KeyID, priv.PrivateKey FROM Keys AS keys ";
+      sql += "INNER JOIN PrivateKeys AS priv ON priv.PubKey = keys.PubKey";
+      return knex.select('*').from('Keys').join('PrivateKeys', 'PrivateKeys.pubkey', 'Keys.pubkey');
     },
 
     getPrivateKey: function(keyID) {
-      return new P(function() { return []; });
+      return new P(function(resolve) { resolve([]); });
     },
 
     overview: function(id, viewpoint) {
-      return new P(function() { return []; });
+      var useViewpoint = false;
+      var sql = "SELECT ";
+      sql += "SUM(CASE WHEN pi.is_recipient = 0 AND p.rating > (p.min_rating + p.max_rating) / 2 THEN 1 ELSE 0 END) AS sentPositive, ";
+      sql += "SUM(CASE WHEN pi.is_recipient = 0 AND p.rating == (p.min_rating + p.max_rating) / 2 THEN 1 ELSE 0 END) AS sentNeutral, ";
+      sql += "SUM(CASE WHEN pi.is_recipient = 0 AND p.rating < (p.min_rating + p.max_rating) / 2 THEN 1 ELSE 0 END) AS sentNegative, ";
+      if (!useViewpoint) {
+          sql += "SUM(CASE WHEN pi.is_recipient = 1 AND p.rating > (p.min_rating + p.max_rating) / 2 THEN 1 ELSE 0 END) AS receivedPositive, ";
+          sql += "SUM(CASE WHEN pi.is_recipient = 1 AND p.rating == (p.min_rating + p.max_rating) / 2 THEN 1 ELSE 0 END) AS receivedNeutral, ";
+          sql += "SUM(CASE WHEN pi.is_recipient = 1 AND p.rating < (p.min_rating + p.max_rating) / 2 THEN 1 ELSE 0 END) AS receivedNegative, ";
+      } else {
+          sql += "SUM(CASE WHEN pi.is_recipient = 1 AND p.rating > (p.min_rating + p.max_rating) / 2 AND ";
+          sql += "(tp.start_value IS NOT NULL OR (author.value = @viewpointID AND author.type = @viewpointType)) THEN 1 ELSE 0 END) AS receivedPositive, ";
+          sql += "SUM(CASE WHEN pi.is_recipient = 1 AND p.rating == (p.min_rating + p.max_rating) / 2 AND ";
+          sql += "(tp.start_value IS NOT NULL OR (author.value = @viewpointID AND author.type = @viewpointType)) THEN 1 ELSE 0 END) AS receivedNeutral, ";
+          sql += "SUM(CASE WHEN pi.is_recipient = 1 AND p.rating < (p.min_rating + p.max_rating) / 2 AND  ";
+          sql += "(tp.start_value IS NOT NULL OR (author.value = @viewpointID AND author.type = @viewpointType)) THEN 1 ELSE 0 END) AS receivedNegative, ";
+      }
+      sql += "MIN(p.Created) AS firstSeen ";
+      sql += "FROM Messages AS p ";
+      sql += "INNER JOIN MessageIdentifiers AS pi ON pi.message_hash = p.hash ";
+      sql += "INNER JOIN UniqueIdentifierTypes AS tpp ON tpp.type = pi.type ";
+      sql += "INNER JOIN Identities AS i ON pi.type = i.type AND pi.value = i.value AND i.identity_id = ";
+      sql += "(SELECT identity_id FROM Identities WHERE viewpoint_value = @viewpointID AND viewpoint_type = @viewpointType ";
+      sql += "AND type = @type AND value = @id) ";
+      //AddMessageFilterSQL(sql, viewpoint, maxDistance, msgType);
+      sql += "WHERE p.type = 'rating' ";
+      sql += "AND p.is_latest = 1 ";
+
+      if (useViewpoint) {
+          sql += "AND (tp.start_value IS NOT NULL OR (author.value = @viewpointID AND author.type = @viewpointType) ";
+          sql += "OR (author.type = @type AND author.value = @id)) ";
+      }
+
+      sql += "GROUP BY i.identity_id ";
+      
+      return knex.raw(sql, [viewpoint[1], viewpoint[0], id[0], id[1]]);
     }
   };
 };
