@@ -314,10 +314,6 @@ module.exports = function(knex) {
       return knex.select('*').from('Keys').join('PrivateKeys', 'PrivateKeys.pubkey', 'Keys.pubkey');
     },
 
-    getPrivateKey: function(keyID) {
-      return new P(function(resolve) { resolve([]); });
-    },
-
     overview: function(id, viewpoint) {
       var useViewpoint = false;
       var sql = "SELECT ";
