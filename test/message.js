@@ -48,7 +48,7 @@ describe('Message', function () {
       var data = {
         signedData: { timestamp: 1422822269531 },
         signature: {
-          signerPubkey: '-----BEGIN PUBLIC KEY-----\nMFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEKn3lQ3+/aN6xNd9DSFrYbaPSGOzLMbb1\nkQZ9lCMtwc6Og4hfCMLhaSbE3sXek8e2fvKrTp8FY1MyCL4qMeVviA==\n-----END PUBLIC KEY-----',
+          signerPubkey: 'MFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEKn3lQ3+/aN6xNd9DSFrYbaPSGOzLMbb1kQZ9lCMtwc6Og4hfCMLhaSbE3sXek8e2fvKrTp8FY1MyCL4qMeVviA==',
           signature: 'MEUCIDywg79Jes1BvEgCGz/FGMRRusCNVpiXEVigLf6nwn42AiEAg4xfFgoHOeW0Yl11uAtEWT7BsQLFQyAAjGPA9U+Z6+M='
         }
       };
@@ -74,6 +74,20 @@ describe('Message', function () {
       };
       var f = function() {
         Message.parse(JSON.stringify(data));
+      };
+      f.should.throw(Error);
+    });
+
+    it('should not accept a message with an invalid signature', function() {
+      var data = {
+        signedData: { timestamp: 1422822269531 },
+        signature: {
+          signerPubkey: 'MFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEKn3lQ3+/aN6xNd9DSFrYbaPSGOzLMbb1kQZ9lCMtwc6Og4hfCMLhaSbE3sXek8e2fvKrTp8FY1MyCL4qMeVviA==',
+          signature: 'MEUCIDywg79Jes1BvEgCGz/FGMRRusCNVpiXEVigLf6nwn42AiEAg4xfFgoHOeW0Yl11uAtEWT7BsQLFQyAAjGPA9U+Z6+L='
+        }
+      };
+      var f = function() {
+        var msg = Message.parse(JSON.stringify(data));
       };
       f.should.throw(Error);
     });
