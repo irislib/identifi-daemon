@@ -7,6 +7,11 @@ chai.should();
 chai.use(chaiAsPromised);
 
 var Message = require('../message.js');
+var privKey = '-----BEGIN EC PRIVATE KEY-----\n'+
+              'MHQCAQEEINY+49rac3jkC+S46XN0f411svOveILjev4R3aBehwUKoAcGBSuBBAAK\n'+
+              'oUQDQgAEKn3lQ3+/aN6xNd9DSFrYbaPSGOzLMbb1kQZ9lCMtwc6Og4hfCMLhaSbE\n'+
+              '3sXek8e2fvKrTp8FY1MyCL4qMeVviA==\n'+
+              '-----END EC PRIVATE KEY-----';
 
 var cleanup = function() {
   fs.unlink('./test.db', function(err) {});
@@ -37,20 +42,20 @@ describe('Database', function () {
 
   it('should save a message', function (done) {
     var message = Message.create({ type: 'rating', author: [['email', 'alice@example.com']], recipient: [['email', 'bob@example.com']], message: 'Positive', rating: 1 });
-    Message.sign(message, 'pubkey');
+    Message.sign(message, privKey);
     db.saveMessage(message).should.eventually.notify(done);
   });
 
   it('should save another message', function (done) {
     var message = Message.create({ type: 'rating', author: [['email', 'charles@example.com']], recipient: [['email', 'bob@example.com']], message: 'Negative', rating: -1 });
-    Message.sign(message, 'pubkey');
+    Message.sign(message, privKey);
     db.saveMessage(message).should.eventually.notify(done);
   });
 
   var hash;
   it('should save yet another message', function (done) {
     var message = Message.create({ type: 'rating', author: [['email', 'bob@example.com']], recipient: [['email', 'charles@example.com']], message: 'Positive', rating: 1 });
-    Message.sign(message, 'pubkey');
+    Message.sign(message, privKey);
     hash = message.hash;
     db.saveMessage(message).should.eventually.notify(done);
   });
@@ -94,7 +99,7 @@ describe('Database', function () {
 
   it('should save a connection', function (done) {
     var message = Message.create({ type: 'confirm_connection', author: [['email', 'alice@example.com']], recipient: [['email', 'bob@example.com'], ['url', 'http://www.example.com/bob']] });
-    Message.sign(message, 'pubkey');
+    Message.sign(message, privKey);
     db.saveMessage(message).should.eventually.notify(done);
   });
 

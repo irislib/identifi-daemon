@@ -51,12 +51,7 @@ module.exports = {
     return false;
   },
 
-  sign: function(msg, key) {
-    var privKey = '-----BEGIN EC PRIVATE KEY-----\n'+
-'MHQCAQEEINY+49rac3jkC+S46XN0f411svOveILjev4R3aBehwUKoAcGBSuBBAAK\n'+
-'oUQDQgAEKn3lQ3+/aN6xNd9DSFrYbaPSGOzLMbb1kQZ9lCMtwc6Og4hfCMLhaSbE\n'+
-'3sXek8e2fvKrTp8FY1MyCL4qMeVviA==\n'+
-'-----END EC PRIVATE KEY-----';
+  sign: function(msg, privKey) {
     var pubKey = 'MFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEKn3lQ3+/aN6xNd9DSFrYbaPSGOzLMbb1kQZ9lCMtwc6Og4hfCMLhaSbE3sXek8e2fvKrTp8FY1MyCL4qMeVviA==';
     var signer = crypto.createSign(algorithm);
     signer.update(JSON.stringify(msg.signedData));
@@ -67,7 +62,7 @@ module.exports = {
   verify: function(msg) {
     var verifier = crypto.createVerify(algorithm);
     verifier.update(JSON.stringify(msg.signedData));
-    var key = derToPem(msg.signature.signerPubkey);
-    return verifier.verify(key, msg.signature.signature, encoding);
+    var pubkey = derToPem(msg.signature.signerPubkey);
+    return verifier.verify(pubkey, msg.signature.signature, encoding);
   }
 };

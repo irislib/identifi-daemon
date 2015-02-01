@@ -24,15 +24,19 @@ describe('Message', function () {
   });
 
   describe('Message signature', function() {
-    var msg, key;
+    var msg, privKey;
 
     before(function() {
       msg = Message.create();
-      key = '';
+      privKey = '-----BEGIN EC PRIVATE KEY-----\n'+
+        'MHQCAQEEINY+49rac3jkC+S46XN0f411svOveILjev4R3aBehwUKoAcGBSuBBAAK\n'+
+        'oUQDQgAEKn3lQ3+/aN6xNd9DSFrYbaPSGOzLMbb1kQZ9lCMtwc6Og4hfCMLhaSbE\n'+
+        '3sXek8e2fvKrTp8FY1MyCL4qMeVviA==\n'+
+        '-----END EC PRIVATE KEY-----';
     });
 
     it('should be created with sign()', function() {
-      Message.sign(msg, key);
+      Message.sign(msg, privKey);
       msg.should.have.property('signature');
       msg.should.have.deep.property('signature.signerPubkey');
       msg.should.have.deep.property('signature.signature');
