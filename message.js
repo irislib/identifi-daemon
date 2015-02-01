@@ -51,8 +51,7 @@ module.exports = {
     return false;
   },
 
-  sign: function(msg, privKey) {
-    var pubKey = 'MFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEKn3lQ3+/aN6xNd9DSFrYbaPSGOzLMbb1kQZ9lCMtwc6Og4hfCMLhaSbE3sXek8e2fvKrTp8FY1MyCL4qMeVviA==';
+  sign: function(msg, privKey, pubKey) {
     var signer = crypto.createSign(algorithm);
     signer.update(JSON.stringify(msg.signedData));
     var signature = signer.sign(privKey, encoding);

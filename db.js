@@ -306,8 +306,17 @@ module.exports = function(knex) {
       return knex('Messages').count('* as val');
     },
 
-    importPrivateKey: function(privateKey) {
-      return new P(function(resolve) { resolve([]); });
+    importPrivateKey: function(privateKey, setDefault) {
+      return knex('PrivateKeys').insert({
+        pubkey: '',
+        private_key: privateKey,
+        is_default: setDefault
+      }).then(function() {
+        return knex('Keys').insert({
+          pubkey: '',
+          key_id: ''
+        });
+      });
     },
 
     listMyKeys: function() {

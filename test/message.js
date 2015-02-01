@@ -24,7 +24,7 @@ describe('Message', function () {
   });
 
   describe('Message signature', function() {
-    var msg, privKey;
+    var msg, privKey, pubKey;
 
     before(function() {
       msg = Message.create();
@@ -33,10 +33,11 @@ describe('Message', function () {
         'oUQDQgAEKn3lQ3+/aN6xNd9DSFrYbaPSGOzLMbb1kQZ9lCMtwc6Og4hfCMLhaSbE\n'+
         '3sXek8e2fvKrTp8FY1MyCL4qMeVviA==\n'+
         '-----END EC PRIVATE KEY-----';
+      pubKey = 'MFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEKn3lQ3+/aN6xNd9DSFrYbaPSGOzLMbb1kQZ9lCMtwc6Og4hfCMLhaSbE3sXek8e2fvKrTp8FY1MyCL4qMeVviA==';
     });
 
     it('should be created with sign()', function() {
-      Message.sign(msg, privKey);
+      Message.sign(msg, privKey, pubKey);
       msg.should.have.property('signature');
       msg.should.have.deep.property('signature.signerPubkey');
       msg.should.have.deep.property('signature.signature');
