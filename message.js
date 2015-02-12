@@ -63,5 +63,9 @@ module.exports = {
     verifier.update(JSON.stringify(msg.signedData));
     var pubkey = derToPem(msg.signature.signerPubkey);
     return verifier.verify(pubkey, msg.signature.signature, encoding);
+  },
+
+  isPositive: function(msg) {
+    return msg.rating > (msg.maxRating + msg.minRating) / 2;
   }
 };

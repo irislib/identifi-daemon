@@ -179,6 +179,20 @@ describe('Database', function () {
     });
   });
 
+  describe('Priority', function() {
+    it('should be 0 for a message from an unknown signer', function (done) {
+      var message = Message.create({ type: 'rating', author: [['email', 'alice@example.com']], recipient: [['email', 'bob@example.com']], message: 'Positive', rating: 1 });
+      Message.sign(message, privKey, pubKey);
+      db.saveMessage(message).then(function() {
+        return db.getMessage(message.hash);
+      }).then(function(res) {
+        console.log(res[0].priority);
+        res[0].priority.should.equal(0);
+        done();
+      });
+    });
+  });
+
   it('should return an overview of an identifier', function (done) {
     db.overview(['email', 'bob@example.com'], ['email', 'alice@example.com']).then(function(res) {
       res.length.should.equal(1);

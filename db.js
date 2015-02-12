@@ -1,55 +1,52 @@
 /*jshint unused: false */
 'use strict';
 var schema = require('./schema.js');
+var Message = require('./message.js');
 var P = require("bluebird");
 
 module.exports = function(knex) {
   schema.init(knex);
 
-  var getPriority = function(message) {
-    return 0;
-  };
-
-  var isLatest = function(message) {
-    return true;
-  };
-
-  return {
+  var publicMethods = {
     saveMessage: function(message) {
       var queries = [];
-      queries.push(knex('Messages').insert({
-        hash:           message.hash,
-        signed_data:    JSON.stringify(message.signedData),
-        created:        message.signedData.timestamp,
-        type:           message.signedData.type || 'rating',
-        rating:         message.signedData.rating || 0,
-        max_rating:     message.signedData.maxRating || 0,
-        min_rating:     message.signedData.minRating || 0,
-        is_published:   message.isPublished,
-        priority:       getPriority(message),
-        is_latest:      isLatest(message),
-        signer_pubkey:  message.signature.signerPubkey,
-        signature:      message.signature.signature
-      }));
 
-      var i;
-      for (i = 0; i < message.signedData.author.length; i++) {
-        queries.push(knex('MessageIdentifiers').insert({
-          message_hash: message.hash,
-          type: message.signedData.author[i][0],
-          value: message.signedData.author[i][1],
-          is_recipient: false
+      return getPriority(message).then(function(priority) {
+        queries.push(knex('Messages').insert({
+          hash:           message.hash,
+          signed_data:    JSON.stringify(message.signedData),
+          created:        message.signedData.timestamp,
+          type:           message.signedData.type || 'rating',
+          rating:         message.signedData.rating || 0,
+          max_rating:     message.signedData.maxRating || 0,
+          min_rating:     message.signedData.minRating || 0,
+          is_published:   message.isPublished,
+          priority:       priority,
+          is_latest:      isLatest(message),
+          signer_pubkey:  message.signature.signerPubkey,
+          signature:      message.signature.signature
         }));
-      }
-      for (i = 0; i < message.signedData.recipient.length; i++) {
-        queries.push(knex('MessageIdentifiers').insert({
-          message_hash: message.hash,
-          type: message.signedData.recipient[i][0],
-          value: message.signedData.recipient[i][1],
-          is_recipient: true
-        }));
-      }
-      return P.all(queries);
+
+        var i;
+        for (i = 0; i < message.signedData.author.length; i++) {
+          queries.push(knex('MessageIdentifiers').insert({
+            message_hash: message.hash,
+            type: message.signedData.author[i][0],
+            value: message.signedData.author[i][1],
+            is_recipient: false
+          }));
+        }
+        for (i = 0; i < message.signedData.recipient.length; i++) {
+          queries.push(knex('MessageIdentifiers').insert({
+            message_hash: message.hash,
+            type: message.signedData.recipient[i][0],
+            value: message.signedData.recipient[i][1],
+            is_recipient: true
+          }));
+        }
+        queries.push(saveMessageTrustDistances(message));
+        return P.all(queries);
+      });
     },
     getMessage: function(messageHash) {
       return knex.select('*').from('Messages').where({ hash: messageHash });
@@ -156,6 +153,18 @@ module.exports = function(knex) {
           sql += "ORDER BY c-r DESC ";
           return knex.raw(sql, [id[0], id[1]]);
         });
+    },
+
+    getTrustDistance: function(id1, id2) {
+      if (id1[0] === id2[0] && id1[1] === id2[1]) {
+        return new P(function(resolve) { resolve(1); });
+      }
+      return knex.select('distance').from('TrustDistances').where({
+        'start_id_type': id1[0],
+        'start_id_value': id1[1],
+        'end_id_type': id2[0],
+        'end_id_value': id2[1]       
+      });
     },
 
     getConnectingMessages: function(id1, id2, limit, offset, viewpoint) {
@@ -362,4 +371,56 @@ module.exports = function(knex) {
       return knex.raw(sql, [viewpoint[1], viewpoint[0], id[0], id[1]]);
     }
   };
+
+  var getPriority = function(message) {
+    var maxPriority = 100;
+    var keyType = 'keyID';
+
+    var shortestPathToSignature = 1000000;
+
+    var i, j;
+    return publicMethods.listMyKeys().then(function(res) {
+      var queries = [];
+      for (i = 0; i < res.length; i++) {
+        var key = res[i].keyID;
+        queries.push(publicMethods.getTrustDistance([keyType, key], [keyType, message.signature.signerPubkey]));
+      }
+      return P.all(queries);
+    }).then(function(res) {
+      for (i = 0; i < res.length; i++) {
+        if (res[i].length > 0 && res[i][0] < shortestPathToSignature) {
+          shortestPathToSignature = res[i][0];
+          console.log('shortestPathToSignature ' + shortestPathToSignature);
+        }
+      }
+      return new P(function(resolve) {
+        resolve(Math.round(maxPriority / shortestPathToSignature));
+      });
+    });
+  };
+
+  var isLatest = function(message) {
+    return true;
+  };
+
+  var saveMessageTrustDistances = function(message) {
+    var queries = [];
+    if (Message.isPositive(message)) {
+      var i, j;
+      for (i = 0; i < message.signedData.author.length; i++) {
+        for (j = 0; j < message.signedData.recipient.length; j++) {
+          queries.push(knex('TrustDistances').insert({
+            'start_id_type': message.signedData.author[0],
+            'start_id_value': message.signedData.author[1],
+            'end_id_type': message.signedData.recipient[0],
+            'end_id_value': message.signedData.recipient[1]  
+          }));
+        }
+      }
+    }
+
+    return P.all(queries);
+  };
+
+  return publicMethods;
 };

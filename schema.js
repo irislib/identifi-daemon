@@ -13,6 +13,14 @@ var addDefaultUniqueIdentifierTypes = function(db) {
   );
 };
 
+var checkDefaultKey = function(db) {
+  return db('PrivateKeys').count('* as count');
+};
+
+var checkDefaultTrustList = function(db) {
+  return db('Messages').count('* as count');
+};
+
 var init = function(db) {
   return db.schema.createTable('UniqueIdentifierTypes', function(t) {
     t.string('type').primary();
@@ -74,6 +82,14 @@ var init = function(db) {
 
   .then(function() {
     return addDefaultUniqueIdentifierTypes(db);
+  })
+
+  .then(function() {
+    return checkDefaultKey(db);
+  })
+
+  .then(function() {
+    return checkDefaultTrustList(db);
   })
 
   .catch(function(e) {
