@@ -26,12 +26,8 @@ module.exports = (grunt) ->
         src: watchFiles.js
     mochacli:
       all:
-        ###
         options:
-          require: 'coffee-script/register'
-          reporter: "spec"
-          bail: true
-        ###
+          bail: false
         src: watchFiles.tests
     watch:
       js:

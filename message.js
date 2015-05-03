@@ -1,6 +1,7 @@
 /*jshint unused: false */
 'use strict';
 var crypto = require('crypto');
+var jws = require('jws');
 
 var algorithm = 'ecdsa-with-SHA1';
 var encoding = 'base64';
@@ -31,41 +32,44 @@ module.exports = {
     };
 
     msg.signedData.timestamp = msg.signedData.timestamp || Date.now();
-    msg.hash = getHash(msg).toString(encoding);
 
     return msg;
   },
 
-  parse: function(json) {
-    var msg = JSON.parse(json);
+  sign: function(msg, privKey, keyID) {
+    msg.jwsHeader = { alg: 'ES256', kid: keyID };
+    msg.jws = jws.sign({
+      header: msg.jwsHeader,
+      payload: msg.signedData,
+      privateKey: privKey
+    });
+    msg.hash = getHash(msg).toString(encoding);
+    return msg.jws;
+  },
+
+  decode: function(msg) {
     if (!msg.signedData) {
-      throw new Error("Missing signedData");
+      var d = jws.decode(msg.jws);
+      msg.signedData = d.payload;
+      msg.jwsHeader = d.header;
+      msg.hash = getHash(msg).toString(encoding);
     }
-    if (!msg.signature) {
-      throw new Error("Missing signature");
-    }
-    if (!this.verify(msg)) {
-      throw new Error("Invalid signature");
-    }
-
-    return false;
+    return msg.jwsData;
   },
 
-  sign: function(msg, privKey, pubKey) {
-    var signer = crypto.createSign(algorithm);
-    signer.update(JSON.stringify(msg.signedData));
-    var signature = signer.sign(privKey, encoding);
-    msg.signature = { signerPubkey: pubKey, signature: signature };
+  verify: function(msg, pubKey) {
+    this.decode(msg);
+    return jws.verify(msg.jws, msg.jwsHeader.alg, pubKey); 
   },
 
-  verify: function(msg) {
-    var verifier = crypto.createVerify(algorithm);
-    verifier.update(JSON.stringify(msg.signedData));
-    var pubkey = derToPem(msg.signature.signerPubkey);
-    return verifier.verify(pubkey, msg.signature.signature, encoding);
+  parse: function(jws) {
+    var msg = { jws: jws };
+    this.decode(msg);
+    return msg;
   },
 
   isPositive: function(msg) {
-    return msg.rating > (msg.maxRating + msg.minRating) / 2;
+    var d = msg.signedData;
+    return d.rating > (d.maxRating + d.minRating) / 2;
   }
 };

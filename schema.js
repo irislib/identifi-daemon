@@ -28,7 +28,7 @@ var init = function(db) {
 
   .createTable('Messages', function(t) {
     t.string('hash').primary();
-    t.string('signed_data');
+    t.string('jws');
     t.timestamp('created');
     t.string('type');
     t.integer('rating');
@@ -37,8 +37,7 @@ var init = function(db) {
     t.boolean('is_published');
     t.integer('priority').unsigned();
     t.boolean('is_latest');
-    t.string('signer_pubkey');
-    t.string('signature');
+    t.string('signer_keyid');
   })
 
   .createTable('MessageIdentifiers', function(t) {

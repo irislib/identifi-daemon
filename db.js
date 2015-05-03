@@ -14,7 +14,7 @@ module.exports = function(knex) {
       return getPriority(message).then(function(priority) {
         queries.push(knex('Messages').insert({
           hash:           message.hash,
-          signed_data:    JSON.stringify(message.signedData),
+          jws:            message.jws,
           created:        message.signedData.timestamp,
           type:           message.signedData.type || 'rating',
           rating:         message.signedData.rating || 0,
@@ -23,8 +23,7 @@ module.exports = function(knex) {
           is_published:   message.isPublished,
           priority:       priority,
           is_latest:      isLatest(message),
-          signer_pubkey:  message.signature.signerPubkey,
-          signature:      message.signature.signature
+          signer_keyid:   message.jwsHeader.kid,
         }));
 
         var i;
@@ -383,7 +382,7 @@ module.exports = function(knex) {
       var queries = [];
       for (i = 0; i < res.length; i++) {
         var key = res[i].keyID;
-        queries.push(publicMethods.getTrustDistance([keyType, key], [keyType, message.signature.signerPubkey]));
+        queries.push(publicMethods.getTrustDistance([keyType, key], [keyType, message.jwsHeader.kid]));
       }
       return P.all(queries);
     }).then(function(res) {
