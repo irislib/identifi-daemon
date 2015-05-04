@@ -140,7 +140,6 @@ module.exports = function(knex) {
         })
         .then(function(res) {
           if (countBefore === res[0].val) {
-            console.log("no connections");
             return new P(function(resolve) { resolve([]); });
           }
           sql = "SELECT type, value, Confirmations AS c, Refutations AS r, 1 FROM Identities WHERE NOT (Type = @searchedtype AND value = @searchedid) AND identity_id = (SELECT MAX(identity_id) FROM Identities) ";
@@ -312,6 +311,10 @@ module.exports = function(knex) {
 
     getMessageCount: function() {
       return knex('Messages').count('* as val');
+    },
+
+    getIdentityCount: function() {
+      return knex('Identities').count('* as val');
     },
 
     importPrivateKey: function(privateKey, setDefault) {

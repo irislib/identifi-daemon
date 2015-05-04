@@ -19,8 +19,9 @@
   ],
   "dependencies": {
     "bluebird": "^2.5.3",
+    "body-parser": "^1.12.3",
     "dht.js": "^0.2.16",
-    "ecdsa": "^0.6.0",
+    "express": "^4.12.3",
     "jws": "^3.0.0",
     "knex": "^0.7.3",
     "sqlite3": "^3.0.4"
