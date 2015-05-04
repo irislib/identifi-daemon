@@ -29,6 +29,13 @@ module.exports = (grunt) ->
         options:
           bail: false
         src: watchFiles.tests
+    nodemon:
+      dev:
+        script: 'server.js'
+        options:
+          nodeArgs: [ '--debug' ]
+          ext: 'js,html'
+          watch: watchFiles.js
     watch:
       js:
         files: watchFiles.js
@@ -44,4 +51,4 @@ module.exports = (grunt) ->
         tasks: ["coffeelint", "mochacli"]
 
   grunt.registerTask "test", ["coffeelint", "jshint", "mochacli"]
-  grunt.registerTask "default", ["coffeelint", "jshint", "mochacli", "watch"]
+  grunt.registerTask "default", ["coffeelint", "jshint", "mochacli", "watch", "nodemon"]
