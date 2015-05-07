@@ -18,7 +18,19 @@ describe('Message', function () {
 
     it('should create a message', function() {
       msg.should.have.deep.property('signedData.timestamp');
-      msg.should.have.property('isPublished');
+      msg.should.have.property('isPublic');
+    });
+  });
+
+  describe('Validate method', function() {
+    it('should not accept a message without signedData', function() {
+      var data = {
+        signedData: {}
+      };
+      var f = function() {
+        Message.validate(JSON.stringify(data));
+      }
+      f.should.throw(Error);
     });
   });
 
@@ -27,6 +39,9 @@ describe('Message', function () {
 
     before(function() {
       msg = Message.create();
+      msg.signedData.type = 'rating';
+      msg.signedData.author = [['email', 'alice@example.com']];
+      msg.signedData.recipient = [['email', 'bob@example.com']];
       privKey = '-----BEGIN EC PRIVATE KEY-----\n'+
         'MHQCAQEEINY+49rac3jkC+S46XN0f411svOveILjev4R3aBehwUKoAcGBSuBBAAK\n'+
         'oUQDQgAEKn3lQ3+/aN6xNd9DSFrYbaPSGOzLMbb1kQZ9lCMtwc6Og4hfCMLhaSbE\n'+
@@ -47,21 +62,13 @@ describe('Message', function () {
     });
   });
 
-  /*
-  describe('Parse method', function() {
-    it('should create a message from valid data', function() {
+  describe('Deserialize method', function() {
+    it('should not accept invalid data', function() {
       var jws = 'asdf';
-      Message.parse(jws);
-    });
-
-    it('should not accept a message without a signature', function() {
-      var data = {
-        signedData: {}
-      };
       var f = function() {
-        Message.parse(JSON.stringify(data));
+        Message.deserialize(jws);
       };
       f.should.throw(Error);
     });
-  }); */
+  });
 });

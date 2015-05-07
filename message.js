@@ -24,11 +24,11 @@ var derToPem = function(der) {
   return pem;
 };
 
-module.exports = { 
-  create: function(signedData, publish) {
+module.exports = {
+  create: function(data, isPublic) {
     var msg = {
-      signedData: signedData || {},
-      isPublished: publish || false, 
+      signedData: data || {},
+      isPublic: isPublic || false, 
     };
 
     msg.signedData.timestamp = msg.signedData.timestamp || Date.now();
@@ -36,7 +36,21 @@ module.exports = {
     return msg;
   },
 
+  validate: function(msg) {
+    var errorMsg = "Invalid Identifi message: ";
+    if (!msg.signedData) { throw Error(errorMsg + "Missing signedData"); }
+    var d = msg.signedData;
+
+    if (!d.type) { throw Error(errorMsg + "Missing type definition"); }
+    if (!d.author) { throw Error(errorMsg + "Missing author"); }
+    if (!d.recipient) { throw Error(errorMsg + "Missing recipient"); }
+    if (!d.timestamp) { throw Error(errorMsg + "Missing timestamp"); }
+
+    return true;
+  },
+
   sign: function(msg, privKey, keyID) {
+    this.validate(msg);
     msg.jwsHeader = { alg: 'ES256', kid: keyID };
     msg.jws = jws.sign({
       header: msg.jwsHeader,
@@ -54,6 +68,7 @@ module.exports = {
       msg.jwsHeader = d.header;
       msg.hash = getHash(msg).toString(encoding);
     }
+    this.validate(msg);
     return msg.jwsData;
   },
 
@@ -62,7 +77,7 @@ module.exports = {
     return jws.verify(msg.jws, msg.jwsHeader.alg, pubKey); 
   },
 
-  parse: function(jws) {
+  deserialize: function(jws) {
     var msg = { jws: jws };
     this.decode(msg);
     return msg;
