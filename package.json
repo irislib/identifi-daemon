@@ -20,6 +20,7 @@
   "dependencies": {
     "bluebird": "^2.5.3",
     "body-parser": "^1.12.3",
+    "config": "^1.13.0",
     "daemonize2": "^0.4.2",
     "dht.js": "^0.2.16",
     "express": "^4.12.3",
@@ -33,6 +34,7 @@
     "coffee-script": "^1.8.0",
     "grunt-cli": "^0.1.13",
     "grunt-coffeelint": "0.0.13",
+    "grunt-concurrent": "^1.0.0",
     "grunt-contrib-jshint": "^0.10.0",
     "grunt-contrib-nodeunit": "^0.4.1",
     "grunt-contrib-watch": "^0.6.1",

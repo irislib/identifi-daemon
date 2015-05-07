@@ -4,14 +4,19 @@ var express    = require('express');
 var app        = express();
 var bodyParser = require('body-parser');
 
-var knex = require('knex')({
-  dialect: 'sqlite3',
-  connection: {
-    filename: './identifi.db'
-  }
-});
-var db = require('./db.js')(knex);
 var Message = require('./message.js');
+
+var config = require('config');
+
+// Init DB
+var knex, db;
+try {
+  knex = require('knex')(config.get('db'));
+  db = require('./db.js')(knex);
+} catch (ex) {
+  console.log(ex);
+  process.exit(0);
+}
 
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());

@@ -29,6 +29,11 @@ module.exports = (grunt) ->
         options:
           bail: false
         src: watchFiles.tests
+    concurrent:
+      dev:
+        tasks: ['nodemon', 'watch']
+        options:
+          logConcurrentOutput: true
     nodemon:
       dev:
         script: 'server.js'
@@ -51,4 +56,4 @@ module.exports = (grunt) ->
         tasks: ["coffeelint", "mochacli"]
 
   grunt.registerTask "test", ["coffeelint", "jshint", "mochacli"]
-  grunt.registerTask "default", ["coffeelint", "jshint", "mochacli", "watch", "nodemon"]
+  grunt.registerTask "default", ["coffeelint", "jshint", "mochacli", "concurrent"]
