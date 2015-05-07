@@ -69,8 +69,9 @@ var init = function(db) {
   })
 
   .createTable('Keys', function(t) {
-    t.string('pubkey');
+    t.string('pubkey').unique();
     t.string('key_id');
+    t.primary(['pubkey', 'key_id']);
   })
 
   .createTable('PrivateKeys', function(t) {
