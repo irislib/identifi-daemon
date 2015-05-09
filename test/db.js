@@ -42,20 +42,20 @@ describe('Database', function () {
     });
   });
 
-  it('should save a message', function (done) {
+  it('should save a rating', function (done) {
     var message = Message.createRating([['email', 'alice@example.com']], [['email', 'bob@example.com']], 1);
     Message.sign(message, privKey, pubKey);
     db.saveMessage(message).should.eventually.notify(done);
   });
 
-  it('should save another message', function (done) {
+  it('should save another rating', function (done) {
     var message = Message.createRating([['email', 'charles@example.com']], [['email', 'bob@example.com']], -1 );
     Message.sign(message, privKey, pubKey);
     db.saveMessage(message).should.eventually.notify(done);
   });
 
   var hash;
-  it('should save yet another message', function (done) {
+  it('should save yet another rating', function (done) {
     var message = Message.createRating([['email', 'bob@example.com']], [['email', 'charles@example.com']], 1);
     Message.sign(message, privKey, pubKey);
     hash = message.hash;

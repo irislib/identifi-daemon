@@ -23,6 +23,7 @@
     "config": "^1.13.0",
     "daemonize2": "^0.4.2",
     "express": "^4.12.3",
+    "identifi-cli": "0.0.2",
     "jws": "^3.0.0",
     "knex": "^0.7.3",
     "moment": "^2.10.2",
