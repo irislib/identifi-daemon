@@ -8,13 +8,26 @@ var Message = require('./message.js');
 
 var config = require('config');
 
+var fs = require('fs');
+var util = require('util');
+var logStream = fs.createWriteStream(config.get('logfile'), {flags: 'w', encoding: 'utf8'});
+function log(msg) {
+  msg = util.format(msg); 
+  logStream.write(msg + '\n');
+  console.log(msg);
+}
+
+process.on("uncaughtException", function(e) {
+  log(e);
+});
+
 // Init DB
 var knex, db;
 try {
   knex = require('knex')(config.get('db'));
   db = require('./db.js')(knex);
 } catch (ex) {
-  console.log(ex);
+  log(ex);
   process.exit(0);
 }
 
@@ -46,7 +59,7 @@ router.get('/info', function(req, res) {
 router.get('/halt', function(req, res) {
   var msg = 'Shutting down the identifi server';
   res.json(msg);
-  console.log(msg);
+  log(msg);
   setTimeout(function () {
     server.close();
     process.exit(0);
@@ -93,7 +106,7 @@ router.route('/msg')
   .get(function(req, res) {
     db.getMessageCount().then(function(dbRes) {
       res.json(dbRes);
-      console.log("list messages");
+      log("list messages");
     });
   })
 
@@ -147,4 +160,4 @@ app.use('/api', router);
 
 // Start the server
 server = app.listen(port);
-console.log('Identifi server started on port ' + port);
+log('Identifi server started on port ' + port);

@@ -7,5 +7,6 @@
             "password" : "your_database_password",
             "database" : "myapp_test"
         }
-    }
+    },
+    "logfile": "./identifi.log"
 }

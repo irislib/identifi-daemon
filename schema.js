@@ -14,11 +14,21 @@ var addDefaultUniqueIdentifierTypes = function(db) {
 };
 
 var checkDefaultKey = function(db) {
-  return db('PrivateKeys').count('* as count');
+  return db('PrivateKeys').count('* as count')
+    .then(function(res) {
+      if (res[0].count === 0) {
+        // create default key
+      }
+    });
 };
 
 var checkDefaultTrustList = function(db) {
-  return db('Messages').count('* as count');
+  return db('Messages').count('* as count')
+    .then(function(res) {
+      if (res[0].count === 0) {
+        // add default trust list as an entry point
+      }
+    });
 };
 
 var init = function(db) {

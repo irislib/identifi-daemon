@@ -4,5 +4,6 @@
         "connection": {
             "filename": "./identifi.db"
         }
-    }
+    },
+    "logfile": "./identifi.log"
 }

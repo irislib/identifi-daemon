@@ -3,7 +3,8 @@
 var daemon = require("daemonize2").setup({
     main: "server.js",
     name: "identifid",
-    pidfile: "identifid.pid"
+    pidfile: "identifid.pid",
+    cwd: '.'
 });
 
 switch (process.argv[2]) {
