@@ -27,7 +27,7 @@ module.exports = (grunt) ->
     mochacli:
       all:
         options:
-          bail: false
+          bail: true
         src: watchFiles.tests
     concurrent:
       dev:

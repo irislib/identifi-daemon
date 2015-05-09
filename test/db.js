@@ -43,20 +43,20 @@ describe('Database', function () {
   });
 
   it('should save a message', function (done) {
-    var message = Message.create({ type: 'rating', author: [['email', 'alice@example.com']], recipient: [['email', 'bob@example.com']], message: 'Positive', rating: 1 });
+    var message = Message.createRating([['email', 'alice@example.com']], [['email', 'bob@example.com']], 1);
     Message.sign(message, privKey, pubKey);
     db.saveMessage(message).should.eventually.notify(done);
   });
 
   it('should save another message', function (done) {
-    var message = Message.create({ type: 'rating', author: [['email', 'charles@example.com']], recipient: [['email', 'bob@example.com']], message: 'Negative', rating: -1 });
+    var message = Message.createRating([['email', 'charles@example.com']], [['email', 'bob@example.com']], -1 );
     Message.sign(message, privKey, pubKey);
     db.saveMessage(message).should.eventually.notify(done);
   });
 
   var hash;
   it('should save yet another message', function (done) {
-    var message = Message.create({ type: 'rating', author: [['email', 'bob@example.com']], recipient: [['email', 'charles@example.com']], message: 'Positive', rating: 1 });
+    var message = Message.createRating([['email', 'bob@example.com']], [['email', 'charles@example.com']], 1);
     Message.sign(message, privKey, pubKey);
     hash = message.hash;
     db.saveMessage(message).should.eventually.notify(done);
@@ -100,7 +100,7 @@ describe('Database', function () {
   });
 
   it('should save a connection', function (done) {
-    var message = Message.create({ type: 'confirm_connection', author: [['email', 'alice@example.com']], recipient: [['email', 'bob@example.com'], ['url', 'http://www.example.com/bob']] });
+    var message = Message.createConfirmConnection([['email', 'alice@example.com']], [['email', 'bob@example.com'], ['url', 'http://www.example.com/bob']] );
     Message.sign(message, privKey, pubKey);
     db.saveMessage(message).should.eventually.notify(done);
   });
@@ -181,7 +181,7 @@ describe('Database', function () {
 
   describe('Priority', function() {
     it('should be 0 for a message from an unknown signer', function (done) {
-      var message = Message.create({ type: 'rating', author: [['email', 'alice@example.com']], recipient: [['email', 'bob@example.com']], message: 'Positive', rating: 1 });
+      var message = Message.createRating([['email', 'alice@example.com']], [['email', 'bob@example.com']], 1 );
       Message.sign(message, privKey, pubKey);
       db.saveMessage(message).then(function() {
         return db.getMessage(message.hash);

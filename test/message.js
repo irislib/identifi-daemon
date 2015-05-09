@@ -9,11 +9,16 @@ chai.should();
 chai.use(chaiAsPromised);
 
 describe('Message', function () {
-  describe('Create method', function() {
+  describe('createRating method', function() {
     var msg;
 
     before(function() {
-      msg = Message.create();
+      msg = Message.createRating(
+        [['email', 'alice@example.com']],
+        [['email', 'bob@example.com']],
+        5,
+        'Good guy'
+        );
     });
 
     it('should create a message', function() {
@@ -38,10 +43,13 @@ describe('Message', function () {
     var msg, privKey, pubKey;
 
     before(function() {
-      msg = Message.create();
-      msg.signedData.type = 'rating';
-      msg.signedData.author = [['email', 'alice@example.com']];
-      msg.signedData.recipient = [['email', 'bob@example.com']];
+      msg = Message.createRating(
+        [['email', 'alice@example.com']],
+        [['email', 'bob@example.com']],
+        5,
+        'Good guy'
+        );
+
       privKey = '-----BEGIN EC PRIVATE KEY-----\n'+
         'MHQCAQEEINY+49rac3jkC+S46XN0f411svOveILjev4R3aBehwUKoAcGBSuBBAAK\n'+
         'oUQDQgAEKn3lQ3+/aN6xNd9DSFrYbaPSGOzLMbb1kQZ9lCMtwc6Og4hfCMLhaSbE\n'+

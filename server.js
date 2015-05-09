@@ -1,4 +1,5 @@
 var P = require("bluebird");
+var moment = require('moment');
 
 var express    = require('express');
 var app        = express();
@@ -10,9 +11,10 @@ var config = require('config');
 
 var fs = require('fs');
 var util = require('util');
-var logStream = fs.createWriteStream(config.get('logfile'), {flags: 'w', encoding: 'utf8'});
+var logStream = fs.createWriteStream(config.get('logfile'), {flags: 'a', encoding: 'utf8'});
+
 function log(msg) {
-  msg = util.format(msg); 
+  msg = moment.utc().format() + ": " + util.format(msg);
   logStream.write(msg + '\n');
   console.log(msg);
 }

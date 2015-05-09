@@ -2,6 +2,7 @@
 'use strict';
 var crypto = require('crypto');
 var jws = require('jws');
+var moment = require('moment');
 
 var algorithm = 'ecdsa-with-SHA1';
 var encoding = 'base64';
@@ -24,33 +25,100 @@ var derToPem = function(der) {
   return pem;
 };
 
+var validate = function(msg) {
+  var errorMsg = "Invalid Identifi message: ";
+  if (!msg.signedData) { throw Error(errorMsg + "Missing signedData"); }
+  var d = msg.signedData;
+
+  if (!d.type) { throw Error(errorMsg + "Missing type definition"); }
+  if (!d.author) { throw Error(errorMsg + "Missing author"); }
+  if (!d.recipient) { throw Error(errorMsg + "Missing recipient"); }
+  if (!d.timestamp) { throw Error(errorMsg + "Missing timestamp"); }
+
+  if (!moment(d.timestamp)) { throw Error(errorMsg + "Invalid timestamp"); }
+
+  if (d.type === "rating") {
+    if (isNaN(d.rating)) { throw Error(errorMsg + "Invalid rating"); }
+    if (isNaN(d.maxRating)) { throw Error(errorMsg + "Invalid maxRating"); }
+    if (isNaN(d.minRating)) { throw Error(errorMsg + "Invalid minRating"); }
+    if (d.rating > d.maxRating) { throw Error(errorMsg + "Rating is above maxRating"); }
+    if (d.rating < d.minRating) { throw Error(errorMsg + "Rating is below minRating"); }
+  }
+
+  if (d.type === "confirm_connection" || d.type === "refute_connection") {
+
+  }
+
+  return true;
+};
+
+var createConfirmOrRefuteConnection = function(confirm, authorIds, recipientIds, comment, isPublic, skipValidation) {
+  var msg = {
+    signedData: {
+      author: authorIds,
+      recipient: recipientIds,
+      type: confirm ? "confirm_connection" : "refute_connection",
+      comment: comment,
+      timestamp: moment.utc()
+    },
+    isPublic: isPublic || false
+  };
+
+  if (!skipValidation) {
+    validate(msg);
+  }
+  
+  return msg;
+};
+
 module.exports = {
-  create: function(data, isPublic) {
+  createRating: function(authorIds, recipientIds, rating, comment, isPublic, skipValidation) {
     var msg = {
-      signedData: data || {},
+      signedData: {
+        author: authorIds,
+        recipient: recipientIds,
+        type: "rating",
+        rating: rating,
+        maxRating: 10,
+        minRating: -10,
+        comment: comment,
+        timestamp: moment.utc()
+      },
+      isPublic: isPublic || false
+    };
+
+    if (!skipValidation) {
+      validate(msg);
+    }
+    
+    return msg;
+  },
+
+  createConfirmConnection: function(authorIds, recipientIds, comment, isPublic, skipValidation) {
+    return createConfirmOrRefuteConnection(true, authorIds, recipientIds, comment, isPublic, skipValidation);
+  },
+
+  createRefuteConnection: function(authorIds, recipientIds, comment, isPublic, skipValidation) {
+    return createConfirmOrRefuteConnection(false, authorIds, recipientIds, comment, isPublic, skipValidation);
+  },
+
+  fromData: function(data, isPublic, skipValidation) {
+    var msg = {
+      signedData: data,
       isPublic: isPublic || false, 
     };
 
-    msg.signedData.timestamp = msg.signedData.timestamp || Date.now();
+    if (!skipValidation) {
+      validate(msg);
+    }
 
     return msg;
   },
 
-  validate: function(msg) {
-    var errorMsg = "Invalid Identifi message: ";
-    if (!msg.signedData) { throw Error(errorMsg + "Missing signedData"); }
-    var d = msg.signedData;
-
-    if (!d.type) { throw Error(errorMsg + "Missing type definition"); }
-    if (!d.author) { throw Error(errorMsg + "Missing author"); }
-    if (!d.recipient) { throw Error(errorMsg + "Missing recipient"); }
-    if (!d.timestamp) { throw Error(errorMsg + "Missing timestamp"); }
-
-    return true;
-  },
+  validate: validate,
 
   sign: function(msg, privKey, keyID) {
-    this.validate(msg);
+    validate(msg);
     msg.jwsHeader = { alg: 'ES256', kid: keyID };
     msg.jws = jws.sign({
       header: msg.jwsHeader,
@@ -68,7 +136,7 @@ module.exports = {
       msg.jwsHeader = d.header;
       msg.hash = getHash(msg).toString(encoding);
     }
-    this.validate(msg);
+    validate(msg);
     return msg.jwsData;
   },
 
