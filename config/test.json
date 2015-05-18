@@ -1,0 +1,10 @@
+{
+    "db": {
+        "dialect": "sqlite3",
+        "connection": {
+            "filename": "./identifi_test.db"
+        }
+    },
+    "logfile": "./identifi_test.log",
+    "port": 8081
+}

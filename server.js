@@ -36,7 +36,7 @@ try {
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 
-var port = process.env.PORT || 8080;
+var port = config.get('port');
 var server;
 
 // Routes
@@ -162,4 +162,7 @@ app.use('/api', router);
 
 // Start the server
 server = app.listen(port);
+
+module.exports = server;
+
 log('Identifi server started on port ' + port);

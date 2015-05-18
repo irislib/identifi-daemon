@@ -392,7 +392,6 @@ module.exports = function(knex) {
       for (i = 0; i < res.length; i++) {
         if (res[i].length > 0 && res[i][0] < shortestPathToSignature) {
           shortestPathToSignature = res[i][0];
-          console.log('shortestPathToSignature ' + shortestPathToSignature);
         }
       }
       return new P(function(resolve) {
