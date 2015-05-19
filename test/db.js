@@ -1,5 +1,7 @@
 /*global describe, it, after, before */
 'use strict';
+process.env.NODE_ENV = 'test'
+var config = require('config');
 var fs = require('fs');
 var chai = require('chai');
 var chaiAsPromised = require('chai-as-promised');
@@ -23,13 +25,7 @@ describe('Database', function () {
   var db;
   before(function() {
     cleanup(); // After hook fails to execute when errors are thrown
-    var knex = require('knex')({
-      dialect: 'sqlite3',
-      //debug: true,
-      connection: {
-        filename: './test.db'
-      }
-    });
+    var knex = require('knex')(config.get('db'));
     db = require('../db.js')(knex);
   });
 
@@ -186,7 +182,6 @@ describe('Database', function () {
       db.saveMessage(message).then(function() {
         return db.getMessage(message.hash);
       }).then(function(res) {
-        console.log(res[0].priority);
         res[0].priority.should.equal(0);
         done();
       });

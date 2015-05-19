@@ -4,6 +4,7 @@ process.env.NODE_ENV = 'test'
 var fs = require('fs');
 var request = require('request');
 var config = require('config');
+var identifi = require('identifi-lib');
 
 var chai = require('chai');
 var chaiAsPromised = require('chai-as-promised');
@@ -20,6 +21,7 @@ describe('API', function () {
   before(function() {
     cleanup(); // After hook fails to execute when errors are thrown
     server = require('../server.js');
+    identifi.host = 'http://localhost:8081/api/';
   });
 
   after(cleanup);
@@ -28,12 +30,31 @@ describe('API', function () {
     server.close();    
   });
 
-  it('should respond at /api', function (done) {
-    request('http://localhost:' + config.get('port') + '/api', function (error, response, body) {
-      if (!error && response.statusCode == 200) {
-        console.log(body);
-        done();
-      }
-    });
+  it('should return server info', function (done) {
+    identifi.get_info().should.eventually.notify(done);
+  });
+
+  it('should return a list of peers', function (done) {
+    identifi.get_peers().should.eventually.notify(done);
+  });
+
+  describe('Search', function() {
+
+  });
+
+  describe('Overview', function() {
+
+  });
+
+  describe('Connections', function() {
+
+  });
+
+  describe('Sent', function() {
+
+  });
+
+  describe('Received', function() {
+
   });
 });
