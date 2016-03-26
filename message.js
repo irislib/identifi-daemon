@@ -67,7 +67,7 @@ var createConfirmOrRefuteConnection = function(confirm, authorIds, recipientIds,
   if (!skipValidation) {
     validate(msg);
   }
-  
+
   return msg;
 };
 
@@ -90,7 +90,7 @@ module.exports = {
     if (!skipValidation) {
       validate(msg);
     }
-    
+
     return msg;
   },
 
@@ -105,7 +105,7 @@ module.exports = {
   fromData: function(data, isPublic, skipValidation) {
     var msg = {
       signedData: data,
-      isPublic: isPublic || false, 
+      isPublic: isPublic || false,
     };
 
     if (!skipValidation) {

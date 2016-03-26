@@ -27,11 +27,11 @@ describe('API', function () {
   after(cleanup);
   after(function() {
     console.log('Test server at ' + config.get('port') + ' shutting down');
-    server.close();    
+    server.close();
   });
 
-  it('should return server info', function (done) {
-    identifi.get_info().should.eventually.notify(done);
+  it('should return server status', function (done) {
+    identifi.get_status().should.eventually.notify(done);
   });
 
   it('should return a list of peers', function (done) {

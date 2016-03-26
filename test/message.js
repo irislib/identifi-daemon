@@ -55,7 +55,10 @@ describe('Message', function () {
         'oUQDQgAEKn3lQ3+/aN6xNd9DSFrYbaPSGOzLMbb1kQZ9lCMtwc6Og4hfCMLhaSbE\n'+
         '3sXek8e2fvKrTp8FY1MyCL4qMeVviA==\n'+
         '-----END EC PRIVATE KEY-----';
-      pubKey = 'MFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEKn3lQ3+/aN6xNd9DSFrYbaPSGOzLMbb1kQZ9lCMtwc6Og4hfCMLhaSbE3sXek8e2fvKrTp8FY1MyCL4qMeVviA==';
+      pubKey = '-----BEGIN PUBLIC KEY-----\n'+
+        'MFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEKn3lQ3+/aN6xNd9DSFrYbaPSGOzLMbb1\n'+
+        'kQZ9lCMtwc6Og4hfCMLhaSbE3sXek8e2fvKrTp8FY1MyCL4qMeVviA==\n'+
+        '-----END PUBLIC KEY-----'
     });
 
     it('should be created with sign()', function() {

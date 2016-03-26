@@ -1,6 +1,6 @@
 "use strict"
 module.exports = (grunt) ->
-  
+
   watchFiles =
     js: ["*.js"]
     tests: ["test/**/*.js"]
@@ -8,7 +8,7 @@ module.exports = (grunt) ->
 
   # Show elapsed time at the end
   require("time-grunt")(grunt)
-  
+
   # Load all grunt tasks
   require("load-grunt-tasks")(grunt)
 
@@ -27,7 +27,8 @@ module.exports = (grunt) ->
     mochacli:
       all:
         options:
-          bail: true
+          bail: false
+          compilers: 'coffee:coffee-script/register'
         src: watchFiles.tests
     concurrent:
       dev:

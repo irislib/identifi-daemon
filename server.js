@@ -49,7 +49,7 @@ router.get('/', function(req, res) {
 
 
 
-router.get('/info', function(req, res) {
+router.get('/status', function(req, res) {
   var queries = [db.getMessageCount(), db.getIdentityCount()];
   P.all(queries).then(function(results) {
     res.json({ msgCount: results[0][0].val, identityCount: results[1][0].val });

@@ -1,6 +1,7 @@
 {
     "db": {
         "dialect": "sqlite3",
+        "useNullAsDefault": true,
         "connection": {
             "filename": "./identifi_test.db"
         }

@@ -18,7 +18,7 @@ var pubKey = 'MFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEKn3lQ3+/aN6xNd9DSFrYbaPSGOzLMbb1kQ
 
 
 var cleanup = function() {
-  fs.unlink('./test.db', function(err) {});
+  //fs.unlink('./identifi_test.db', function(err) {});
 };
 
 describe('Database', function () {
