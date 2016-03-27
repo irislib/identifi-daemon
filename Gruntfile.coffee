@@ -1,9 +1,10 @@
 "use strict"
+
 module.exports = (grunt) ->
 
   watchFiles =
     js: ["*.js"]
-    tests: ["test/**/*.js"]
+    tests: ["test/**/*.coffee"]
     gruntfile: ["Gruntfile.coffee"]
 
   # Show elapsed time at the end
@@ -24,11 +25,12 @@ module.exports = (grunt) ->
         reporter: require("jshint-stylish")
       js:
         src: watchFiles.js
-    mochacli:
+    mochaTest:
       all:
         options:
+          reporter: 'spec'
           bail: false
-          compilers: 'coffee:coffee-script/register'
+          require: 'coffee-script/register'
         src: watchFiles.tests
     concurrent:
       dev:
@@ -47,14 +49,14 @@ module.exports = (grunt) ->
         files: watchFiles.js
         tasks: [
           "jshint"
-          "mochacli"
+          "mochaTest"
         ]
       tests:
         files: watchFiles.tests
-        tasks: ["mochacli"]
+        tasks: ["mochaTest"]
       coffee:
         files: watchFiles.gruntfile
-        tasks: ["coffeelint", "mochacli"]
+        tasks: ["coffeelint", "mochaTest"]
 
-  grunt.registerTask "test", ["coffeelint", "jshint", "mochacli"]
-  grunt.registerTask "default", ["coffeelint", "jshint", "mochacli", "concurrent"]
+  grunt.registerTask "test", ["coffeelint", "jshint", "mochaTest"]
+  grunt.registerTask "default", ["coffeelint", "jshint", "mochaTest", "concurrent"]
