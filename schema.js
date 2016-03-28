@@ -8,7 +8,8 @@ var addDefaultUniqueIdentifierTypes = function(db) {
       { type: 'url' },
       { type: 'tel' },
       { type: 'keyID' },
-      { type: 'bitcoin' }
+      { type: 'bitcoin' },
+      { type: 'identifiNode' }
     ]
   );
 };

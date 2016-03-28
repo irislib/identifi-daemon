@@ -1,8 +1,10 @@
 /*jshint unused: false */
 'use strict';
 var schema = require('./schema.js');
-var Message = require('./message.js');
+var Message = require('identifi-lib/message');
 var P = require("bluebird");
+var moment = require('moment');
+
 
 module.exports = function(knex) {
   schema.init(knex);
@@ -16,7 +18,7 @@ module.exports = function(knex) {
         queries.push(knex('Messages').insert({
           hash:           message.hash,
           jws:            message.jws,
-          created:        message.signedData.timestamp.unix(),
+          created:        moment(message.signedData.timestamp).unix(),
           type:           message.signedData.type || 'rating',
           rating:         message.signedData.rating || 0,
           max_rating:     message.signedData.maxRating || 0,

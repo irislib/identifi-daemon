@@ -5,7 +5,7 @@ var express    = require('express');
 var app        = express();
 var bodyParser = require('body-parser');
 
-var Message = require('./message.js');
+var Message = require('identifi-lib/message');
 
 var config = require('config');
 
@@ -44,7 +44,7 @@ var server;
 var router = express.Router();
 
 router.get('/', function(req, res) {
-  res.json({ message: 'Identifi API' });   
+  res.json({ message: 'Identifi API' });
 });
 
 
@@ -135,7 +135,7 @@ router.route('/msg/:hash')
 
 router.get('/id', function(req, res) {
     db.getMessageCount().then(function(dbRes) {
-      res.json({ msgCount: dbRes[0].val });   
+      res.json({ msgCount: dbRes[0].val });
     });
 });
 
