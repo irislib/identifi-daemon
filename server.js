@@ -104,7 +104,7 @@ router.route('/keys')
 
 
 
-router.route('/msg')
+router.route('/messages')
   .get(function(req, res) {
     db.getMessageCount().then(function(dbRes) {
       res.json(dbRes);
@@ -113,22 +113,31 @@ router.route('/msg')
   })
 
   .post(function(req, res) {
-    var message = { signedData: req.body.messageData };
-    Message.sign(message);
-    db.saveMessage(message).then(function(dbRes) {
-      res.json(dbRes);
+    var m = Message.decode(req.body);
+    db.saveMessage(m).then(function() {
+      res.status(201).json(m);
     });
   });
 
 
 
-router.route('/msg/:hash')
+router.route('/messages/:hash')
   .get(function(req, res) {
-    res.json("get a message by hash");
+    db.getMessage(req.params.hash).then(function(dbRes) {
+      if (!dbRes.length) {
+        return res.status(404).json('Message not found');
+      }
+      res.json(dbRes[0]);
+    });
   })
 
   .delete(function(req, res) {
-    res.json("delete a message");
+    db.dropMessage(req.params.hash).then(function(dbRes) {
+      if (!dbRes) {
+        return res.status(404).json('Message not found');
+      }
+      res.json('OK');
+    });
   });
 
 
