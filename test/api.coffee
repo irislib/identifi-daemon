@@ -25,7 +25,7 @@ describe 'API', ->
     cleanup()
     # After hook fails to execute when errors are thrown
     server = require('../server.js')
-    identifi.apiRoot = 'http://localhost:8081/api'
+    identifi.apiRoot = 'http://localhost:4944/api'
   after cleanup
   after ->
     console.log 'Test server at ' + config.get('port') + ' shutting down'
@@ -111,7 +111,7 @@ describe 'API', ->
             viewpoint_value: 'alice@example.com'
             max_distance: 1
         r.then (res) ->
-          res.length.should.equal 3
+          res.length.should.equal 1
           done()
     describe 'delete', ->
       it 'should fail if the message was not found', ->
@@ -134,20 +134,133 @@ describe 'API', ->
               apiId: m.hash
         r.should.be.rejectedWith Error
   describe 'identifiers', ->
-    describe 'search', ->
-      it 'should return matching identifiers / identities ordered by trust distance'
-      it 'should return a list of peers as identifi identities'
+      it 'should fail if an identity was not found', ->
+        r = identifi.request
+              apiMethod: 'id'
+              apiId: 'bob@example.com'
+              apiIdType: 'nope'
+        r.should.be.rejectedWith Error
+    describe 'retrieve', ->
+      it 'should return an identity', (done) ->
+        r = identifi.request
+          apiMethod: 'id'
+          apiId: 'bob@example.com'
+          apiIdType: 'email'
+        r.then (res) ->
+          res.should.not.be.empty
+          done()
+    describe 'list', ->
+      it 'should return identities', (done) ->
+        r = identifi.request
+          apiMethod: 'id'
+        r.then (res) ->
+          res.length.should.equal 4
+          done()
+      it 'should filter identities by identifier type', (done) ->
+        r = identifi.request
+          apiMethod: 'id'
+          qs:
+            type: 'email'
+        r.then (res) ->
+          res.length.should.equal 4
+          done()
+      it 'should filter by search query', (done) ->
+        r = identifi.request
+          apiMethod: 'id'
+          qs:
+            search_value: 'i'
+        r.then (res) ->
+          res.length.should.equal 2
+          res[0].value.should.equal 'alice@example.com'
+          res[1].value.should.equal 'david@example.com'
+          done()
+      it 'should return a list of peers as identifi identities', (done) ->
+        r = identifi.request
+          apiMethod: 'id'
+          qs:
+            type: 'identifi_node'
+        r.then (res) ->
+          res.length.should.equal 0
+          done()
     describe 'overview', ->
-      it 'should return an overview of an identifier'
+      it 'should return an overview of an identifier', (done) ->
+        r = identifi.request
+          apiMethod: 'id'
+          apiIdType: 'email'
+          apiId: 'bob@example.com'
+          apiAction: 'overview'
+        r.then (res) ->
+          res.should.not.be.empty
+          done()
     describe 'connections', ->
-      it 'should return an identity, i.e. set of identifiers connected to the query param'
-    describe 'connectingmsgs', ->
-        it 'should messages that connect id1 and id2 to the same identity'
+      it 'should return an identity, i.e. set of identifiers connected to the query param', (done) ->
+        r = identifi.request
+          apiMethod: 'id'
+          apiIdType: 'email'
+          apiId: 'bob@example.com'
+          apiAction: 'connections'
+        r.then (res) ->
+          res.should.not.be.empty
+          done()
+    describe 'connecting_msgs', ->
+        it 'should return messages that connect id1 and id2 to the same identity', (done) ->
+          r = identifi.request
+            apiMethod: 'id'
+            apiIdType: 'email'
+            apiId: 'bob@example.com'
+            apiAction: 'connecting_msgs'
+            qs:
+              target_type: 'name'
+              target_value: 'Bob the Builder'
+          r.then (res) ->
+            res.should.not.be.empty
+            done()
     describe 'sent', ->
-      it 'should return messages sent by an identifier / identity'
+      it 'should return messages sent by an identifier / identity', (done) ->
+        r = identifi.request
+          apiMethod: 'id'
+          apiIdType: 'email'
+          apiId: 'bob@example.com'
+          apiAction: 'sent'
+        r.then (res) ->
+          res.should.not.be.empty
+          done()
     describe 'received', ->
-      it 'should return messages received by an identifier / identity'
+      it 'should return messages received by an identifier / identity', (done) ->
+        r = identifi.request
+          apiMethod: 'id'
+          apiIdType: 'email'
+          apiId: 'bob@example.com'
+          apiAction: 'received'
+        r.then (res) ->
+          res.should.not.be.empty
+          done()
     describe 'getname', ->
       it 'should return a cached common name for the identifier'
     describe 'trustpaths', ->
-      it 'should trustpaths from id1 to id2'
+      it 'should return a trustpath from alice to bob', (done) ->
+        r = identifi.request
+          apiMethod: 'id'
+          apiIdType: 'email'
+          apiId: 'alice@example.com'
+          apiAction: 'trustpaths'
+          qs:
+            target_type: 'email'
+            target_value: 'bob@example.com'
+        r.then (res) ->
+          res.should.not.be.empty
+          res[0].path_string.split(':').length.should.equal 5
+          done()
+      it 'should return a trustpath from alice to david', (done) ->
+        r = identifi.request
+          apiMethod: 'id'
+          apiIdType: 'email'
+          apiId: 'alice@example.com'
+          apiAction: 'trustpaths'
+          qs:
+            target_type: 'email'
+            target_value: 'david@example.com'
+        r.then (res) ->
+          res.should.not.be.empty
+          res[0].path_string.split(':').length.should.equal 9
+          done()

@@ -13,7 +13,7 @@ privKey = '-----BEGIN EC PRIVATE KEY-----\n' + 'MHQCAQEEINY+49rac3jkC+S46XN0f411
 pubKey = 'MFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEKn3lQ3+/aN6xNd9DSFrYbaPSGOzLMbb1kQZ9lCMtwc6Og4hfCMLhaSbE3sXek8e2fvKrTp8FY1MyCL4qMeVviA=='
 
 cleanup = ->
-  fs.unlink('./identifi_test.db', (err) -> {});
+  fs.unlink './identifi_test.db', (err) ->
 
 describe 'Database', ->
   db = undefined
@@ -56,25 +56,19 @@ describe 'Database', ->
       res[0].val.should.equal 3
       done()
   it 'should return message by hash', (done) ->
-    db.getMessages({ hash: hash }).then (res) ->
+    db.getMessages({ where: { hash: hash } }).then (res) ->
       res.length.should.equal 1
       done()
   it 'should return sent messages', (done) ->
-    db.getSent([
-      'email'
-      'alice@example.com'
-    ]).then (res) ->
+    db.getMessages({ author: ['email', 'alice@example.com'] }).then (res) ->
       res.length.should.equal 1
       done()
   it 'should return received messages', (done) ->
-    db.getReceived([
-      'email'
-      'bob@example.com'
-    ]).then (res) ->
+    db.getMessages({ recipient: ['email', 'bob@example.com'] }).then (res) ->
       res.length.should.equal 2
       done()
   it 'should find a saved identifier', (done) ->
-    db.identifierSearch('bob').then (res) ->
+    db.getIdentities({ searchValue: 'bob' }).then (res) ->
       res.length.should.equal 1
       res[0].type.should.equal 'email'
       res[0].value.should.equal 'bob@example.com'
@@ -87,62 +81,41 @@ describe 'Database', ->
     Message.sign message, privKey, pubKey
     db.saveMessage(message).should.eventually.notify done
   it 'should return connecting messages', (done) ->
-    db.getConnectingMessages([
-      'email'
-      'bob@example.com'
-    ], [
-      'url'
-      'http://www.example.com/bob'
-    ]).then (res) ->
+    db.getConnectingMessages({
+      id1: ['email', 'bob@example.com']
+      id2: ['url', 'http://www.example.com/bob']
+    }).then (res) ->
       res.length.should.equal 1
       done()
   it 'should return connections', (done) ->
-    db.getConnectedIdentifiers([
-      'email'
-      'bob@example.com'
-    ], [], 10, 0, [
-      'email'
-      'alice@example.com'
-    ]).then (res) ->
+    db.getConnectedIdentifiers({
+      id: ['email','bob@example.com']
+      viewpoint: ['email', 'alice@example.com']
+    }).then (res) ->
       res.length.should.equal 1
       done()
   it 'should generate a trust map', (done) ->
-    db.generateTrustMap([
-      'email'
-      'alice@example.com'
-    ], 3).then (res) ->
+    db.generateTrustMap(['email', 'alice@example.com'], 3).then (res) ->
       res[0].val.should.equal 2
       done()
   it 'should return a trust path', (done) ->
-    db.getTrustPaths([
-      'email'
-      'alice@example.com'
-    ], [
-      'email'
-      'charles@example.com'
-    ], 3).then (res) ->
+    db.getTrustPaths(['email', 'alice@example.com'], ['email', 'charles@example.com'], 3).then (res) ->
       res.length.should.equal 1
       done()
   it 'should find 4 identifiers matching "a"', (done) ->
-    db.identifierSearch('a').then (res) ->
+    db.getIdentities({ searchValue: 'a' }).then (res) ->
       res.length.should.equal 4
       done()
   it 'should find 1 identifier matching "alice"', (done) ->
-    db.identifierSearch('alice').then (res) ->
+    db.getIdentities({ searchValue: 'alice' }).then (res) ->
       res.length.should.equal 1
       done()
   it 'should find 4 identities matching "a"', (done) ->
-    db.identitySearch([
-      ''
-      'a'
-    ]).then (res) ->
+    db.identitySearch(['', 'a']).then (res) ->
       res.length.should.equal 4
       done()
   it 'should find 1 identity matching "alice"', (done) ->
-    db.identitySearch([
-      ''
-      'alice'
-    ]).then (res) ->
+    db.identitySearch(['', 'alice']).then (res) ->
       res.length.should.equal 1
       done()
   it 'should initially have no private keys', (done) ->
@@ -163,18 +136,12 @@ describe 'Database', ->
         rating: 1
       Message.sign message, privKey, pubKey
       db.saveMessage(message).then(->
-        db.getMessages({ hash: message.hash })
+        db.getMessages({ where: { hash: message.hash } })
       ).then (res) ->
         res[0].priority.should.equal 0
         done()
   it 'should return an overview of an identifier', (done) ->
-    db.overview([
-      'email'
-      'bob@example.com'
-    ], [
-      'email'
-      'alice@example.com'
-    ]).then (res) ->
+    db.overview(['email', 'bob@example.com'], ['email', 'alice@example.com']).then (res) ->
       res.length.should.equal 1
       res[0].sentPositive.should.equal 1
       res[0].sentNeutral.should.equal 0

@@ -58,7 +58,7 @@ router.get('/status', function(req, res) {
 
 
 
-router.get('/halt', function(req, res) {
+router.get('/stop', function(req, res) {
   var msg = 'Shutting down the identifi server';
   res.json(msg);
   log(msg);
@@ -104,34 +104,56 @@ router.route('/keys')
 
 
 
+// Helper method
+function getMessages(req, res, options) {
+    options = options || {};
+    options.where = options.where || {};
+
+    if (req.query.viewpoint_type && req.query.viewpoint_value) {
+      options.viewpoint = [req.query.viewpoint_type, req.query.viewpoint_value];
+    }
+    if (req.query.type)     { options.where.type = req.query.type; }
+    if (req.query.order_by) { options.orderBy = req.query.order_by; }
+    if (req.query.direction && (req.query.direction === 'asc' || req.query.direction === 'desc')) {
+       options.direction = req.query.order_by;
+    }
+    if (req.query.limit)    { options.limit = parseInt(req.query.limit); }
+    if (req.query.offset)   { options.offset = parseInt(req.query.offset); }
+    db.getMessages(options).then(function(dbRes) {
+      res.json(dbRes);
+    }).catch(function(err) { handleError(err, req, res); });
+}
+
+
+function handleError(err, req, res) {
+  log(err);
+  log(req);
+  res.status(500).json('Server error');
+}
+
+
 router.route('/messages')
   .get(function(req, res) {
-    var where = {};
-    if (req.query.type) {
-      where.type = req.query.type;
-    }
-    db.getMessages(where).then(function(dbRes) {
-      res.json(dbRes);
-    });
+    getMessages(req, res);
   })
 
   .post(function(req, res) {
     var m = Message.decode(req.body);
     db.saveMessage(m).then(function() {
       res.status(201).json(m);
-    });
+    }).catch(function(err) { handleError(err, req, res); });
   });
 
 
 
 router.route('/messages/:hash')
   .get(function(req, res) {
-    db.getMessages({ hash: req.params.hash }).then(function(dbRes) {
+    db.getMessages({ where: { hash: req.params.hash } }).then(function(dbRes) {
       if (!dbRes.length) {
         return res.status(404).json('Message not found');
       }
       res.json(dbRes[0]);
-    });
+    }).catch(function(err) { handleError(err, req, res); });
   })
 
   .delete(function(req, res) {
@@ -140,33 +162,118 @@ router.route('/messages/:hash')
         return res.status(404).json('Message not found');
       }
       res.json('OK');
-    });
+    }).catch(function(err) { handleError(err, req, res); });
   });
 
 
 
 router.get('/id', function(req, res) {
-    db.getMessageCount().then(function(dbRes) {
-      res.json({ msgCount: dbRes[0].val });
-    });
+    var options = {
+      where: {}
+    };
+    if (req.query.type)             { options.where.type = req.query.type; }
+    if (req.query.search_value)     { options.searchValue = req.query.search_value; }
+    if (req.query.order_by)         { options.orderBy = req.query.order_by; }
+    if (req.query.direction && (req.query.direction === 'asc' || req.query.direction === 'desc'))
+                                    { options.direction = req.query.order_by; }
+    if (req.query.limit)            { options.limit = parseInt(req.query.limit); }
+    if (req.query.offset)           { options.offset = parseInt(req.query.offset); }
+    db.getIdentities(options).then(function(dbRes) {
+      res.json(dbRes);
+    }).catch(function(err) { handleError(err, req, res); });
 });
 
 
 
-router.get('/id/:id_type/:id_value', function(req, res) {
-  db.getConnectedIdentifiers([req.params.id_type, req.params.id_value], [], 10, 0, ['email', 'alice@example.com']).then(function(dbRes) {
+router.get('/id/:type/:value', function(req, res) {
+  db.getIdentities({ where: { type: req.params.type, value: req.params.value } }).then(function(dbRes) {
+    if (!dbRes.length) {
+      return res.status(404).json('Identity not found');
+    }
     res.json(dbRes);
-  });
+  }).catch(function(err) { handleError(err, req, res); });
 });
 
 
 
 router.get('/id/:id_type/:id_value/overview', function(req, res) {
-  db.overview([req.params.id_type, req.params.id_value], ['a', 'b']).then(function(dbRes) {
+  var viewpoint = ['', ''];
+  if (req.query.viewpoint_type && req.query.viewpoint_value) {
+    viewpoint = [req.query.viewpoint_type, req.query.viewpoint_value];
+  }
+  log('test1');
+  db.overview([req.params.id_type, req.params.id_value], viewpoint).then(function(dbRes) {
+    log('test');
     res.json(dbRes);
-  });
+  }).catch(function(err) { handleError(err, req, res); });
 });
 
+
+router.get('/id/:id_type/:id_value/sent', function(req, res) {
+  var options = {
+    author: [req.params.id_type, req.params.id_value],
+  };
+  getMessages(req, res, options);
+});
+
+
+router.get('/id/:id_type/:id_value/received', function(req, res) {
+  var options = {
+    recipient: [req.params.id_type, req.params.id_value],
+  };
+  getMessages(req, res, options);
+});
+
+
+
+router.get('/id/:id_type/:id_value/connections', function(req, res) {
+  var options = {
+    id: [req.params.id_type, req.params.id_value],
+    limit: 50,
+    offset: 0,
+    viewpoint: ['email', 'alice@example.com']
+  };
+  if (req.query.type)             { options.where.type = req.query.type; }
+  if (req.query.limit)            { options.limit = parseInt(req.query.limit); }
+  if (req.query.offset)           { options.offset = parseInt(req.query.offset); }
+  if (req.query.viewpoint_type && req.query.viewpoint_value) {
+    options.viewpoint = [req.query.viewpoint_type, req.query.viewpoint_value];
+  }
+
+  db.getConnectedIdentifiers(options).then(function(dbRes) {
+    res.json(dbRes);
+  }).catch(function(err) { handleError(err, req, res); });
+});
+
+
+
+router.get('/id/:id_type/:id_value/connecting_msgs', function(req, res) {
+  if (!(req.query.target_type && req.query.target_value)) {
+    res.status(400).json('target_type and target_value must be specified');
+    return;
+  }
+  var options = {
+    id1: [req.params.id_type, req.params.id_value],
+    id2: [req.query.target_type, req.query.target_value]
+  };
+  db.getConnectingMessages(options).then(function(dbRes) {
+    res.json(dbRes);
+  }).catch(function(err) { handleError(err, req, res); });
+});
+
+
+
+router.get('/id/:id_type/:id_value/trustpaths', function(req, res) {
+  if (!(req.query.target_type && req.query.target_value)) {
+    res.status(400).json('target_type and target_value must be specified');
+    return;
+  }
+  var maxLength = req.query.max_length || 5;
+  var shortestOnly = req.query.max_length !== undefined;
+  db.getTrustPaths([req.params.id_type, req.params.id_value], [req.query.target_type, req.query.target_value], maxLength, shortestOnly).then(function(dbRes) {
+    res.json(dbRes);
+  }).catch(function(err) { handleError(err, req, res); });
+});
 
 
 // Register the routes

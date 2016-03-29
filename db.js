@@ -24,7 +24,7 @@ module.exports = function(knex) {
           rating:         message.signedData.rating || 0,
           max_rating:     message.signedData.maxRating || 0,
           min_rating:     message.signedData.minRating || 0,
-          is_published:   message.isPublished,
+          public:         message.signedData.public || true,
           priority:       priority,
           is_latest:      p.isLatest(message),
           signer_keyid:   message.jwsHeader.kid,
@@ -51,19 +51,42 @@ module.exports = function(knex) {
         return P.all(queries);
       });
     },
-    getMessages: function(where, orderBy, direction, limit, offset) {
-      orderBy = orderBy || 'timestamp';
-      limit = parseInt(limit) || 100;
-      offset = parseInt(offset) || 0;
-      where = where || {};
-      if (direction !== 'asc' && direction !== 'desc') {
-        direction = 'desc';
+    getMessages: function(options) {
+      var defaultOptions = {
+        orderBy: 'timestamp',
+        direction: 'desc',
+        limit: 100,
+        offset: 0,
+        where: {}
+      };
+      options = options || defaultOptions;
+      for (var key in defaultOptions) {
+        options[key] = options[key] !== undefined ? options[key] : defaultOptions[key];
       }
+
+      if (options.author || options.recipient) {
+        if (options.author) {
+          options.where['id.type'] = options.author[0];
+          options.where['id.value'] = options.author[1];
+          options.where['id.is_recipient'] = false;
+        } else {
+          options.where['id.type'] = options.recipient[0];
+          options.where['id.value'] = options.recipient[1];
+          options.where['id.is_recipient'] = true;
+        }
+        return knex.select('*').from('Messages')
+          .innerJoin('MessageIdentifiers as id', 'Messages.hash', 'id.message_hash')
+          .where(options.where)
+          .orderBy(options.orderBy, options.direction)
+          .limit(options.limit)
+          .offset(options.offset);
+      }
+
       return knex.select('*').from('Messages')
-        .where(where)
-        .orderBy(orderBy, direction)
-        .limit(limit)
-        .offset(offset);
+        .where(options.where)
+        .orderBy(options.orderBy, options.direction)
+        .limit(options.limit)
+        .offset(options.offset);
     },
 
     dropMessage: function(messageHash) {
@@ -77,24 +100,40 @@ module.exports = function(knex) {
         });
     },
 
-    getSent: function(sender, limit, offset, viewpoint) {
-      return knex.from('Messages')
-        .innerJoin('MessageIdentifiers', 'Messages.hash', 'MessageIdentifiers.message_hash')
-        .where({ 'MessageIdentifiers.type': sender[0], 'MessageIdentifiers.value': sender[1], 'MessageIdentifiers.is_recipient': false });
+    getIdentities: function(options) {
+      var defaultOptions = {
+        orderBy: 'value',
+        direction: 'asc',
+        limit: 100,
+        offset: 0,
+        where: {}
+      };
+      options = options || defaultOptions;
+      for (var key in defaultOptions) {
+        options[key] = options[key] !== undefined ? options[key] : defaultOptions[key];
+      }
+
+      if (options.searchValue) {
+        return knex.from('MessageIdentifiers').distinct('type', 'value').select()
+          .where(options.where)
+          .where('value', 'like', '%' + options.searchValue + '%')
+          .orderBy(options.orderBy, options.direction)
+          .limit(options.limit)
+          .offset(options.offset);
+      }
+      return knex.from('MessageIdentifiers').distinct('type', 'value').select()
+        .where(options.where)
+        .orderBy(options.orderBy, options.direction)
+        .limit(options.limit)
+        .offset(options.offset);
     },
 
-    getReceived: function(recipient, limit, offset, viewpoint) {
-      return knex.from('Messages')
-        .innerJoin('MessageIdentifiers', 'Messages.hash', 'MessageIdentifiers.message_hash')
-        .where({ 'MessageIdentifiers.type': recipient[0], 'MessageIdentifiers.value': recipient[1], 'MessageIdentifiers.is_recipient': true });
-    },
-
-    getConnectedIdentifiers: function(id, types, limit, offset, viewpoint) {
+    getConnectedIdentifiers: function(options) {
       var sql = 'identity_id IN (SELECT identity_id FROM Identities WHERE type = ? AND value = ? AND viewpoint_type = ? AND viewpoint_value = ?)';
       var countBefore;
 
       return knex('Identities')
-        .whereRaw(sql, [id[0], id[1], viewpoint[0], viewpoint[1]]).del()
+        .whereRaw(sql, [options.id[0], options.id[1], options.viewpoint[0], options.viewpoint[1]]).del()
         .then(function() {
           return knex('Identities').count('* as count');
         })
@@ -108,7 +147,7 @@ module.exports = function(knex) {
           sql += "( ";
           sql += "SELECT id1.type, id1.value, id2.type, id2.value, 1 AS distance, ";
           sql += "printf('%s:%s:%s:%s:',replace(id1.type,':','::'),replace(id1.value,':','::'),replace(id2.type,':','::'),replace(id2.value,':','::')) AS path_string, ";
-          sql += "1 AS Confirmations, ";
+          sql += "1 AS Confirmations, "; // TODO fix
           sql += "0 AS Refutations ";
           sql += "FROM Messages AS p ";
           sql += "INNER JOIN MessageIdentifiers AS id1 ON p.hash = id1.message_hash ";
@@ -123,7 +162,7 @@ module.exports = function(knex) {
 
           sql += "SELECT tc.id1type, tc.id1val, id2.type, id2.value, tc.distance + 1, ";
           sql += "printf('%s%s:%s:',tc.path_string,replace(id2.type,':','::'),replace(id2.value,':','::')) AS path_string, ";
-          sql += "1 AS Confirmations, ";
+          sql += "1 AS Confirmations, "; // TODO fix
           sql += "0 AS Refutations ";
           sql += "FROM Messages AS p ";
           sql += "JOIN MessageIdentifiers AS id1 ON p.hash = id1.message_hash AND id1.is_recipient = 1 ";
@@ -148,10 +187,10 @@ module.exports = function(knex) {
           sql += "WHERE mi.type = :type AND mi.value = :id  ";
 
           var sqlValues = {
-            type: id[0],
-            id: id[1],
-            viewpointType: viewpoint[0],
-            viewpointID: viewpoint[1]
+            type: options.id[0],
+            id: options.id[1],
+            viewpointType: options.viewpoint[0],
+            viewpointID: options.viewpoint[1]
           };
 
           return knex.raw(sql, sqlValues);
@@ -169,7 +208,7 @@ module.exports = function(knex) {
           }*/
           sql += "GROUP BY type, value ";
           sql += "ORDER BY c-r DESC ";
-          return knex.raw(sql, [id[0], id[1]]);
+          return knex.raw(sql, [options.id[0], options.id[1]]);
         });
     },
 
@@ -185,16 +224,16 @@ module.exports = function(knex) {
       });
     },
 
-    getConnectingMessages: function(id1, id2, limit, offset, viewpoint) {
-      return knex.from('Messages')
+    getConnectingMessages: function(options) {
+      return knex.select('Messages.*').from('Messages')
         .innerJoin('MessageIdentifiers as id1', 'Messages.hash', 'id1.message_hash')
         .innerJoin('MessageIdentifiers as id2', 'id1.message_hash', 'id2.message_hash')
         .where({
-          'id1.type': id1[0],
-          'id1.value': id1[1],
+          'id1.type': options.id1[0],
+          'id1.value': options.id1[1],
           'id1.is_recipient': true,
-          'id2.type': id2[0],
-          'id2.value': id2[1],
+          'id2.type': options.id2[0],
+          'id2.value': options.id2[1],
           'id2.is_recipient': true
         });
     },
@@ -234,12 +273,6 @@ module.exports = function(knex) {
           return knex('TrustDistances').count('* as val')
             .where({ start_id_type: id[0], start_id_value: id[1] });
         });
-    },
-
-    identifierSearch: function(query, limit, offset, viewpoint) {
-      return knex.from('MessageIdentifiers')
-        .where('value', 'like', '%' + query + '%')
-        .distinct('type', 'value').select();
     },
 
     identitySearch: function(query, limit, offset, viewpoint) {
@@ -291,6 +324,7 @@ module.exports = function(knex) {
       var params = { query: query[1], type: query[0], viewType: viewpoint[0], viewID: viewpoint[1] };
       return knex.raw(sql, params);
     },
+
     getTrustPaths: function(start, end, maxLength, shortestOnly) {
       var sql = '';
       sql += "WITH RECURSIVE transitive_closure(id1type, id1val, id2type, id2val, distance, path_string) AS ";
@@ -370,9 +404,10 @@ module.exports = function(knex) {
       sql += "FROM Messages AS p ";
       sql += "INNER JOIN MessageIdentifiers AS pi ON pi.message_hash = p.hash ";
       sql += "INNER JOIN UniqueIdentifierTypes AS tpp ON tpp.type = pi.type ";
-      sql += "INNER JOIN Identities AS i ON pi.type = i.type AND pi.value = i.value AND i.identity_id = ";
-      sql += "(SELECT identity_id FROM Identities WHERE viewpoint_value = :viewpointID AND viewpoint_type = :viewpointType ";
-      sql += "AND type = :type AND value = :id) ";
+      if (useViewpoint) {
+          sql += "INNER JOIN Identities AS i ON pi.type = i.type AND pi.value = i.value AND i.identity_id = ";
+          sql += "(SELECT identity_id FROM Identities WHERE viewpoint_value = :viewpointID AND viewpoint_type = :viewpointType ";
+          sql += "AND type = :type AND value = :id) ";      }
       //AddMessageFilterSQL(sql, viewpoint, maxDistance, msgType);
       sql += "WHERE p.type = 'rating' ";
       sql += "AND p.is_latest = 1 ";
@@ -380,9 +415,8 @@ module.exports = function(knex) {
       if (useViewpoint) {
           sql += "AND (tp.start_value IS NOT NULL OR (author.value = :viewpointID AND author.type = :viewpointType) ";
           sql += "OR (author.type = :type AND author.value = :id)) ";
+          sql += "GROUP BY i.identity_id ";
       }
-
-      sql += "GROUP BY i.identity_id ";
 
       return knex.raw(sql, { type: id[0], id: id[1], viewpointType: viewpoint[0], viewpointID: viewpoint[1] });
     }
@@ -416,7 +450,7 @@ module.exports = function(knex) {
     },
 
     isLatest: function(message) {
-      return true;
+      return true; // TODO: implement
     },
 
     saveMessageTrustDistances: function(message) {
