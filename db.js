@@ -18,7 +18,8 @@ module.exports = function(knex) {
         queries.push(knex('Messages').insert({
           hash:           message.hash,
           jws:            message.jws,
-          created:        moment(message.signedData.timestamp).unix(),
+          saved_at:       moment(message.signedData.timestamp).unix(),
+          timestamp:      message.signedData.timestamp,
           type:           message.signedData.type || 'rating',
           rating:         message.signedData.rating || 0,
           max_rating:     message.signedData.maxRating || 0,
@@ -50,8 +51,19 @@ module.exports = function(knex) {
         return P.all(queries);
       });
     },
-    getMessage: function(messageHash) {
-      return knex.select('*').from('Messages').where({ hash: messageHash });
+    getMessages: function(where, orderBy, direction, limit, offset) {
+      orderBy = orderBy || 'timestamp';
+      limit = parseInt(limit) || 100;
+      offset = parseInt(offset) || 0;
+      where = where || {};
+      if (direction !== 'asc' && direction !== 'desc') {
+        direction = 'desc';
+      }
+      return knex.select('*').from('Messages')
+        .where(where)
+        .orderBy(orderBy, direction)
+        .limit(limit)
+        .offset(offset);
     },
 
     dropMessage: function(messageHash) {
@@ -354,7 +366,7 @@ module.exports = function(knex) {
           sql += "SUM(CASE WHEN pi.is_recipient = 1 AND p.rating < (p.min_rating + p.max_rating) / 2 AND  ";
           sql += "(tp.start_value IS NOT NULL OR (author.value = :viewpointID AND author.type = :viewpointType)) THEN 1 ELSE 0 END) AS receivedNegative, ";
       }
-      sql += "MIN(p.created) AS firstSeen ";
+      sql += "MIN(p.timestamp) AS firstSeen ";
       sql += "FROM Messages AS p ";
       sql += "INNER JOIN MessageIdentifiers AS pi ON pi.message_hash = p.hash ";
       sql += "INNER JOIN UniqueIdentifierTypes AS tpp ON tpp.type = pi.type ";

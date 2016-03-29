@@ -106,9 +106,12 @@ router.route('/keys')
 
 router.route('/messages')
   .get(function(req, res) {
-    db.getMessageCount().then(function(dbRes) {
+    var where = {};
+    if (req.query.type) {
+      where.type = req.query.type;
+    }
+    db.getMessages(where).then(function(dbRes) {
       res.json(dbRes);
-      log("list messages");
     });
   })
 
@@ -123,7 +126,7 @@ router.route('/messages')
 
 router.route('/messages/:hash')
   .get(function(req, res) {
-    db.getMessage(req.params.hash).then(function(dbRes) {
+    db.getMessages({ hash: req.params.hash }).then(function(dbRes) {
       if (!dbRes.length) {
         return res.status(404).json('Message not found');
       }

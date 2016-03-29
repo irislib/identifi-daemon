@@ -40,7 +40,8 @@ var init = function(db) {
   .createTable('Messages', function(t) {
     t.string('hash').primary();
     t.string('jws');
-    t.timestamp('created');
+    t.timestamp('saved_at');
+    t.datetime('timestamp');
     t.string('type');
     t.integer('rating');
     t.integer('max_rating');

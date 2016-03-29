@@ -35,7 +35,7 @@ describe 'API', ->
       apiMethod: 'status'
   describe 'messages', ->
     describe 'create', ->
-      it 'should add a new message', ->
+      it 'should add a rating message', ->
         m = message.createRating
           author: [['email', 'alice@example.com']]
           recipient: [['email', 'bob@example.com']]
@@ -45,34 +45,84 @@ describe 'API', ->
           method: 'POST'
           apiMethod: 'messages'
           body: m
+      it 'should add another rating message', ->
+        m = message.createRating
+          author: [['email', 'bob@example.com']]
+          recipient: [['email', 'charles@example.com']]
+          rating: 10
+        message.sign(m, privKey, 'keyID')
+        r = identifi.request
+          method: 'POST'
+          apiMethod: 'messages'
+          body: m
+      it 'one more', ->
+        m = message.createRating
+          author: [['email', 'charles@example.com']]
+          recipient: [['email', 'david@example.com']]
+          rating: 10
+        message.sign(m, privKey, 'keyID')
+        r = identifi.request
+          method: 'POST'
+          apiMethod: 'messages'
+          body: m
+      it 'add a connection msg', ->
+        m = message.create
+          author: [['email', 'alice@example.com']]
+          recipient: [['email', 'bob@example.com'], ['name', 'Bob the Builder']]
+          type: 'confirm_connection'
+        message.sign(m, privKey, 'keyID')
+        r = identifi.request
+          method: 'POST'
+          apiMethod: 'messages'
+          body: m
     describe 'retrieve', ->
       it 'should fail if the message was not found', ->
         r = identifi.request
-              apiMethod: 'messages',
+              apiMethod: 'messages'
               apiId: '1234'
         r.should.be.rejectedWith Error
       it 'should return the previously saved message', (done) ->
         r = identifi.request
-          apiMethod: 'messages',
+          apiMethod: 'messages'
           apiId: m.hash
         r.then (res) ->
           res.hash.should.equal m.hash
           done()
     describe 'list', ->
-      it 'should list messages ordered by date'
-      it 'should filter messages by type'
-      it 'should filter messages by viewpoint'
-      it 'should return a list of peers as identifi messages'
+      it 'should list messages ordered by date', (done) ->
+        r = identifi.request
+          apiMethod: 'messages'
+        r.then (res) ->
+          res[0].hash.should.equal m.hash
+          done()
+      it 'should filter messages by type', (done) ->
+        r = identifi.request
+          apiMethod: 'messages'
+          qs:
+            type: 'rating'
+        r.then (res) ->
+          msg.type.should.equal 'rating' for msg in res
+          done()
+      it 'should filter messages by viewpoint', (done) ->
+        r = identifi.request
+          apiMethod: 'messages'
+          qs:
+            viewpoint_type: 'email'
+            viewpoint_value: 'alice@example.com'
+            max_distance: 1
+        r.then (res) ->
+          res.length.should.equal 3
+          done()
     describe 'delete', ->
       it 'should fail if the message was not found', ->
         r = identifi.request
-              apiMethod: 'messages',
-              apiId: '1234'
-              method: 'DELETE'
+          apiMethod: 'messages'
+          apiId: '1234'
+          method: 'DELETE'
         r.should.be.rejectedWith Error
       it 'should delete the previously saved message', (done) ->
         r = identifi.request
-          apiMethod: 'messages',
+          apiMethod: 'messages'
           apiId: m.hash
           method: 'DELETE'
         r.then (res) ->
@@ -80,12 +130,13 @@ describe 'API', ->
           done()
       it 'should have removed the message', ->
         r = identifi.request
-              apiMethod: 'messages',
+              apiMethod: 'messages'
               apiId: m.hash
         r.should.be.rejectedWith Error
   describe 'identifiers', ->
     describe 'search', ->
       it 'should return matching identifiers / identities ordered by trust distance'
+      it 'should return a list of peers as identifi identities'
     describe 'overview', ->
       it 'should return an overview of an identifier'
     describe 'connections', ->

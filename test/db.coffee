@@ -56,7 +56,7 @@ describe 'Database', ->
       res[0].val.should.equal 3
       done()
   it 'should return message by hash', (done) ->
-    db.getMessage(hash).then (res) ->
+    db.getMessages({ hash: hash }).then (res) ->
       res.length.should.equal 1
       done()
   it 'should return sent messages', (done) ->
@@ -163,7 +163,7 @@ describe 'Database', ->
         rating: 1
       Message.sign message, privKey, pubKey
       db.saveMessage(message).then(->
-        db.getMessage message.hash
+        db.getMessages({ hash: message.hash })
       ).then (res) ->
         res[0].priority.should.equal 0
         done()
@@ -182,7 +182,7 @@ describe 'Database', ->
       res[0].receivedPositive.should.equal 1
       res[0].receivedNeutral.should.equal 0
       res[0].receivedNegative.should.equal 1
-      res[0].firstSeen.should.be.above 0
+      res[0].firstSeen.should.not.be.empty
       done()
   it 'should delete a message', (done) ->
     db.dropMessage(hash).then((res) ->
