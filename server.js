@@ -58,18 +58,6 @@ router.get('/status', function(req, res) {
 
 
 
-router.get('/stop', function(req, res) {
-  var msg = 'Shutting down the identifi server';
-  res.json(msg);
-  log(msg);
-  setTimeout(function () {
-    server.close();
-    process.exit(0);
-  }, 3000);
-});
-
-
-
 router.route('/peers')
   .get(function(req, res) {
     res.json("list peers");
