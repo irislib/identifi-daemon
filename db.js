@@ -74,6 +74,30 @@ module.exports = function(knex) {
           options.where['id.value'] = options.recipient[1];
           options.where['id.is_recipient'] = true;
         }
+
+        if (options.where['Messages.type'] && options.where['Messages.type'].match(/^rating:(positive|neutral|negative)$/i)) {
+          var ratingType = options.where['Messages.type'].match(/(positive|neutral|negative)$/i)[0];
+          options.where['Messages.type'] = 'rating';
+          var ratingTypeFilter;
+          switch(ratingType) {
+            case 'positive':
+              ratingTypeFilter = ['Messages.rating', '<', '(Messages.max_rating + Messages.min_rating) / 2'];
+              break;
+            case 'neutral':
+              ratingTypeFilter = ['Messages.rating', '=', '(Messages.max_rating + Messages.min_rating) / 2'];
+              break;
+            case 'negative':
+              ratingTypeFilter = ['Messages.rating', '>', '(Messages.max_rating + Messages.min_rating) / 2'];
+              break;
+          }
+          return knex.select('*').from('Messages')
+            .innerJoin('MessageIdentifiers as id', 'Messages.hash', 'id.message_hash')
+            .where(options.where)
+            .where(ratingTypeFilter[0], ratingTypeFilter[1], ratingTypeFilter[2])
+            .orderBy(options.orderBy, options.direction)
+            .limit(options.limit)
+            .offset(options.offset);
+        }
         return knex.select('*').from('Messages')
           .innerJoin('MessageIdentifiers as id', 'Messages.hash', 'id.message_hash')
           .where(options.where)
@@ -382,7 +406,7 @@ module.exports = function(knex) {
       return knex.select('*').from('Keys').join('PrivateKeys', 'PrivateKeys.pubkey', 'Keys.pubkey');
     },
 
-    overview: function(id, viewpoint) {
+    getStats: function(id, viewpoint) {
       var useViewpoint = false;
       var sql = "SELECT ";
       sql += "SUM(CASE WHEN pi.is_recipient = 0 AND p.rating > (p.min_rating + p.max_rating) / 2 THEN 1 ELSE 0 END) AS sentPositive, ";

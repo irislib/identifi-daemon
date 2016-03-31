@@ -140,8 +140,8 @@ describe 'Database', ->
       ).then (res) ->
         res[0].priority.should.equal 0
         done()
-  it 'should return an overview of an identifier', (done) ->
-    db.overview(['email', 'bob@example.com'], ['email', 'alice@example.com']).then (res) ->
+  it 'should return the stats of an identifier', (done) ->
+    db.getStats(['email', 'bob@example.com'], ['email', 'alice@example.com']).then (res) ->
       res.length.should.equal 1
       res[0].sentPositive.should.equal 1
       res[0].sentNeutral.should.equal 0

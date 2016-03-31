@@ -182,13 +182,13 @@ describe 'API', ->
         r.then (res) ->
           res.length.should.equal 0
           done()
-    describe 'overview', ->
-      it 'should return an overview of an identifier', (done) ->
+    describe 'stats', ->
+      it 'should return the stats of an identifier', (done) ->
         r = identifi.request
           apiMethod: 'id'
           apiIdType: 'email'
           apiId: 'bob@example.com'
-          apiAction: 'overview'
+          apiAction: 'stats'
         r.then (res) ->
           res.should.not.be.empty
           done()

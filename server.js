@@ -92,6 +92,13 @@ router.route('/keys')
 
 
 
+  function handleError(err, req, res) {
+    log(err);
+    log(req);
+    res.status(500).json('Server error');
+  }
+
+
 // Helper method
 function getMessages(req, res, options) {
     options = options || {};
@@ -100,7 +107,7 @@ function getMessages(req, res, options) {
     if (req.query.viewpoint_type && req.query.viewpoint_value) {
       options.viewpoint = [req.query.viewpoint_type, req.query.viewpoint_value];
     }
-    if (req.query.type)     { options.where.type = req.query.type; }
+    if (req.query.type)     { options.where['Messages.type'] = req.query.type; }
     if (req.query.order_by) { options.orderBy = req.query.order_by; }
     if (req.query.direction && (req.query.direction === 'asc' || req.query.direction === 'desc')) {
        options.direction = req.query.order_by;
@@ -112,12 +119,6 @@ function getMessages(req, res, options) {
     }).catch(function(err) { handleError(err, req, res); });
 }
 
-
-function handleError(err, req, res) {
-  log(err);
-  log(req);
-  res.status(500).json('Server error');
-}
 
 
 router.route('/messages')
@@ -175,22 +176,19 @@ router.get('/id', function(req, res) {
 
 router.get('/id/:type/:value', function(req, res) {
   db.getIdentities({ where: { type: req.params.type, value: req.params.value } }).then(function(dbRes) {
-    if (!dbRes.length) {
-      return res.status(404).json('Identity not found');
-    }
     res.json(dbRes);
   }).catch(function(err) { handleError(err, req, res); });
 });
 
 
 
-router.get('/id/:id_type/:id_value/overview', function(req, res) {
+router.get('/id/:id_type/:id_value/stats', function(req, res) {
   var viewpoint = ['', ''];
   if (req.query.viewpoint_type && req.query.viewpoint_value) {
     viewpoint = [req.query.viewpoint_type, req.query.viewpoint_value];
   }
   log('test1');
-  db.overview([req.params.id_type, req.params.id_value], viewpoint).then(function(dbRes) {
+  db.getStats([req.params.id_type, req.params.id_value], viewpoint).then(function(dbRes) {
     log('test');
     res.json(dbRes);
   }).catch(function(err) { handleError(err, req, res); });
