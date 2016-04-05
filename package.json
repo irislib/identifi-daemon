@@ -1,6 +1,6 @@
 {
   "name": "identifi-daemon",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "Identifi daemon",
   "homepage": "https://github.com/identifi/identifi-daemon",
   "author": {
@@ -10,6 +10,7 @@
   },
   "repository": "identifi/identifi-daemon",
   "license": "MIT",
+  "main": "identifid",
   "files": [
     "."
   ],
