@@ -10,12 +10,13 @@
   },
   "repository": "identifi/identifi-daemon",
   "license": "MIT",
-  "main": "identifid",
+  "main": "server.js",
   "files": [
     "identifid",
     "db.js",
     "server.js",
-    "schema.js"
+    "schema.js",
+    "config/default.json"
   ],
   "keywords": [
     "identifi-daemon",

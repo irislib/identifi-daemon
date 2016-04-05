@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 var daemon = require("daemonize2").setup({
-    main: "server.js",
+    main: require.resolve('identifi-daemon'),
     name: "identifid",
     pidfile: "identifid.pid",
     cwd: '.'
