@@ -7,10 +7,31 @@ var bodyParser = require('body-parser');
 
 var Message = require('identifi-lib/message');
 
-var config = require('config');
-
+var os = require('os');
 var fs = require('fs');
 var util = require('util');
+
+var config = require('config');
+
+// Extend default config from datadir/config.json and write the result back to it
+var datadir = process.env.identifi_datadir || (os.homedir() + '/.identifi');
+(function setConfig() {
+  if (!fs.existsSync(datadir)) {
+    fs.mkdirSync(datadir);
+  }
+  var cfgFile = datadir + '/config.json';
+  if (fs.existsSync(cfgFile)) {
+    var cfgFromFile = require(cfgFile);
+    Object.assign(config, cfgFromFile);
+  }
+  fs.writeFileSync(cfgFile, JSON.stringify(config, null, 4), 'utf8');
+  // Set some paths
+  if (config.db.connection.filename) {
+    config.db.connection.filename = datadir + '/' + config.db.connection.filename;
+  }
+  config.logfile = datadir + '/' + config.logfile;
+})();
+
 var logStream = fs.createWriteStream(config.get('logfile'), {flags: 'a', encoding: 'utf8'});
 
 function log(msg) {
@@ -26,7 +47,8 @@ process.on("uncaughtException", function(e) {
 // Init DB
 var knex, db;
 try {
-  knex = require('knex')(config.get('db'));
+  var dbConf = config.get('db');
+  knex = require('knex')(dbConf);
   db = require('./db.js')(knex);
 } catch (ex) {
   log(ex);
@@ -215,17 +237,11 @@ router.get('/id/:id_type/:id_value/received', function(req, res) {
 router.get('/id/:id_type/:id_value/connections', function(req, res) {
   var options = {
     id: [req.params.id_type, req.params.id_value],
-    limit: 50,
-    offset: 0,
-    viewpoint: ['email', 'alice@example.com']
+    viewpoint: ['', '']
   };
-  if (req.query.type)             { options.where.type = req.query.type; }
-  if (req.query.limit)            { options.limit = parseInt(req.query.limit); }
-  if (req.query.offset)           { options.offset = parseInt(req.query.offset); }
-  if (req.query.viewpoint_type && req.query.viewpoint_value) {
-    options.viewpoint = [req.query.viewpoint_type, req.query.viewpoint_value];
+  if (req.query.type) {
+    options.searchedTypes = [req.query.type];
   }
-
   db.getConnectedIdentifiers(options).then(function(dbRes) {
     res.json(dbRes);
   }).catch(function(err) { handleError(err, req, res); });

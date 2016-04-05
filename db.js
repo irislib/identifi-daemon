@@ -226,13 +226,19 @@ module.exports = function(knex) {
             return new P(function(resolve) { resolve([]); });
           }
           sql = "SELECT type, value, Confirmations AS c, Refutations AS r, 1 FROM Identities WHERE NOT (Type = ? AND value = ?) AND identity_id = (SELECT MAX(identity_id) FROM Identities) ";
+          var hasSearchedTypes = options.searchedTypes && options.searchedTypes.length > 0;
+          if (hasSearchedTypes) {
+            sql += "AND type IN (?) ";
+          }
+          sql += "";
           /*if (types && !types.empty()) {
               vector<string> questionMarks(searchedTypes.size(), "?");
               sql += "AND type IN (" += algorithm::join(questionMarks, ", ") += ") ";
           }*/
           sql += "GROUP BY type, value ";
           sql += "ORDER BY c-r DESC ";
-          return knex.raw(sql, [options.id[0], options.id[1]]);
+          var params = hasSearchedTypes ? [options.id[0], options.id[1], options.searchedTypes] : [options.id[0], options.id[1]];
+          return knex.raw(sql, params);
         });
     },
 

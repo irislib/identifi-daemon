@@ -1,6 +1,6 @@
 {
   "name": "identifi-daemon",
-  "version": "0.0.0",
+  "version": "0.0.5",
   "description": "Identifi daemon",
   "homepage": "https://github.com/identifi/identifi-daemon",
   "author": {
@@ -23,7 +23,6 @@
     "config": "^1.13.0",
     "daemonize2": "^0.4.2",
     "express": "^4.12.3",
-    "identifi-cli": "0.0.4",
     "identifi-lib": "0.0.5",
     "jws": "^3.0.0",
     "knex": "^0.10.0",
