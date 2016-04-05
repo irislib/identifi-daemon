@@ -1,10 +1,11 @@
 #  [![Build Status](https://secure.travis-ci.org/identifi/identifi-daemon.png?branch=master)](http://travis-ci.org/identifi/identifi-daemon)
 
-> Identifi daemon
+# Identifi daemon
 
-Under development.
+https://www.npmjs.com/package/identifi
 
-<!--
+![](http://mmalmi.github.io/illusions/construction.gif)
+
 ## Install
 
 ```sh
@@ -15,9 +16,8 @@ $ npm install -g identifi-daemon
 ## Usage
 
 ```cli
-identifi-daemon
+identifid
 ```
--->
 
 ## License
 
