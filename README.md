@@ -2,7 +2,7 @@
 
 # Identifi daemon
 
-https://www.npmjs.com/package/identifi
+https://www.npmjs.com/package/identifi-daemon
 
 ![](http://mmalmi.github.io/illusions/construction.gif)
 
