@@ -11,7 +11,7 @@
   "repository": "identifi/identifi-daemon",
   "license": "MIT",
   "files": [
-    "index.js"
+    "."
   ],
   "keywords": [
     "identifi-daemon",
