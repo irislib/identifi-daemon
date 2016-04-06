@@ -11,6 +11,7 @@ var os = require('os');
 var fs = require('fs');
 var util = require('util');
 
+process.env.NODE_CONFIG_DIR = __dirname + '/config';
 var config = require('config');
 
 // Extend default config from datadir/config.json and write the result back to it

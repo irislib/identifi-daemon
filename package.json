@@ -19,8 +19,12 @@
     "config/default.json"
   ],
   "keywords": [
-    "identifi-daemon",
-    "identifi"
+    "identifi",
+    "identity",
+    "trust",
+    "web of trust",
+    "rating",
+    "reputation"
   ],
   "dependencies": {
     "bluebird": "^3.3.4",
