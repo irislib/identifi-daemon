@@ -15,7 +15,7 @@ process.env.NODE_CONFIG_DIR = __dirname + '/config';
 var config = require('config');
 
 // Extend default config from datadir/config.json and write the result back to it
-var datadir = process.env.identifi_datadir || (os.homedir() + '/.identifi');
+var datadir = process.env.IDENTIFI_DATADIR || (os.homedir() + '/.identifi');
 (function setConfig() {
   if (!fs.existsSync(datadir)) {
     fs.mkdirSync(datadir);

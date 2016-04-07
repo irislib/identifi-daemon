@@ -7,5 +7,6 @@
         }
     },
     "port": 4944,
-    "logfile": "identifi.log"
+    "logfile": "identifi.log",
+    "datadir": "~/.identifi"
 }

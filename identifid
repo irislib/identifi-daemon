@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 
+var datadir = process.env.IDENTIFI_DATADIR || (require('os').homedir() + '/.identifi');
+
 var daemon = require("daemonize2").setup({
     main: require.resolve('identifi-daemon'),
     name: "identifid",
-    pidfile: "identifid.pid",
+    pidfile: datadir + "/identifid.pid",
     cwd: '.'
 });
 
