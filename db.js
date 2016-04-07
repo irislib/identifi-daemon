@@ -120,7 +120,7 @@ module.exports = function(knex) {
           messageDeleted = res;
           return knex('MessageIdentifiers').where({ message_hash: messageHash }).del();
         }).then(function(res) {
-          return messageDeleted ? true : false;
+          return new P(function(resolve) { resolve(messageDeleted ? true : false); });
         });
     },
 
@@ -225,7 +225,7 @@ module.exports = function(knex) {
           if (countBefore === res[0].val) {
             return new P(function(resolve) { resolve([]); });
           }
-          sql = "SELECT type, value, Confirmations AS c, Refutations AS r, 1 FROM Identities WHERE NOT (Type = ? AND value = ?) AND identity_id = (SELECT MAX(identity_id) FROM Identities) ";
+          sql = "SELECT type, value, confirmations, refutations, 1 FROM Identities WHERE NOT (Type = ? AND value = ?) AND identity_id = (SELECT MAX(identity_id) FROM Identities) ";
           var hasSearchedTypes = options.searchedTypes && options.searchedTypes.length > 0;
           if (hasSearchedTypes) {
             sql += "AND type IN (?) ";
@@ -236,7 +236,7 @@ module.exports = function(knex) {
               sql += "AND type IN (" += algorithm::join(questionMarks, ", ") += ") ";
           }*/
           sql += "GROUP BY type, value ";
-          sql += "ORDER BY c-r DESC ";
+          sql += "ORDER BY confirmations-refutations DESC ";
           var params = hasSearchedTypes ? [options.id[0], options.id[1], options.searchedTypes] : [options.id[0], options.id[1]];
           return knex.raw(sql, params);
         });
@@ -309,7 +309,7 @@ module.exports = function(knex) {
       viewpoint = viewpoint || ['', ''];
       var useViewpoint = viewpoint[0] && viewpoint[1];
 
-      var sql = "SELECT IFNULL(OtherIdentifiers.type,idtype), IFNULL(OtherIdentifiers.value,idvalue), MAX(iid) FROM (";
+      var sql = "SELECT IFNULL(OtherIdentifiers.type,idtype) AS type, IFNULL(OtherIdentifiers.value,idvalue) AS value, MAX(iid) AS iid FROM (";
       sql += "SELECT DISTINCT mi.type AS idtype, mi.value AS idvalue, -1 AS iid FROM MessageIdentifiers AS mi ";
       sql += "WHERE ";
       sql += "mi.value LIKE '%' || :query || '%' ";

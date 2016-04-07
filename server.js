@@ -14,24 +14,26 @@ var util = require('util');
 process.env.NODE_CONFIG_DIR = __dirname + '/config';
 var config = require('config');
 
-// Extend default config from datadir/config.json and write the result back to it
-var datadir = process.env.IDENTIFI_DATADIR || (os.homedir() + '/.identifi');
-(function setConfig() {
-  if (!fs.existsSync(datadir)) {
-    fs.mkdirSync(datadir);
-  }
-  var cfgFile = datadir + '/config.json';
-  if (fs.existsSync(cfgFile)) {
-    var cfgFromFile = require(cfgFile);
-    Object.assign(config, cfgFromFile);
-  }
-  fs.writeFileSync(cfgFile, JSON.stringify(config, null, 4), 'utf8');
-  // Set some paths
-  if (config.db.connection.filename) {
-    config.db.connection.filename = datadir + '/' + config.db.connection.filename;
-  }
-  config.logfile = datadir + '/' + config.logfile;
-})();
+if (process.env.NODE_ENV !== 'test') {
+  // Extend default config from datadir/config.json and write the result back to it
+  var datadir = process.env.IDENTIFI_DATADIR || (os.homedir() + '/.identifi');
+  (function setConfig() {
+    if (!fs.existsSync(datadir)) {
+      fs.mkdirSync(datadir);
+    }
+    var cfgFile = datadir + '/config.json';
+    if (fs.existsSync(cfgFile)) {
+      var cfgFromFile = require(cfgFile);
+      Object.assign(config, cfgFromFile);
+    }
+    fs.writeFileSync(cfgFile, JSON.stringify(config, null, 4), 'utf8');
+    // Set some paths
+    if (config.db.connection.filename) {
+      config.db.connection.filename = datadir + '/' + config.db.connection.filename;
+    }
+    config.logfile = datadir + '/' + config.logfile;
+  })();
+}
 
 var logStream = fs.createWriteStream(config.get('logfile'), {flags: 'a', encoding: 'utf8'});
 
@@ -210,9 +212,7 @@ router.get('/id/:id_type/:id_value/stats', function(req, res) {
   if (req.query.viewpoint_type && req.query.viewpoint_value) {
     viewpoint = [req.query.viewpoint_type, req.query.viewpoint_value];
   }
-  log('test1');
   db.getStats([req.params.id_type, req.params.id_value], viewpoint).then(function(dbRes) {
-    log('test');
     res.json(dbRes);
   }).catch(function(err) { handleError(err, req, res); });
 });

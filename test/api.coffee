@@ -134,12 +134,14 @@ describe 'API', ->
               apiId: m.hash
         r.should.be.rejectedWith Error
   describe 'identifiers', ->
-      it 'should fail if an identity was not found', ->
+      it 'should return an empty set if an identity was not found', (done) ->
         r = identifi.request
               apiMethod: 'id'
               apiId: 'bob@example.com'
               apiIdType: 'nope'
-        r.should.be.rejectedWith Error
+        r.then (res) ->
+          res.should.be.empty
+          done()
     describe 'retrieve', ->
       it 'should return an identity', (done) ->
         r = identifi.request

@@ -13,7 +13,7 @@ privKey = '-----BEGIN EC PRIVATE KEY-----\n' + 'MHQCAQEEINY+49rac3jkC+S46XN0f411
 pubKey = 'MFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEKn3lQ3+/aN6xNd9DSFrYbaPSGOzLMbb1kQZ9lCMtwc6Og4hfCMLhaSbE3sXek8e2fvKrTp8FY1MyCL4qMeVviA=='
 
 cleanup = ->
-  fs.unlink './identifi_test.db', (err) ->
+  fs.unlink '../' + config.db.connection.filename, (err) ->
 
 describe 'Database', ->
   db = undefined
@@ -23,12 +23,14 @@ describe 'Database', ->
     # After hook fails to execute when errors are thrown
     knex = require('knex')(config.get('db'))
     db = require('../db.js')(knex)
-  after cleanup
-  it 'should initially have 0 messages', (done) ->
-    db.getMessageCount().then (res) ->
-      res[0].val.should.equal 0
-      done()
+  after ->
+    cleanup()
+
   describe 'save and retrieve messages', ->
+    it 'should initially have 0 messages', (done) ->
+      db.getMessageCount().then (res) ->
+        res[0].val.should.equal 0
+        done()
     it 'should save a rating', (done) ->
       message = Message.createRating
         author: [['email', 'alice@example.com']]
@@ -80,6 +82,8 @@ describe 'Database', ->
         author: [['email', 'alice@example.com']]
         recipient: [['email', 'bob@example.com'], ['url', 'http://www.example.com/bob']]
         type: 'confirm_connection'
+      Message.sign message, privKey, pubKey
+      db.saveMessage(message).should.eventually.notify done
     it 'should save another connection', (done) ->
       message = Message.create
         author: [['email', 'alice@example.com']]
@@ -99,24 +103,26 @@ describe 'Database', ->
         id: ['email','bob@example.com']
         viewpoint: ['email', 'alice@example.com']
       }).then (res) ->
-        res.length.should.equal 3
+        res.length.should.equal 2
         done()
     it 'should return connections of type url', (done) ->
       db.getConnectedIdentifiers({
         id: ['email','bob@example.com']
         viewpoint: ['email', 'alice@example.com']
-        type: 'url'
+        searchedTypes: ['url']
       }).then (res) ->
+        console.log res
         res.length.should.equal 1
         done()
-  it 'should generate a trust map', (done) ->
-    db.generateTrustMap(['email', 'alice@example.com'], 3).then (res) ->
-      res[0].val.should.equal 2
-      done()
-  it 'should return a trust path', (done) ->
-    db.getTrustPaths(['email', 'alice@example.com'], ['email', 'charles@example.com'], 3).then (res) ->
-      res.length.should.equal 1
-      done()
+  describe 'trust functions', ->
+    it 'should generate a trust map', (done) ->
+      db.generateTrustMap(['email', 'alice@example.com'], 3).then (res) ->
+        res[0].val.should.equal 2
+        done()
+    it 'should return a trust path', (done) ->
+      db.getTrustPaths(['email', 'alice@example.com'], ['email', 'charles@example.com'], 3).then (res) ->
+        res.length.should.equal 1
+        done()
   describe 'identity search', ->
     it 'should find 4 identifiers matching "a"', (done) ->
       db.getIdentities({ searchValue: 'a' }).then (res) ->
@@ -140,9 +146,9 @@ describe 'Database', ->
         res.length.should.equal 0
         done()
     it 'should import a private key', (done) ->
-      db.importPrivateKey(privKey).then(->
+      db.importPrivateKey(privKey).then ->
         db.listMyKeys()
-      ).then (res) ->
+      .then (res) ->
         res.length.should.equal 1
         done()
   describe 'Priority', ->
@@ -152,26 +158,32 @@ describe 'Database', ->
         recipient: [['email', 'bob@example.com']]
         rating: 1
       Message.sign message, privKey, pubKey
-      db.saveMessage(message).then(->
+      db.saveMessage(message).then ->
         db.getMessages({ where: { hash: message.hash } })
-      ).then (res) ->
+      .then (res) ->
         res[0].priority.should.equal 0
         done()
-  it 'should return the stats of an identifier', (done) ->
-    db.getStats(['email', 'bob@example.com'], ['email', 'alice@example.com']).then (res) ->
-      res.length.should.equal 1
-      res[0].sentPositive.should.equal 1
-      res[0].sentNeutral.should.equal 0
-      res[0].sentNegative.should.equal 0
-      res[0].receivedPositive.should.equal 1
-      res[0].receivedNeutral.should.equal 0
-      res[0].receivedNegative.should.equal 1
-      res[0].firstSeen.should.not.be.empty
-      done()
-  it 'should delete a message', (done) ->
-    db.dropMessage(hash).then((res) ->
-      res.should.be.true
-      db.getMessageCount()
-    ).then (res) ->
-      res[0].val.should.equal 3
-      done()
+  describe 'stats', ->
+    it 'should return the stats of an identifier', (done) ->
+      db.getStats(['email', 'bob@example.com'], ['email', 'alice@example.com']).then (res) ->
+        res.length.should.equal 1
+        res[0].sentPositive.should.equal 1
+        res[0].sentNeutral.should.equal 0
+        res[0].sentNegative.should.equal 0
+        res[0].receivedPositive.should.equal 1
+        res[0].receivedNeutral.should.equal 0
+        res[0].receivedNegative.should.equal 1
+        res[0].firstSeen.should.not.be.empty
+        done()
+  describe 'delete', ->
+    it 'should delete a message', (done) ->
+      originalCount = null
+      db.getMessageCount().then (res) ->
+        originalCount = res[0].val
+        db.dropMessage(hash)
+      .then (res) ->
+        res.should.be.true
+        db.getMessageCount()
+      .then (res) ->
+        (originalCount - res[0].val).should.equal 1
+        done()
