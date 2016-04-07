@@ -29,7 +29,7 @@ module.exports = (grunt) ->
       all:
         options:
           reporter: 'spec'
-          bail: true
+          bail: false
           require: 'coffee-script/register'
         src: watchFiles.tests
     concurrent:
