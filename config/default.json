@@ -4,7 +4,8 @@
         "useNullAsDefault": true,
         "connection": {
             "filename": "identifi.db"
-        }
+        },
+        "debug": false
     },
     "port": 4944,
     "logfile": "identifi.log",

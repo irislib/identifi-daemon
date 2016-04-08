@@ -82,6 +82,8 @@ describe 'Database', ->
         author: [['email', 'alice@example.com']]
         recipient: [['email', 'bob@example.com'], ['url', 'http://www.example.com/bob']]
         type: 'confirm_connection'
+      Message.sign message, privKey, pubKey
+      db.saveMessage(message).should.eventually.notify done
     it 'should save another connection', (done) ->
       message = Message.create
         author: [['email', 'alice@example.com']]
@@ -101,14 +103,15 @@ describe 'Database', ->
         id: ['email','bob@example.com']
         viewpoint: ['email', 'alice@example.com']
       }).then (res) ->
-        res.length.should.equal 3
+        res.length.should.equal 2
         done()
     it 'should return connections of type url', (done) ->
       db.getConnectedIdentifiers({
         id: ['email','bob@example.com']
         viewpoint: ['email', 'alice@example.com']
-        type: 'url'
+        searchedTypes: ['url']
       }).then (res) ->
+        console.log res
         res.length.should.equal 1
         done()
   describe 'trust functions', ->
@@ -143,9 +146,9 @@ describe 'Database', ->
         res.length.should.equal 0
         done()
     it 'should import a private key', (done) ->
-      db.importPrivateKey(privKey).then(->
+      db.importPrivateKey(privKey).then ->
         db.listMyKeys()
-      ).then (res) ->
+      .then (res) ->
         res.length.should.equal 1
         done()
   describe 'Priority', ->
@@ -155,9 +158,9 @@ describe 'Database', ->
         recipient: [['email', 'bob@example.com']]
         rating: 1
       Message.sign message, privKey, pubKey
-      db.saveMessage(message).then(->
+      db.saveMessage(message).then ->
         db.getMessages({ where: { hash: message.hash } })
-      ).then (res) ->
+      .then (res) ->
         res[0].priority.should.equal 0
         done()
   describe 'stats', ->
@@ -174,9 +177,13 @@ describe 'Database', ->
         done()
   describe 'delete', ->
     it 'should delete a message', (done) ->
-      db.dropMessage(hash).then((res) ->
+      originalCount = null
+      db.getMessageCount().then (res) ->
+        originalCount = res[0].val
+        db.dropMessage(hash)
+      .then (res) ->
         res.should.be.true
         db.getMessageCount()
-      ).then (res) ->
-        res[0].val.should.equal 3
+      .then (res) ->
+        (originalCount - res[0].val).should.equal 1
         done()
