@@ -225,20 +225,23 @@ module.exports = function(knex) {
           if (countBefore === res[0].val) {
             return new P(function(resolve) { resolve([]); });
           }
-          sql = "SELECT type, value, confirmations, refutations, 1 FROM Identities WHERE NOT (Type = ? AND value = ?) AND identity_id = (SELECT MAX(identity_id) FROM Identities) ";
+
           var hasSearchedTypes = options.searchedTypes && options.searchedTypes.length > 0;
+
           if (hasSearchedTypes) {
-            sql += "AND type IN (?) ";
+            return knex('Identities')
+              .select('type', 'value', 'confirmations', 'refutations')
+              .where(knex.raw('NOT (Type = ? AND value = ?) AND identity_id = (SELECT MAX(identity_id) FROM Identities)', [options.id[0], options.id[1]]))
+              .whereIn('type', options.searchedTypes)
+              .groupBy('type', 'value')
+              .orderByRaw('confirmations - refutations DESC');
           }
-          sql += "";
-          /*if (types && !types.empty()) {
-              vector<string> questionMarks(searchedTypes.size(), "?");
-              sql += "AND type IN (" += algorithm::join(questionMarks, ", ") += ") ";
-          }*/
-          sql += "GROUP BY type, value ";
-          sql += "ORDER BY confirmations-refutations DESC ";
-          var params = hasSearchedTypes ? [options.id[0], options.id[1], options.searchedTypes] : [options.id[0], options.id[1]];
-          return knex.raw(sql, params);
+
+          return knex('Identities')
+            .select('type', 'value', 'confirmations', 'refutations')
+            .where(knex.raw('NOT (Type = ? AND value = ?) AND identity_id = (SELECT MAX(identity_id) FROM Identities)', [options.id[0], options.id[1]]))
+            .groupBy('type', 'value')
+            .orderByRaw('confirmations - refutations DESC');
         });
     },
 
