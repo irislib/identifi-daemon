@@ -75,6 +75,16 @@ describe 'API', ->
           method: 'POST'
           apiMethod: 'messages'
           body: m
+      it 'add another connection msg', ->
+        m = message.create
+          author: [['email', 'bob@example.com']]
+          recipient: [['email', 'charles@example.com'], ['url', 'Charles the Great']]
+          type: 'confirm_connection'
+        message.sign(m, privKey, 'keyID')
+        r = identifi.request
+          method: 'POST'
+          apiMethod: 'messages'
+          body: m
     describe 'retrieve', ->
       it 'should fail if the message was not found', ->
         r = identifi.request
@@ -111,7 +121,7 @@ describe 'API', ->
             viewpoint_value: 'alice@example.com'
             max_distance: 1
         r.then (res) ->
-          res.length.should.equal 1
+          res.length.should.equal 4
           done()
     describe 'delete', ->
       it 'should fail if the message was not found', ->
@@ -156,7 +166,7 @@ describe 'API', ->
         r = identifi.request
           apiMethod: 'id'
         r.then (res) ->
-          res.length.should.equal 4
+          res.length.should.equal 5
           done()
       it 'should filter identities by identifier type', (done) ->
         r = identifi.request
@@ -172,9 +182,10 @@ describe 'API', ->
           qs:
             search_value: 'i'
         r.then (res) ->
-          res.length.should.equal 2
-          res[0].value.should.equal 'alice@example.com'
-          res[1].value.should.equal 'david@example.com'
+          res.length.should.equal 3
+          res[0].value.should.equal 'Bob the Builder'
+          res[1].value.should.equal 'alice@example.com'
+          res[2].value.should.equal 'david@example.com'
           done()
       it 'should return a list of peers as identifi identities', (done) ->
         r = identifi.request

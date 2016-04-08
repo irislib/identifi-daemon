@@ -440,18 +440,19 @@ module.exports = function(knex) {
       if (useViewpoint) {
           sql += "INNER JOIN Identities AS i ON pi.type = i.type AND pi.value = i.value AND i.identity_id = ";
           sql += "(SELECT identity_id FROM Identities WHERE viewpoint_value = :viewpointID AND viewpoint_type = :viewpointType ";
-          sql += "AND type = :type AND value = :id) ";      }
+          sql += "AND type = :type AND value = :value) ";
+      }
       //AddMessageFilterSQL(sql, viewpoint, maxDistance, msgType);
-      sql += "WHERE p.type = 'rating' ";
+      sql += "WHERE p.type = 'rating' AND pi.type = :type AND pi.value = :value ";
       sql += "AND p.is_latest = 1 ";
 
       if (useViewpoint) {
           sql += "AND (tp.start_value IS NOT NULL OR (author.value = :viewpointID AND author.type = :viewpointType) ";
-          sql += "OR (author.type = :type AND author.value = :id)) ";
+          sql += "OR (author.type = :type AND author.value = :value)) ";
           sql += "GROUP BY i.identity_id ";
       }
 
-      return knex.raw(sql, { type: id[0], id: id[1], viewpointType: viewpoint[0], viewpointID: viewpoint[1] });
+      return knex.raw(sql, { type: id[0], value: id[1], viewpointType: viewpoint[0], viewpointID: viewpoint[1] });
     }
   };
 

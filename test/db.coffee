@@ -111,7 +111,6 @@ describe 'Database', ->
         viewpoint: ['email', 'alice@example.com']
         searchedTypes: ['url']
       }).then (res) ->
-        console.log res
         res.length.should.equal 1
         done()
   describe 'trust functions', ->
@@ -170,7 +169,7 @@ describe 'Database', ->
         res[0].sentPositive.should.equal 1
         res[0].sentNeutral.should.equal 0
         res[0].sentNegative.should.equal 0
-        res[0].receivedPositive.should.equal 1
+        res[0].receivedPositive.should.equal 2
         res[0].receivedNeutral.should.equal 0
         res[0].receivedNegative.should.equal 1
         res[0].firstSeen.should.not.be.empty
