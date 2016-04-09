@@ -410,44 +410,69 @@ module.exports = function(knex) {
       return knex('Identities').count('* as val');
     },
 
-    getStats: function(id, viewpoint) {
-      var useViewpoint = false;
-      var sql = "SELECT ";
-      sql += "SUM(CASE WHEN pi.is_recipient = 0 AND p.rating > (p.min_rating + p.max_rating) / 2 THEN 1 ELSE 0 END) AS sentPositive, ";
-      sql += "SUM(CASE WHEN pi.is_recipient = 0 AND p.rating == (p.min_rating + p.max_rating) / 2 THEN 1 ELSE 0 END) AS sentNeutral, ";
-      sql += "SUM(CASE WHEN pi.is_recipient = 0 AND p.rating < (p.min_rating + p.max_rating) / 2 THEN 1 ELSE 0 END) AS sentNegative, ";
-      if (!useViewpoint) {
-          sql += "SUM(CASE WHEN pi.is_recipient = 1 AND p.rating > (p.min_rating + p.max_rating) / 2 THEN 1 ELSE 0 END) AS receivedPositive, ";
-          sql += "SUM(CASE WHEN pi.is_recipient = 1 AND p.rating == (p.min_rating + p.max_rating) / 2 THEN 1 ELSE 0 END) AS receivedNeutral, ";
-          sql += "SUM(CASE WHEN pi.is_recipient = 1 AND p.rating < (p.min_rating + p.max_rating) / 2 THEN 1 ELSE 0 END) AS receivedNegative, ";
+    getStats: function(id, options) {
+      var sql = "";
+      sql += "SUM(CASE WHEN id.is_recipient = 0 AND m.rating > (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS sentPositive, ";
+      sql += "SUM(CASE WHEN id.is_recipient = 0 AND m.rating == (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS sentNeutral, ";
+      sql += "SUM(CASE WHEN id.is_recipient = 0 AND m.rating < (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS sentNegative, ";
+      if (options.viewpoint) {
+        sql += "SUM(CASE WHEN id.is_recipient = 1 AND m.rating > (m.min_rating + m.max_rating) / 2 AND ";
+        sql += "(td.start_id_value IS NOT NULL) THEN 1 ELSE 0 END) AS receivedPositive, ";
+        sql += "SUM(CASE WHEN id.is_recipient = 1 AND m.rating == (m.min_rating + m.max_rating) / 2 AND ";
+        sql += "(td.start_id_value IS NOT NULL) THEN 1 ELSE 0 END) AS receivedNeutral, ";
+        sql += "SUM(CASE WHEN id.is_recipient = 1 AND m.rating < (m.min_rating + m.max_rating) / 2 AND  ";
+        sql += "(td.start_id_value IS NOT NULL) THEN 1 ELSE 0 END) AS receivedNegative, ";
       } else {
-          sql += "SUM(CASE WHEN pi.is_recipient = 1 AND p.rating > (p.min_rating + p.max_rating) / 2 AND ";
-          sql += "(tp.start_value IS NOT NULL OR (author.value = :viewpointID AND author.type = :viewpointType)) THEN 1 ELSE 0 END) AS receivedPositive, ";
-          sql += "SUM(CASE WHEN pi.is_recipient = 1 AND p.rating == (p.min_rating + p.max_rating) / 2 AND ";
-          sql += "(tp.start_value IS NOT NULL OR (author.value = :viewpointID AND author.type = :viewpointType)) THEN 1 ELSE 0 END) AS receivedNeutral, ";
-          sql += "SUM(CASE WHEN pi.is_recipient = 1 AND p.rating < (p.min_rating + p.max_rating) / 2 AND  ";
-          sql += "(tp.start_value IS NOT NULL OR (author.value = :viewpointID AND author.type = :viewpointType)) THEN 1 ELSE 0 END) AS receivedNegative, ";
+        sql += "SUM(CASE WHEN id.is_recipient = 1 AND m.rating > (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS receivedPositive, ";
+        sql += "SUM(CASE WHEN id.is_recipient = 1 AND m.rating == (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS receivedNeutral, ";
+        sql += "SUM(CASE WHEN id.is_recipient = 1 AND m.rating < (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS receivedNegative, ";
       }
-      sql += "MIN(p.timestamp) AS firstSeen ";
-      sql += "FROM Messages AS p ";
-      sql += "INNER JOIN MessageIdentifiers AS pi ON pi.message_hash = p.hash ";
-      sql += "INNER JOIN UniqueIdentifierTypes AS tpp ON tpp.type = pi.type ";
-      if (useViewpoint) {
-          sql += "INNER JOIN Identities AS i ON pi.type = i.type AND pi.value = i.value AND i.identity_id = ";
-          sql += "(SELECT identity_id FROM Identities WHERE viewpoint_value = :viewpointID AND viewpoint_type = :viewpointType ";
-          sql += "AND type = :type AND value = :value) ";
-      }
-      //AddMessageFilterSQL(sql, viewpoint, maxDistance, msgType);
-      sql += "WHERE p.type = 'rating' AND pi.type = :type AND pi.value = :value ";
-      sql += "AND p.is_latest = 1 ";
+      sql += "MIN(m.timestamp) AS firstSeen ";
 
-      if (useViewpoint) {
-          sql += "AND (tp.start_value IS NOT NULL OR (author.value = :viewpointID AND author.type = :viewpointType) ";
-          sql += "OR (author.type = :type AND author.value = :value)) ";
-          sql += "GROUP BY i.identity_id ";
+      var query = knex('Messages as m')
+        .innerJoin('MessageIdentifiers AS id', 'id.message_hash', 'm.hash')
+        .innerJoin('UniqueIdentifierTypes as uit', 'uit.type', 'id.type')
+        .select(knex.raw(sql, {
+          viewpointType: options.viewpoint ? options.viewpoint[0] : null,
+          viewpointID: options.viewpoint ? options.viewpoint[1] : null
+        }))
+        .where({ 'm.is_latest': 1, 'm.type': 'rating', 'id.type': id[0], 'id.value': id[1] });
+
+      if (options.viewpoint) {
+        query.leftJoin('TrustDistances as td', function() {
+          this.on('id.type', '=', 'td.end_id_type')
+            .andOn('id.value', '=', 'td.end_id_value')
+            .andOn('id.is_recipient', '=', '0');
+        });
+
+        sql = '(td.start_id_type = :viewpointType AND td.start_id_value = :viewpointValue ';
+        if (options.maxDistance > 0) {
+          sql += 'AND td.distance <= :maxDistance ';
+        }
+        // A bit messy way to pick also messages that were authored by the viewpointId
+        sql += ') OR (id.is_recipient = 0 AND id.type = :viewpointType AND id.value = :viewpointValue)';
+        query.where(knex.raw(sql, {
+          viewpointType: options.viewpoint[0],
+          viewpointValue: options.viewpoint[1],
+          maxDistance: options.maxDistance
+        }));
+
+        var subquery = knex('Identities').where({
+          viewpoint_type: options.viewpoint[0],
+          viewpoint_value: options.viewpoint[1],
+          type: id[0],
+          value: id[1]
+        }).select('identity_id');
+
+        query.leftJoin('Identities AS i', function() {
+          this.on('id.type', '=', 'i.type')
+            .andOn('id.value', '=', 'i.value');
+        })
+        .whereIn('i.identity_id', subquery)
+        .groupBy('i.identity_id', 'm.hash');
       }
 
-      return knex.raw(sql, { type: id[0], value: id[1], viewpointType: viewpoint[0], viewpointID: viewpoint[1] });
+      return query;
     }
   };
 

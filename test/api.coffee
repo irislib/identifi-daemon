@@ -35,7 +35,7 @@ describe 'API', ->
       apiMethod: 'status'
   describe 'messages', ->
     describe 'create', ->
-      it 'should add a rating message', ->
+      it 'should add rating 10 from alice@example.com to bob@example.com', ->
         m = message.createRating
           author: [['email', 'alice@example.com']]
           recipient: [['email', 'bob@example.com']]
@@ -45,7 +45,7 @@ describe 'API', ->
           method: 'POST'
           apiMethod: 'messages'
           body: m
-      it 'should add another rating message', ->
+      it 'should add rating 10 from bob@example.com to charles@example.com', ->
         m = message.createRating
           author: [['email', 'bob@example.com']]
           recipient: [['email', 'charles@example.com']]
@@ -55,11 +55,31 @@ describe 'API', ->
           method: 'POST'
           apiMethod: 'messages'
           body: m
-      it 'one more', ->
+      it 'should add rating 10 from charles@example.com to david@example.com', ->
         m = message.createRating
           author: [['email', 'charles@example.com']]
           recipient: [['email', 'david@example.com']]
           rating: 10
+        message.sign(m, privKey, 'keyID')
+        r = identifi.request
+          method: 'POST'
+          apiMethod: 'messages'
+          body: m
+      it 'should add rating -1 from charles@example.com to bob@example.com', ->
+        m = message.createRating
+          author: [['email', 'charles@example.com']]
+          recipient: [['email', 'bob@example.com']]
+          rating: -1
+        message.sign(m, privKey, 'keyID')
+        r = identifi.request
+          method: 'POST'
+          apiMethod: 'messages'
+          body: m
+      it 'should add rating -10 from nobody@example.com to bob@example.com', ->
+        m = message.createRating
+          author: [['email', 'nobody@example.com']]
+          recipient: [['email', 'bob@example.com']]
+          rating: -10
         message.sign(m, privKey, 'keyID')
         r = identifi.request
           method: 'POST'
@@ -170,7 +190,7 @@ describe 'API', ->
             viewpoint_value: 'alice@example.com'
             max_distance: 2
         r.then (res) ->
-          res.length.should.equal 5
+          res.length.should.equal 6
           done()
     describe 'delete', ->
       it 'should fail if the message was not found', ->
@@ -215,7 +235,7 @@ describe 'API', ->
         r = identifi.request
           apiMethod: 'id'
         r.then (res) ->
-          res.length.should.equal 5
+          res.length.should.equal 6
           done()
       it 'should filter identities by identifier type', (done) ->
         r = identifi.request
@@ -223,7 +243,7 @@ describe 'API', ->
           qs:
             type: 'email'
         r.then (res) ->
-          res.length.should.equal 4
+          res.length.should.equal 5
           done()
       it 'should filter by search query', (done) ->
         r = identifi.request
@@ -244,16 +264,6 @@ describe 'API', ->
         r.then (res) ->
           res.length.should.equal 0
           done()
-    describe 'stats', ->
-      it 'should return the stats of an identifier', (done) ->
-        r = identifi.request
-          apiMethod: 'id'
-          apiIdType: 'email'
-          apiId: 'bob@example.com'
-          apiAction: 'stats'
-        r.then (res) ->
-          res.should.not.be.empty
-          done()
     describe 'connections', ->
       it 'should return an identity, i.e. set of identifiers connected to the query param', (done) ->
         r = identifi.request
@@ -261,6 +271,9 @@ describe 'API', ->
           apiIdType: 'email'
           apiId: 'bob@example.com'
           apiAction: 'connections'
+          qs:
+            viewpoint_type: 'email'
+            viewpoint_value: 'alice@example.com'
         r.then (res) ->
           res.should.not.be.empty
           done()
@@ -277,6 +290,64 @@ describe 'API', ->
           r.then (res) ->
             res.should.not.be.empty
             done()
+    describe 'stats', ->
+      it 'should return the stats of an identifier, no viewpoint', (done) ->
+        r = identifi.request
+          apiMethod: 'id'
+          apiIdType: 'email'
+          apiId: 'bob@example.com'
+          apiAction: 'stats'
+        r.then (res) ->
+          res.length.should.equal 1
+          res[0].sentPositive.should.equal 1
+          res[0].sentNeutral.should.equal 0
+          res[0].sentNegative.should.equal 0
+          res[0].receivedPositive.should.equal 1
+          res[0].receivedNeutral.should.equal 0
+          res[0].receivedNegative.should.equal 2
+          res[0].firstSeen.should.not.be.empty
+          done()
+      it 'should return the stats of an identifier, using a viewpoint & max_distance 1', (done) ->
+        r = identifi.request
+          apiMethod: 'id'
+          apiIdType: 'email'
+          apiId: 'bob@example.com'
+          apiAction: 'stats'
+          qs:
+            viewpoint_type: 'email'
+            viewpoint_value: 'alice@example.com'
+            max_distance: 1
+        r.then (res) ->
+          res.length.should.equal 1
+          res[0].sentPositive.should.equal 1
+          res[0].sentNeutral.should.equal 0
+          res[0].sentNegative.should.equal 0
+          res[0].receivedPositive.should.equal 1
+          res[0].receivedNeutral.should.equal 0
+          res[0].receivedNegative.should.equal 0
+          res[0].firstSeen.should.not.be.empty
+          done()
+      it 'should return the stats of an identifier, using a viewpoint & max_distance 2', (done) ->
+        r = identifi.request
+          apiMethod: 'id'
+          apiIdType: 'email'
+          apiId: 'bob@example.com'
+          apiAction: 'stats'
+          qs:
+            viewpoint_type: 'email'
+            viewpoint_value: 'alice@example.com'
+            max_distance: 1
+        r.then (res) ->
+          console.log res
+          res.length.should.equal 1
+          res[0].sentPositive.should.equal 1
+          res[0].sentNeutral.should.equal 0
+          res[0].sentNegative.should.equal 0
+          res[0].receivedPositive.should.equal 1
+          res[0].receivedNeutral.should.equal 0
+          res[0].receivedNegative.should.equal 1
+          res[0].firstSeen.should.not.be.empty
+          done()
     describe 'sent', ->
       it 'should return messages sent by an identifier / identity', (done) ->
         r = identifi.request

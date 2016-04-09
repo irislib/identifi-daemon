@@ -189,11 +189,14 @@ router.get('/id/:type/:value', function(req, res) {
 
 
 router.get('/id/:id_type/:id_value/stats', function(req, res) {
-  var viewpoint = ['', ''];
+  var options = {};
+
   if (req.query.viewpoint_type && req.query.viewpoint_value) {
-    viewpoint = [req.query.viewpoint_type, req.query.viewpoint_value];
+    options.viewpoint = [req.query.viewpoint_type, req.query.viewpoint_value];
   }
-  db.getStats([req.params.id_type, req.params.id_value], viewpoint).then(function(dbRes) {
+  if (req.query.max_distance) { options.maxDistance = parseInt(req.query.max_distance); }
+
+  db.getStats([req.params.id_type, req.params.id_value], options).then(function(dbRes) {
     res.json(dbRes);
   }).catch(function(err) { handleError(err, req, res); });
 });
@@ -219,8 +222,13 @@ router.get('/id/:id_type/:id_value/received', function(req, res) {
 router.get('/id/:id_type/:id_value/connections', function(req, res) {
   var options = {
     id: [req.params.id_type, req.params.id_value],
-    viewpoint: ['', '']
   };
+
+  if (req.query.viewpoint_type && req.query.viewpoint_value) {
+    options.viewpoint = [req.query.viewpoint_type, req.query.viewpoint_value];
+  }
+  if (req.query.max_distance) { options.maxDistance = parseInt(req.query.max_distance); }
+
   if (req.query.type) {
     options.searchedTypes = [req.query.type];
   }
