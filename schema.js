@@ -14,15 +14,6 @@ var addDefaultUniqueIdentifierTypes = function(db) {
   );
 };
 
-var checkDefaultKey = function(db) {
-  return db('PrivateKeys').count('* as count')
-    .then(function(res) {
-      if (res[0].count === 0) {
-        // create default key
-      }
-    });
-};
-
 var checkDefaultTrustList = function(db) {
   return db('Messages').count('* as count')
     .then(function(res) {
@@ -39,7 +30,7 @@ var init = function(db) {
 
   .createTable('Messages', function(t) {
     t.string('hash').primary();
-    t.string('jws');
+    t.string('jws').notNullable();
     t.timestamp('saved_at');
     t.datetime('timestamp');
     t.string('type');
@@ -54,8 +45,8 @@ var init = function(db) {
 
   .createTable('MessageIdentifiers', function(t) {
     t.string('message_hash').references('Messages.hash');
-    t.string('type');
-    t.string('value');
+    t.string('type').notNullable();
+    t.string('value').notNullable();
     t.primary(['type', 'value', 'message_hash']);
     t.boolean('is_recipient');
   })
@@ -71,8 +62,8 @@ var init = function(db) {
 
   .createTable('Identities', function(t) {
     t.integer('identity_id').unsigned();
-    t.string('type');
-    t.string('value');
+    t.string('type').notNullable();
+    t.string('value').notNullable();
     t.string('viewpoint_type');
     t.string('viewpoint_value');
     t.integer('confirmations').unsigned();
@@ -86,18 +77,8 @@ var init = function(db) {
     t.primary(['pubkey', 'key_id']);
   })
 
-  .createTable('PrivateKeys', function(t) {
-    t.string('pubkey').references('Keys.pubkey');
-    t.string('private_key', 1000);
-    t.boolean('is_default');
-  })
-
   .then(function() {
     return addDefaultUniqueIdentifierTypes(db);
-  })
-
-  .then(function() {
-    return checkDefaultKey(db);
   })
 
   .then(function() {

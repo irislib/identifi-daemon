@@ -139,17 +139,6 @@ describe 'Database', ->
       db.identitySearch(['', 'alice']).then (res) ->
         res.length.should.equal 1
         done()
-  describe 'keys', ->
-    it 'should initially have no private keys', (done) ->
-      db.listMyKeys().then (res) ->
-        res.length.should.equal 0
-        done()
-    it 'should import a private key', (done) ->
-      db.importPrivateKey(privKey).then ->
-        db.listMyKeys()
-      .then (res) ->
-        res.length.should.equal 1
-        done()
   describe 'Priority', ->
     it 'should be 0 for a message from an unknown signer', (done) ->
       message = Message.createRating

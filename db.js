@@ -113,6 +113,7 @@ module.exports = function(knex) {
         if (options.maxDistance > 0) {
           sql += 'AND td.distance <= :maxDistance ';
         }
+        // A bit messy way to pick also messages that were authored by the viewpointId
         sql += ') OR (id.is_recipient = 0 AND id.type = :viewpointType AND id.value = :viewpointValue)';
         query.where(knex.raw(sql, {
           viewpointType: options.viewpoint[0],
@@ -409,23 +410,6 @@ module.exports = function(knex) {
       return knex('Identities').count('* as val');
     },
 
-    importPrivateKey: function(privateKey, setDefault) {
-      return knex('PrivateKeys').insert({
-        pubkey: '',
-        private_key: privateKey,
-        is_default: setDefault
-      }).then(function() {
-        return knex('Keys').insert({
-          pubkey: '',
-          key_id: ''
-        });
-      });
-    },
-
-    listMyKeys: function() {
-      return knex.select('*').from('Keys').join('PrivateKeys', 'PrivateKeys.pubkey', 'Keys.pubkey');
-    },
-
     getStats: function(id, viewpoint) {
       var useViewpoint = false;
       var sql = "SELECT ";
@@ -473,7 +457,7 @@ module.exports = function(knex) {
       var keyType = 'keyID';
 
       var shortestPathToSignature = 1000000;
-
+      /*
       var i, j;
       return publicMethods.listMyKeys().then(function(res) {
         var queries = [];
@@ -491,6 +475,9 @@ module.exports = function(knex) {
         return new P(function(resolve) {
           resolve(Math.round(maxPriority / shortestPathToSignature));
         });
+      }); */
+      return new P(function(resolve) {
+        resolve(Math.round(maxPriority / shortestPathToSignature));
       });
     },
 

@@ -97,31 +97,11 @@ router.route('/peers')
   });
 
 
-
-router.route('/keys')
-  .get(function(req, res) {
-    db.listMyKeys().then(function(dbRes) {
-      res.json(dbRes);
-    });
-  })
-
-  .post(function(req, res) {
-    db.importPrivKey(req.body.privateKey).then(function(dbRes) {
-      res.json(dbRes);
-    });
-  })
-
-  .delete(function(req, res) {
-    res.json("remove key");
-  });
-
-
-
-  function handleError(err, req, res) {
-    log(err);
-    log(req);
-    res.status(500).json('Server error');
-  }
+function handleError(err, req, res) {
+  log(err);
+  log(req);
+  res.status(500).json('Server error');
+}
 
 
 // Helper method
