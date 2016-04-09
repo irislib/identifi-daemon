@@ -78,7 +78,7 @@ describe 'API', ->
       it 'add another connection msg', ->
         m = message.create
           author: [['email', 'bob@example.com']]
-          recipient: [['email', 'charles@example.com'], ['url', 'Charles the Great']]
+          recipient: [['email', 'charles@example.com'], ['url', 'http://twitter.com/charles']]
           type: 'confirm_connection'
         message.sign(m, privKey, 'keyID')
         r = identifi.request
@@ -98,6 +98,45 @@ describe 'API', ->
         r.then (res) ->
           res.hash.should.equal m.hash
           done()
+    describe 'trustpaths', ->
+      it 'should return a trustpath from alice to bob', (done) ->
+        r = identifi.request
+          apiMethod: 'id'
+          apiIdType: 'email'
+          apiId: 'alice@example.com'
+          apiAction: 'trustpaths'
+          qs:
+            target_type: 'email'
+            target_value: 'bob@example.com'
+        r.then (res) ->
+          res.should.not.be.empty
+          res[0].path_string.split(':').length.should.equal 5
+          done()
+      it 'should return a trustpath from alice to david', (done) ->
+        r = identifi.request
+          apiMethod: 'id'
+          apiIdType: 'email'
+          apiId: 'alice@example.com'
+          apiAction: 'trustpaths'
+          qs:
+            target_type: 'email'
+            target_value: 'david@example.com'
+        r.then (res) ->
+          res.should.not.be.empty
+          res[0].path_string.split(':').length.should.equal 9
+          done()
+      it 'should generate a trustmap', (done) ->
+        r = identifi.request
+          apiMethod: 'id'
+          apiIdType: 'email'
+          apiId: 'alice@example.com'
+          apiAction: 'generatetrustmap'
+          qs:
+            depth: 3
+        r.then (res) ->
+          res.should.not.be.empty
+          res[0].trustmap_size.should.equal 3
+          done()
     describe 'list', ->
       it 'should list messages ordered by date', (done) ->
         r = identifi.request
@@ -113,7 +152,7 @@ describe 'API', ->
         r.then (res) ->
           msg.type.should.equal 'rating' for msg in res
           done()
-      it 'should filter messages by viewpoint', (done) ->
+      it 'should filter messages by viewpoint, max_distance 1', (done) ->
         r = identifi.request
           apiMethod: 'messages'
           qs:
@@ -122,6 +161,16 @@ describe 'API', ->
             max_distance: 1
         r.then (res) ->
           res.length.should.equal 4
+          done()
+      it 'should filter messages by viewpoint, max_distance 2', (done) ->
+        r = identifi.request
+          apiMethod: 'messages'
+          qs:
+            viewpoint_type: 'email'
+            viewpoint_value: 'alice@example.com'
+            max_distance: 2
+        r.then (res) ->
+          res.length.should.equal 5
           done()
     describe 'delete', ->
       it 'should fail if the message was not found', ->
@@ -250,30 +299,3 @@ describe 'API', ->
           done()
     describe 'getname', ->
       it 'should return a cached common name for the identifier'
-    describe 'trustpaths', ->
-      it 'should return a trustpath from alice to bob', (done) ->
-        r = identifi.request
-          apiMethod: 'id'
-          apiIdType: 'email'
-          apiId: 'alice@example.com'
-          apiAction: 'trustpaths'
-          qs:
-            target_type: 'email'
-            target_value: 'bob@example.com'
-        r.then (res) ->
-          res.should.not.be.empty
-          res[0].path_string.split(':').length.should.equal 5
-          done()
-      it 'should return a trustpath from alice to david', (done) ->
-        r = identifi.request
-          apiMethod: 'id'
-          apiIdType: 'email'
-          apiId: 'alice@example.com'
-          apiAction: 'trustpaths'
-          qs:
-            target_type: 'email'
-            target_value: 'david@example.com'
-        r.then (res) ->
-          res.should.not.be.empty
-          res[0].path_string.split(':').length.should.equal 9
-          done()

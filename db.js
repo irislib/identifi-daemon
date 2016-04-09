@@ -74,43 +74,54 @@ module.exports = function(knex) {
           options.where['id.value'] = options.recipient[1];
           options.where['id.is_recipient'] = true;
         }
-
-        if (options.where['Messages.type'] && options.where['Messages.type'].match(/^rating:(positive|neutral|negative)$/i)) {
-          var ratingType = options.where['Messages.type'].match(/(positive|neutral|negative)$/i)[0];
-          options.where['Messages.type'] = 'rating';
-          var ratingTypeFilter;
-          switch(ratingType) {
-            case 'positive':
-              ratingTypeFilter = ['Messages.rating', '<', '(Messages.max_rating + Messages.min_rating) / 2'];
-              break;
-            case 'neutral':
-              ratingTypeFilter = ['Messages.rating', '=', '(Messages.max_rating + Messages.min_rating) / 2'];
-              break;
-            case 'negative':
-              ratingTypeFilter = ['Messages.rating', '>', '(Messages.max_rating + Messages.min_rating) / 2'];
-              break;
-          }
-          return knex.select('*').from('Messages')
-            .innerJoin('MessageIdentifiers as id', 'Messages.hash', 'id.message_hash')
-            .where(options.where)
-            .where(ratingTypeFilter[0], ratingTypeFilter[1], ratingTypeFilter[2])
-            .orderBy(options.orderBy, options.direction)
-            .limit(options.limit)
-            .offset(options.offset);
-        }
-        return knex.select('*').from('Messages')
-          .innerJoin('MessageIdentifiers as id', 'Messages.hash', 'id.message_hash')
-          .where(options.where)
-          .orderBy(options.orderBy, options.direction)
-          .limit(options.limit)
-          .offset(options.offset);
       }
 
-      return knex.select('*').from('Messages')
+      var query = knex.select('Messages.*').from('Messages')
+        .innerJoin('MessageIdentifiers as id', 'Messages.hash', 'id.message_hash')
         .where(options.where)
         .orderBy(options.orderBy, options.direction)
         .limit(options.limit)
-        .offset(options.offset);
+        .offset(options.offset)
+        .groupBy('Messages.hash');
+
+      if (options.where['Messages.type'] && options.where['Messages.type'].match(/^rating:(positive|neutral|negative)$/i)) {
+        var ratingType = options.where['Messages.type'].match(/(positive|neutral|negative)$/i)[0];
+        options.where['Messages.type'] = 'rating';
+        var ratingTypeFilter;
+        switch(ratingType) {
+          case 'positive':
+            ratingTypeFilter = ['Messages.rating', '<', '(Messages.max_rating + Messages.min_rating) / 2'];
+            break;
+          case 'neutral':
+            ratingTypeFilter = ['Messages.rating', '=', '(Messages.max_rating + Messages.min_rating) / 2'];
+            break;
+          case 'negative':
+            ratingTypeFilter = ['Messages.rating', '>', '(Messages.max_rating + Messages.min_rating) / 2'];
+            break;
+        }
+        query.where(ratingTypeFilter[0], ratingTypeFilter[1], ratingTypeFilter[2]);
+      }
+
+      if (options.viewpoint) {
+        query.leftJoin('TrustDistances as td', function() {
+          this.on('id.type', '=', 'td.end_id_type')
+            .andOn('id.value', '=', 'td.end_id_value')
+            .andOn('id.is_recipient', '=', '0');
+        });
+
+        var sql = '(td.start_id_type = :viewpointType AND td.start_id_value = :viewpointValue ';
+        if (options.maxDistance > 0) {
+          sql += 'AND td.distance <= :maxDistance ';
+        }
+        sql += ') OR (id.is_recipient = 0 AND id.type = :viewpointType AND id.value = :viewpointValue)';
+        query.where(knex.raw(sql, {
+          viewpointType: options.viewpoint[0],
+          viewpointValue: options.viewpoint[1],
+          maxDistance: options.maxDistance
+        }));
+      }
+
+      return query;
     },
 
     dropMessage: function(messageHash) {
@@ -303,7 +314,7 @@ module.exports = function(knex) {
           return knex.raw(sql, { id1type: id[0], id1value: id[1], maxDepth: maxDepth });
         })
         .then(function() {
-          return knex('TrustDistances').count('* as val')
+          return knex('TrustDistances').count('* as trustmap_size')
             .where({ start_id_type: id[0], start_id_value: id[1] });
         });
     },
@@ -487,18 +498,35 @@ module.exports = function(knex) {
       return true; // TODO: implement
     },
 
+    saveTrustDistance: function(startId, endId, distance) {
+      return knex('TrustDistances').where({
+        'start_id_type': startId[0],
+        'start_id_value': startId[1],
+        'end_id_type': endId[0],
+        'end_id_value': endId[1]
+      }).del()
+      .then(function() {
+        return knex('TrustDistances').insert({
+          'start_id_type': startId[0],
+          'start_id_value': startId[1],
+          'end_id_type': endId[0],
+          'end_id_value': endId[1],
+          'distance': distance
+        });
+      });
+    },
+
     saveMessageTrustDistances: function(message) {
       var queries = [];
       if (Message.isPositive(message)) {
         var i, j;
         for (i = 0; i < message.signedData.author.length; i++) {
           for (j = 0; j < message.signedData.recipient.length; j++) {
-            queries.push(knex('TrustDistances').insert({
-              'start_id_type': message.signedData.author[0],
-              'start_id_value': message.signedData.author[1],
-              'end_id_type': message.signedData.recipient[0],
-              'end_id_value': message.signedData.recipient[1]
-            }));
+            queries.push(this.saveTrustDistance(
+              message.signedData.author[i],
+              message.signedData.recipient[i],
+              1
+            ));
           }
         }
       }

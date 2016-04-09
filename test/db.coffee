@@ -116,7 +116,7 @@ describe 'Database', ->
   describe 'trust functions', ->
     it 'should generate a trust map', (done) ->
       db.generateTrustMap(['email', 'alice@example.com'], 3).then (res) ->
-        res[0].val.should.equal 2
+        res[0].trustmap_size.should.equal 2
         done()
     it 'should return a trust path', (done) ->
       db.getTrustPaths(['email', 'alice@example.com'], ['email', 'charles@example.com'], 3).then (res) ->

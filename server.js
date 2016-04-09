@@ -132,6 +132,7 @@ function getMessages(req, res, options) {
     if (req.query.viewpoint_type && req.query.viewpoint_value) {
       options.viewpoint = [req.query.viewpoint_type, req.query.viewpoint_value];
     }
+    if (req.query.max_distance) { options.maxDistance = parseInt(req.query.max_distance); }
     if (req.query.type)     { options.where['Messages.type'] = req.query.type; }
     if (req.query.order_by) { options.orderBy = req.query.order_by; }
     if (req.query.direction && (req.query.direction === 'asc' || req.query.direction === 'desc')) {
@@ -274,6 +275,15 @@ router.get('/id/:id_type/:id_value/trustpaths', function(req, res) {
   var maxLength = req.query.max_length || 5;
   var shortestOnly = req.query.max_length !== undefined;
   db.getTrustPaths([req.params.id_type, req.params.id_value], [req.query.target_type, req.query.target_value], maxLength, shortestOnly).then(function(dbRes) {
+    res.json(dbRes);
+  }).catch(function(err) { handleError(err, req, res); });
+});
+
+
+router.get('/id/:id_type/:id_value/generatetrustmap', function(req, res) {
+  var depth = parseInt(req.query.depth) || 3;
+  db.generateTrustMap([req.params.id_type, req.params.id_value], depth)
+  .then(function(dbRes) {
     res.json(dbRes);
   }).catch(function(err) { handleError(err, req, res); });
 });

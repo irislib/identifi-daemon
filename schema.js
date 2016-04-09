@@ -61,11 +61,11 @@ var init = function(db) {
   })
 
   .createTable('TrustDistances', function(t) {
-    t.string('start_id_type');
-    t.string('start_id_value');
-    t.string('end_id_type');
-    t.string('end_id_value');
-    t.integer('distance');
+    t.string('start_id_type').notNullable();
+    t.string('start_id_value').notNullable();
+    t.string('end_id_type').notNullable();
+    t.string('end_id_value').notNullable();
+    t.integer('distance').notNullable();
     t.primary(['start_id_type', 'start_id_value', 'end_id_type', 'end_id_value']);
   })
 
