@@ -68,17 +68,20 @@ var server;
 // =============================================================================
 var router = express.Router();
 
+
+function handleError(err, req, res) {
+  log(err);
+  log(req);
+  res.status(500).json('Server error');
+}
+
+
+
 router.get('/', function(req, res) {
-  res.json({ message: 'Identifi API' });
-});
-
-
-
-router.get('/status', function(req, res) {
-  var queries = [db.getMessageCount(), db.getIdentityCount()];
+  var queries = [db.getMessageCount()];
   P.all(queries).then(function(results) {
-    res.json({ msgCount: results[0][0].val, identityCount: results[1][0].val });
-  });
+    res.json({ message: 'Identifi API', msgCount: results[0][0].val });
+  }).catch(function(err) { handleError(err, req, res); });
 });
 
 
@@ -95,13 +98,6 @@ router.route('/peers')
   .delete(function(req, res) {
     res.json("remove peer");
   });
-
-
-function handleError(err, req, res) {
-  log(err);
-  log(req);
-  res.status(500).json('Server error');
-}
 
 
 // Helper method

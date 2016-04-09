@@ -31,8 +31,7 @@ describe 'API', ->
     console.log 'Test server at ' + config.get('port') + ' shutting down'
     server.close()
   it 'should return server status', ->
-    identifi.request
-      apiMethod: 'status'
+    identifi.request({})
   describe 'messages', ->
     describe 'create', ->
       it 'should add rating 10 from alice@example.com to bob@example.com', ->

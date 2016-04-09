@@ -406,10 +406,6 @@ module.exports = function(knex) {
       return knex('Messages').count('* as val');
     },
 
-    getIdentityCount: function() {
-      return knex('Identities').count('* as val');
-    },
-
     getStats: function(id, options) {
       var sql = "";
       sql += "SUM(CASE WHEN id.is_recipient = 0 AND m.rating > (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS sentPositive, ";
