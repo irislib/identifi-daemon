@@ -21,11 +21,13 @@ cleanup = ->
 
 describe 'API', ->
   server = undefined
+  socket = undefined
   before ->
     cleanup()
     # After hook fails to execute when errors are thrown
     server = require('../server.js')
     identifi.apiRoot = 'http://localhost:4944/api'
+    socket = identifi.getSocket()
   after cleanup
   after ->
     console.log 'Test server at ' + config.get('port') + ' shutting down'
@@ -337,7 +339,6 @@ describe 'API', ->
             viewpoint_value: 'alice@example.com'
             max_distance: 1
         r.then (res) ->
-          console.log res
           res.length.should.equal 1
           res[0].sentPositive.should.equal 1
           res[0].sentNeutral.should.equal 0
@@ -369,3 +370,27 @@ describe 'API', ->
           done()
     describe 'getname', ->
       it 'should return a cached common name for the identifier'
+  describe 'websocket', ->
+    it 'should be connected', ->
+      socket.connected.should.be.true
+    it 'should receive an event when a new message is available', ->
+      socket.on 'event', (e) -> console.log e
+      m = message.createRating
+        author: [['email', 'alice@example.com']]
+        recipient: [['email', 'bob@example.com']]
+        rating: 10
+      message.sign(m, privKey, 'keyID')
+      r = identifi.request
+        method: 'POST'
+        apiMethod: 'messages'
+        body: m
+    it 'should accept and save a message', ->
+      socket.emit('msg', { jws: 'eyJhbGciOiJFUzI1NiIsImtpZCI6IjEyMzQ1In0.eyJhdXRob3IiOltbImVtYWlsIiwiY'
+      'WxpY2VAZXhhbXBsZS5jb20iXV0sInJlY2lwaWVudCI6W1siZW1haWwiLCJib2JAZXhhbXBsZS5jb20iXV0sInJhdGluZyI'
+      '6IjEwIiwidGltZXN0YW1wIjoiMjAxNi0wNC0xMFQxNToyNzo1MS45NjFaIiwidHlwZSI6InJhdGluZyIsIm1heFJhdGluZy'
+      'I6MTAsIm1pblJhdGluZyI6LTEwfQ.PxsXVP8_b_YVZmK1ledbFHgXJ6B_Dv0U_mKqWbMx47eAL9c-DTwOLqeYzhmZktkVwG'
+      'zppckL-y5kPuVLSNMr0g', hash: 'JO7LXy5EkeQ144GTTKwZ29wpaZcnui2vJ2Fku1xJk3w=' })
+      r = identifi.request
+        method: 'GET'
+        apiMethod: 'messages'
+        apiId: 'JO7LXy5EkeQ144GTTKwZ29wpaZcnui2vJ2Fku1xJk3w='

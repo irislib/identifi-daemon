@@ -3,6 +3,8 @@ var moment = require('moment');
 
 var express    = require('express');
 var app        = express();
+var server = require('http').Server(app);
+var io = require('socket.io')(server).of('/api');
 var bodyParser = require('body-parser');
 
 var Message = require('identifi-lib/message');
@@ -62,7 +64,6 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 
 var port = config.get('port');
-var server;
 
 // Routes
 // =============================================================================
@@ -133,6 +134,8 @@ router.route('/messages')
     db.saveMessage(m).then(function() {
       res.status(201).json(m);
     }).catch(function(err) { handleError(err, req, res); });
+
+    io.emit('msg', { jws: m.jws, hash: m.hash });
   });
 
 
@@ -272,12 +275,36 @@ router.get('/id/:id_type/:id_value/generatetrustmap', function(req, res) {
   }).catch(function(err) { handleError(err, req, res); });
 });
 
-
 // Register the routes
 app.use('/api', router);
 
+// Websocket handler
+io.on('connection', function (socket) {
+  // Handle new websocket
+  log('connected');
+  socket.on('msg', function (data) {
+    // Handle incoming message
+    var m;
+    try {
+      m = Message.decode(data);
+    } catch (e) {
+      log('failed to decode msg');
+      return;
+    }
+    log('msg received:');
+    log(data);
+    var isNew = false;
+    if (isNew) {
+      db.saveMessage(m).then(function() {
+        io.emit('msg', { jws: m.jws, hash: m.hash });
+      });
+    }
+  });
+});
+
 // Start the server
-server = app.listen(port);
+server.listen(port);
+
 
 module.exports = server;
 

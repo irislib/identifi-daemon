@@ -167,6 +167,7 @@ module.exports = function(knex) {
     getConnectedIdentifiers: function(options) {
       var sql = 'identity_id IN (SELECT identity_id FROM Identities WHERE type = ? AND value = ? AND viewpoint_type = ? AND viewpoint_value = ?)';
       var countBefore;
+      options.viewpoint = options.viewpoint || ['', ''];
 
       return knex('Identities')
         .whereRaw(sql, [options.id[0], options.id[1], options.viewpoint[0], options.viewpoint[1]]).del()

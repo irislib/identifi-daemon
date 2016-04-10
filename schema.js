@@ -77,6 +77,12 @@ var init = function(db) {
     t.primary(['pubkey', 'key_id']);
   })
 
+  .createTable('Peers', function(t) {
+    t.string('address').primary();
+    t.integer('misbehaving').unsigned().notNullable();
+    t.timestamp('last_seen');
+  })
+
   .then(function() {
     return addDefaultUniqueIdentifierTypes(db);
   })
