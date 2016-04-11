@@ -47,8 +47,8 @@ var init = function(db) {
     t.string('message_hash').references('Messages.hash');
     t.string('type').notNullable();
     t.string('value').notNullable();
-    t.primary(['type', 'value', 'message_hash']);
     t.boolean('is_recipient');
+    t.primary(['type', 'value', 'message_hash', 'is_recipient']);
   })
 
   .createTable('TrustDistances', function(t) {
