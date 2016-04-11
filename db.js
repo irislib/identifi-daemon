@@ -216,7 +216,7 @@ module.exports = function(knex) {
           sql += ") ";
 
           sql += "INSERT INTO Identities ";
-          sql += "SELECT " + identityID + ", id2type, id2val, :viewpointType, :viewpointID, 1, 1 FROM transitive_closure ";
+          sql += "SELECT " + identityID + ", id2type, id2val, :viewpointType, :viewpointID, 1, 0 FROM transitive_closure ";
           sql += "GROUP BY id2type, id2val ";
           sql += "UNION SELECT " + identityID + ", :type, :id, :viewpointType, :viewpointID, 1, 0 ";
           sql += "FROM MessageIdentifiers AS mi ";
