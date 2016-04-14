@@ -8,9 +8,11 @@ chai = require('chai')
 chaiAsPromised = require('chai-as-promised')
 chai.should()
 chai.use chaiAsPromised
-Message = require('identifi-lib/message.js')
-privKey = '-----BEGIN EC PRIVATE KEY-----\n' + 'MHQCAQEEINY+49rac3jkC+S46XN0f411svOveILjev4R3aBehwUKoAcGBSuBBAAK\n' + 'oUQDQgAEKn3lQ3+/aN6xNd9DSFrYbaPSGOzLMbb1kQZ9lCMtwc6Og4hfCMLhaSbE\n' + '3sXek8e2fvKrTp8FY1MyCL4qMeVviA==\n' + '-----END EC PRIVATE KEY-----'
-pubKey = 'MFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEKn3lQ3+/aN6xNd9DSFrYbaPSGOzLMbb1kQZ9lCMtwc6Og4hfCMLhaSbE3sXek8e2fvKrTp8FY1MyCL4qMeVviA=='
+Message = require('identifi-lib/message')
+keyutil = require('identifi-lib/keyutil')
+key = keyutil.generate()
+privKey = key.private.pem
+pubKey = key.public.hex
 
 cleanup = ->
   fs.unlink '../' + config.db.connection.filename, (err) ->

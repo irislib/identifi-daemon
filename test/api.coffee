@@ -7,12 +7,15 @@ errors = require('request-promise/errors')
 config = require('config')
 identifi = require('identifi-lib/client')
 message = require('identifi-lib/message')
+keyutil = require('identifi-lib/keyutil')
 chai = require('chai')
 chaiAsPromised = require('chai-as-promised')
 chai.should()
 chai.use chaiAsPromised
 
-privKey = '-----BEGIN EC PRIVATE KEY-----\n' + 'MHQCAQEEINY+49rac3jkC+S46XN0f411svOveILjev4R3aBehwUKoAcGBSuBBAAK\n' + 'oUQDQgAEKn3lQ3+/aN6xNd9DSFrYbaPSGOzLMbb1kQZ9lCMtwc6Og4hfCMLhaSbE\n' + '3sXek8e2fvKrTp8FY1MyCL4qMeVviA==\n' + '-----END EC PRIVATE KEY-----'
+myKey = keyutil.generate()
+privKeyPEM = myKey.private.pem
+hex = myKey.public.hex
 m = null
 
 cleanup = ->
@@ -41,7 +44,7 @@ describe 'API', ->
           author: [['email', 'alice@example.com']]
           recipient: [['email', 'bob@example.com']]
           rating: 10
-        message.sign(m, privKey, 'keyID')
+        message.sign(m, privKeyPEM, hex)
         r = identifi.request
           method: 'POST'
           apiMethod: 'messages'
@@ -51,7 +54,7 @@ describe 'API', ->
           author: [['email', 'bob@example.com']]
           recipient: [['email', 'charles@example.com']]
           rating: 10
-        message.sign(m, privKey, 'keyID')
+        message.sign(m, privKeyPEM, hex)
         r = identifi.request
           method: 'POST'
           apiMethod: 'messages'
@@ -61,7 +64,7 @@ describe 'API', ->
           author: [['email', 'charles@example.com']]
           recipient: [['email', 'david@example.com']]
           rating: 10
-        message.sign(m, privKey, 'keyID')
+        message.sign(m, privKeyPEM, hex)
         r = identifi.request
           method: 'POST'
           apiMethod: 'messages'
@@ -71,7 +74,7 @@ describe 'API', ->
           author: [['email', 'charles@example.com']]
           recipient: [['email', 'bob@example.com']]
           rating: -1
-        message.sign(m, privKey, 'keyID')
+        message.sign(m, privKeyPEM, hex)
         r = identifi.request
           method: 'POST'
           apiMethod: 'messages'
@@ -81,7 +84,7 @@ describe 'API', ->
           author: [['email', 'nobody@example.com']]
           recipient: [['email', 'bob@example.com']]
           rating: -10
-        message.sign(m, privKey, 'keyID')
+        message.sign(m, privKeyPEM, hex)
         r = identifi.request
           method: 'POST'
           apiMethod: 'messages'
@@ -91,7 +94,7 @@ describe 'API', ->
           author: [['email', 'alice@example.com']]
           recipient: [['email', 'bob@example.com'], ['name', 'Bob the Builder']]
           type: 'confirm_connection'
-        message.sign(m, privKey, 'keyID')
+        message.sign(m, privKeyPEM, hex)
         r = identifi.request
           method: 'POST'
           apiMethod: 'messages'
@@ -101,7 +104,7 @@ describe 'API', ->
           author: [['email', 'bob@example.com']]
           recipient: [['email', 'charles@example.com'], ['url', 'http://twitter.com/charles']]
           type: 'confirm_connection'
-        message.sign(m, privKey, 'keyID')
+        message.sign(m, privKeyPEM, hex)
         r = identifi.request
           method: 'POST'
           apiMethod: 'messages'
@@ -373,24 +376,25 @@ describe 'API', ->
   describe 'websocket', ->
     it 'should be connected', ->
       socket.connected.should.be.true
-    it 'should receive an event when a new message is available', ->
-      socket.on 'event', (e) -> console.log e
+    it 'should receive an event when a new message is available', (done) ->
+      socket.on 'msg', (e) -> done()
       m = message.createRating
         author: [['email', 'alice@example.com']]
         recipient: [['email', 'bob@example.com']]
         rating: 10
-      message.sign(m, privKey, 'keyID')
+      message.sign(m, privKeyPEM, hex)
       r = identifi.request
         method: 'POST'
         apiMethod: 'messages'
         body: m
-    it 'should accept and save a message', ->
-      socket.emit('msg', { jws: 'eyJhbGciOiJFUzI1NiIsImtpZCI6IjEyMzQ1In0.eyJhdXRob3IiOltbImVtYWlsIiwiY'
-      'WxpY2VAZXhhbXBsZS5jb20iXV0sInJlY2lwaWVudCI6W1siZW1haWwiLCJib2JAZXhhbXBsZS5jb20iXV0sInJhdGluZyI'
-      '6IjEwIiwidGltZXN0YW1wIjoiMjAxNi0wNC0xMFQxNToyNzo1MS45NjFaIiwidHlwZSI6InJhdGluZyIsIm1heFJhdGluZy'
-      'I6MTAsIm1pblJhdGluZyI6LTEwfQ.PxsXVP8_b_YVZmK1ledbFHgXJ6B_Dv0U_mKqWbMx47eAL9c-DTwOLqeYzhmZktkVwG'
-      'zppckL-y5kPuVLSNMr0g', hash: 'JO7LXy5EkeQ144GTTKwZ29wpaZcnui2vJ2Fku1xJk3w=' })
-      r = identifi.request
-        method: 'GET'
-        apiMethod: 'messages'
-        apiId: 'JO7LXy5EkeQ144GTTKwZ29wpaZcnui2vJ2Fku1xJk3w='
+    it 'should accept and save a message', (done) ->
+      socket.emit('msg', { jws: 'eyJhbGciOiJFUzI1NiIsImtpZCI6IjMwNTYzMDEwMDYwNzJhODY0OGNlM2QwMjAxMDYwNTJiODEwNDAwMGEwMzQyMDAwNGZjNTA1MDliN2M2Njc2NmY5ODJkMmE2YTRhN2I1MmUwOTFiYzhhYWNmZTdmOWI3ODlkMGZkZjQwMmMxNTg0ZTc2MjE5ZjY5ZGE2ZThjMjVhN2IwYzdmZmQyZjdlMGViNzNmOGIwODE2NzlhYTNkYTljNmMyNWI4OWI3YmU3YjdhIn0.eyJhdXRob3IiOltbImVtYWlsIiwiYWxpY2VAZXhhbXBsZS5jb20iXV0sInJlY2lwaWVudCI6W1siZW1haWwiLCJhbGljZUBleGFtcGxlLmNvbSJdXSwicmF0aW5nIjoiMTAiLCJ0aW1lc3RhbXAiOiIyMDE2LTA0LTE0VDE1OjIwOjQyLjY4MFoiLCJ0eXBlIjoicmF0aW5nIiwibWF4UmF0aW5nIjoxMCwibWluUmF0aW5nIjotMTB9.zvVrbmLxzh9DKAr9Xb1snfYaYwa33RxDTIBdZLzSUH1qXpw8n62yYG-bWuNYBSpq-oNECJ1Zld00lLGYIOc0AA', hash: 'y/9to17qKO538FhCpETFLK4quA9VKhh/Gd8DLQs2suk=' })
+      setTimeout ->
+        r = identifi.request
+          method: 'GET'
+          apiMethod: 'messages'
+          apiId: 'y/9to17qKO538FhCpETFLK4quA9VKhh/Gd8DLQs2suk='
+        r.then ->
+          done()
+        return
+      , 1500

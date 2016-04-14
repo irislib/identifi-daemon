@@ -130,11 +130,11 @@ router.route('/messages')
   })
 
   .post(function(req, res) {
-    var m = Message.decode(req.body);
+    var m = req.body;
+    Message.verify(m);
     db.saveMessage(m).then(function() {
       res.status(201).json(m);
     }).catch(function(err) { handleError(err, req, res); });
-
     io.emit('msg', { jws: m.jws, hash: m.hash });
   });
 
@@ -291,8 +291,7 @@ io.on('connection', function (socket) {
       log('failed to decode msg');
       return;
     }
-    log('msg received:');
-    log(data);
+    log('msg received: ' + data.hash);
     var isNew = false;
     if (isNew) {
       db.saveMessage(m).then(function() {
