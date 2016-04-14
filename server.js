@@ -284,11 +284,11 @@ io.on('connection', function (socket) {
   log('connected');
   socket.on('msg', function (data) {
     // Handle incoming message
-    var m;
+    var m = data;
     try {
-      m = Message.decode(data);
+      Message.verify(m);
     } catch (e) {
-      log('failed to decode msg');
+      log('failed to verify msg');
       return;
     }
     log('msg received: ' + data.hash);
