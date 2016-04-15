@@ -381,7 +381,9 @@ describe 'API', ->
     it 'should be connected', ->
       socket.connected.should.be.true
     it 'should receive an event when a new message is available', (done) ->
-      socket.on 'msg', (e) -> done()
+      socket.on 'msg', (e) ->
+        done()
+        socket._callbacks['$msg'] = []
       m = message.createRating
         author: [['email', 'alice@example.com']]
         recipient: [['email', 'bob@example.com']]
@@ -401,4 +403,18 @@ describe 'API', ->
         r.then ->
           done()
         return
-      , 1500
+      , 1000
+    it 'should not rebroadcast an already saved message', (done) ->
+      socket.on 'msg', (e) ->
+        done('Fail!')
+        socket._callbacks['$msg'] = []
+      socket.emit('msg', { jws: 'eyJhbGciOiJFUzI1NiIsImtpZCI6IjMwNTYzMDEwMDYwNzJhODY0OGNlM2QwMjAxMDYwNTJiODEwNDAwMGEwMzQyMDAwNGZjNTA1MDliN2M2Njc2NmY5ODJkMmE2YTRhN2I1MmUwOTFiYzhhYWNmZTdmOWI3ODlkMGZkZjQwMmMxNTg0ZTc2MjE5ZjY5ZGE2ZThjMjVhN2IwYzdmZmQyZjdlMGViNzNmOGIwODE2NzlhYTNkYTljNmMyNWI4OWI3YmU3YjdhIn0.eyJhdXRob3IiOltbImVtYWlsIiwiYWxpY2VAZXhhbXBsZS5jb20iXV0sInJlY2lwaWVudCI6W1siZW1haWwiLCJhbGljZUBleGFtcGxlLmNvbSJdXSwicmF0aW5nIjoiMTAiLCJ0aW1lc3RhbXAiOiIyMDE2LTA0LTE0VDE1OjIwOjQyLjY4MFoiLCJ0eXBlIjoicmF0aW5nIiwibWF4UmF0aW5nIjoxMCwibWluUmF0aW5nIjotMTB9.zvVrbmLxzh9DKAr9Xb1snfYaYwa33RxDTIBdZLzSUH1qXpw8n62yYG-bWuNYBSpq-oNECJ1Zld00lLGYIOc0AA', hash: 'y/9to17qKO538FhCpETFLK4quA9VKhh/Gd8DLQs2suk=' })
+      setTimeout ->
+        r = identifi.request
+          method: 'GET'
+          apiMethod: 'messages'
+          apiId: 'y/9to17qKO538FhCpETFLK4quA9VKhh/Gd8DLQs2suk='
+        r.then ->
+          done()
+        return
+      , 1000

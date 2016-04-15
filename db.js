@@ -53,6 +53,16 @@ module.exports = function(knex) {
         return P.all(queries);
       });
     },
+
+    messageExists: function(hash) {
+      return knex('Messages').where('hash', hash).count('* as exists')
+        .then(function(res) {
+          return new P(function(resolve) {
+            resolve(!!res[0].exists);
+          });
+        });
+    },
+
     getMessages: function(options) {
       var defaultOptions = {
         orderBy: 'timestamp',

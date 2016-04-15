@@ -138,11 +138,18 @@ router.route('/messages')
 
   .post(function(req, res) {
     var m = req.body;
-    Message.verify(m);
-    db.saveMessage(m).then(function() {
-      res.status(201).json(m);
+
+    db.messageExists(m.hash)
+    .then(function(exists) {
+      if (!exists) {
+        Message.verify(m);
+        db.saveMessage(m);
+        io.emit('msg', { jws: m.jws, hash: m.hash });
+        res.status(201).json(m);
+      } else {
+        res.status(200).json(m);
+      }
     }).catch(function(err) { handleError(err, req, res); });
-    io.emit('msg', { jws: m.jws, hash: m.hash });
   });
 
 
@@ -288,23 +295,25 @@ app.use('/api', router);
 // Websocket handler
 io.on('connection', function (socket) {
   // Handle new websocket
-  log('connected');
+  log('connection from ' + socket.client.conn.remoteAddress);
   socket.on('msg', function (data) {
+    log('msg received from ' + socket.client.conn.remoteAddress + ': ' + data.hash);
     // Handle incoming message
     var m = data;
-    try {
-      Message.verify(m);
-    } catch (e) {
-      log('failed to verify msg');
-      return;
-    }
-    log('msg received: ' + data.hash);
-    var isNew = false;
-    if (isNew) {
-      db.saveMessage(m).then(function() {
-        io.emit('msg', { jws: m.jws, hash: m.hash });
-      });
-    }
+    db.messageExists(m.hash)
+    .then(function(exists) {
+      if (!exists) {
+        try {
+          Message.verify(m);
+        } catch (e) {
+          log('failed to verify msg from ' + socket.client.conn.remoteAddress);
+          return;
+        }
+        db.saveMessage(m).then(function() {
+          io.emit('msg', { jws: m.jws, hash: m.hash });
+        });
+      }
+    });
   });
 });
 
