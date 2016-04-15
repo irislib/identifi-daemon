@@ -8,6 +8,7 @@ var io = require('socket.io')(server).of('/api');
 var bodyParser = require('body-parser');
 
 var Message = require('identifi-lib/message');
+var identifiClient = require('identifi-lib/client');
 
 var os = require('os');
 var fs = require('fs');
@@ -96,7 +97,10 @@ router.get('/', function(req, res) {
 
 router.route('/peers')
   .get(function(req, res) {
-    res.json("list peers");
+    db.getPeers()
+    .then(function(dbRes) {
+      res.json(dbRes);
+    }).catch(function(err) { handleError(err, req, res); });
   })
 
   .post(function(req, res) {
@@ -292,34 +296,60 @@ router.get('/id/:id_type/:id_value/generatetrustmap', function(req, res) {
 // Register the routes
 app.use('/api', router);
 
+function handleMsgEvent(data) {
+  var m = data;
+  db.messageExists(m.hash)
+  .then(function(exists) {
+    if (!exists) {
+      try {
+        Message.verify(m);
+      } catch (e) {
+        log('failed to verify msg');
+        return;
+      }
+      db.saveMessage(m).then(function() {
+        io.emit('msg', { jws: m.jws, hash: m.hash });
+      });
+    }
+  });
+}
+
 // Websocket handler
 io.on('connection', function (socket) {
   // Handle new websocket
   log('connection from ' + socket.client.conn.remoteAddress);
+  if (socket.request.headers['x-accept-incoming-connections']) {
+    var peer = { url: 'http://' + socket.client.conn.remoteAddress + ':4944/api' };
+    db.addPeer(peer).then(function() { log('saved peer ' + peer.url); });
+  }
+
   socket.on('msg', function (data) {
     log('msg received from ' + socket.client.conn.remoteAddress + ': ' + data.hash);
     // Handle incoming message
-    var m = data;
-    db.messageExists(m.hash)
-    .then(function(exists) {
-      if (!exists) {
-        try {
-          Message.verify(m);
-        } catch (e) {
-          log('failed to verify msg from ' + socket.client.conn.remoteAddress);
-          return;
-        }
-        db.saveMessage(m).then(function() {
-          io.emit('msg', { jws: m.jws, hash: m.hash });
-        });
-      }
-    });
+    handleMsgEvent(data);
   });
 });
 
 // Start the server
 server.listen(port);
 
+// Connect to saved peers
+var outgoingConnections = [];
+var maxOutgoingConnections = 10;
+if (process.env.NODE_ENV !== 'test') {
+  db.getPeers()
+  .then(function(peers) {
+    for (var i = 0; i < peers.length; i++) {
+      if (outgoingConnections.length >= maxOutgoingConnections) {
+        break;
+      }
+      log('Attempting connection to saved peer ' + peers[i].url);
+      var s = identifiClient.getSocket({ url: peers[i].url, isPeer: true });
+      s.on('msg', handleMsgEvent);
+      outgoingConnections.push(s);
+    }
+  });
+}
 
 module.exports = server;
 

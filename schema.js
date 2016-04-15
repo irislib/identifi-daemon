@@ -1,6 +1,6 @@
 'use strict';
 
-var addDefaultUniqueIdentifierTypes = function(db) {
+function addDefaultUniqueIdentifierTypes(db) {
   return db.table('UniqueIdentifierTypes').insert(
     [
       { type: 'email' },
@@ -12,16 +12,29 @@ var addDefaultUniqueIdentifierTypes = function(db) {
       { type: 'identifiNode' }
     ]
   );
-};
+}
 
-var checkDefaultTrustList = function(db) {
+function checkDefaultTrustList(db) {
   return db('Messages').count('* as count')
-    .then(function(res) {
-      if (res[0].count === 0) {
-        // add default trust list as an entry point
-      }
-    });
-};
+  .then(function(res) {
+    if (res[0].count === 0) {
+      // add default trust list as an entry point
+    }
+  });
+}
+
+function addDefaultPeers(db) {
+  return db.table('Peers').count('* as count')
+  .then(function(res) {
+    if (res[0].count === 0) {
+      return db('Peers').insert([
+        { url: 'http://seed1.identifi.org:4944/api' },
+        { url: 'http://seed2.identifi.org:4944/api' },
+        { url: 'http://seed3.identifi.org:4944/api' }
+      ]);
+    }
+  });
+}
 
 var init = function(db) {
   return db.schema.createTable('UniqueIdentifierTypes', function(t) {
@@ -78,8 +91,8 @@ var init = function(db) {
   })
 
   .createTable('Peers', function(t) {
-    t.string('address').primary();
-    t.integer('misbehaving').unsigned().notNullable();
+    t.string('url').primary();
+    t.integer('misbehaving').unsigned().notNullable().default(0);
     t.timestamp('last_seen');
   })
 
@@ -89,6 +102,10 @@ var init = function(db) {
 
   .then(function() {
     return checkDefaultTrustList(db);
+  })
+
+  .then(function() {
+    return addDefaultPeers(db);
   })
 
   .catch(function(e) {

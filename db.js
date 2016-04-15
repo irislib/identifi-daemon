@@ -482,6 +482,15 @@ module.exports = function(knex) {
       }
 
       return query;
+    },
+
+    addPeer: function(peer) {
+      return knex('Peers').insert(peer);
+    },
+
+    getPeers: function(where) {
+      where = where || {};
+      return knex('Peers').select('url', 'last_seen').where(where).orderBy('last_seen', 'desc');
     }
   };
 
