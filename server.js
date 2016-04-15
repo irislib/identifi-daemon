@@ -13,12 +13,16 @@ var os = require('os');
 var fs = require('fs');
 var util = require('util');
 
+var keyutil = require('identifi-lib/keyutil');
+var datadir = process.env.IDENTIFI_DATADIR || (os.homedir() + '/.identifi');
+var myKey = keyutil.getDefault(datadir);
+
 process.env.NODE_CONFIG_DIR = __dirname + '/config';
 var config = require('config');
 
+
 if (process.env.NODE_ENV !== 'test') {
   // Extend default config from datadir/config.json and write the result back to it
-  var datadir = process.env.IDENTIFI_DATADIR || (os.homedir() + '/.identifi');
   (function setConfig() {
     if (!fs.existsSync(datadir)) {
       fs.mkdirSync(datadir);
@@ -81,7 +85,10 @@ function handleError(err, req, res) {
 router.get('/', function(req, res) {
   var queries = [db.getMessageCount()];
   P.all(queries).then(function(results) {
-    res.json({ message: 'Identifi API', msgCount: results[0][0].val });
+    res.json({ message: 'Identifi API',
+                msgCount: results[0][0].val,
+                publicKey: myKey.public.hex
+              });
   }).catch(function(err) { handleError(err, req, res); });
 });
 

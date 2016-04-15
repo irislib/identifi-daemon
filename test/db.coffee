@@ -142,12 +142,24 @@ describe 'Database', ->
         res.length.should.equal 1
         done()
   describe 'Priority', ->
-    it 'should be 0 for a message from an unknown signer', (done) ->
+    it 'should be 100 for a message signed and authored by own identity', (done) ->
       message = Message.createRating
         author: [['email', 'alice@example.com']]
         recipient: [['email', 'bob@example.com']]
         rating: 1
       Message.sign message, privKey, pubKey
+      db.saveMessage(message).then ->
+        db.getMessages({ where: { hash: message.hash } })
+      .then (res) ->
+        res[0].priority.should.equal 100
+        done()
+    it 'should be 0 for a message from an unknown signer', (done) ->
+      message = Message.createRating
+        author: [['email', 'alice@example.com']]
+        recipient: [['email', 'bob@example.com']]
+        rating: 1
+      unknownKey = keyutil.generate()
+      Message.sign message, unknownKey.private.pem, unknownKey.public.hex
       db.saveMessage(message).then ->
         db.getMessages({ where: { hash: message.hash } })
       .then (res) ->
@@ -160,7 +172,7 @@ describe 'Database', ->
         res[0].sentPositive.should.equal 1
         res[0].sentNeutral.should.equal 0
         res[0].sentNegative.should.equal 0
-        res[0].receivedPositive.should.equal 2
+        res[0].receivedPositive.should.equal 3
         res[0].receivedNeutral.should.equal 0
         res[0].receivedNegative.should.equal 1
         res[0].firstSeen.should.not.be.empty

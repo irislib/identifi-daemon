@@ -5,6 +5,8 @@ var Message = require('identifi-lib/message');
 var P = require("bluebird");
 var moment = require('moment');
 
+var keyutil = require('identifi-lib/keyutil');
+var myKey = keyutil.getDefault();
 
 module.exports = function(knex) {
   schema.init(knex);
@@ -477,6 +479,7 @@ module.exports = function(knex) {
     getPriority: function(message) {
       var maxPriority = 100;
       var keyType = 'keyID';
+      var priority;
 
       var shortestPathToSignature = 1000000;
       /*
@@ -498,8 +501,13 @@ module.exports = function(knex) {
           resolve(Math.round(maxPriority / shortestPathToSignature));
         });
       }); */
+      if (message.jwsHeader.kid === myKey.public.hex) {
+        priority = maxPriority;
+      } else {
+        priority = Math.round(maxPriority / shortestPathToSignature);
+      }
       return new P(function(resolve) {
-        resolve(Math.round(maxPriority / shortestPathToSignature));
+        resolve(priority);
       });
     },
 

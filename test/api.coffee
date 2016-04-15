@@ -331,6 +331,8 @@ describe 'API', ->
           res[0].receivedNegative.should.equal 0
           res[0].firstSeen.should.not.be.empty
           done()
+        .catch (e) ->
+          done(e)
       it 'should return the stats of an identifier, using a viewpoint & max_distance 2', (done) ->
         r = identifi.request
           apiMethod: 'id'
@@ -351,6 +353,8 @@ describe 'API', ->
           res[0].receivedNegative.should.equal 1
           res[0].firstSeen.should.not.be.empty
           done()
+        .catch (e) ->
+          done(e)
     describe 'sent', ->
       it 'should return messages sent by an identifier / identity', (done) ->
         r = identifi.request
