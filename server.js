@@ -7,8 +7,10 @@ var server = require('http').Server(app);
 var io = require('socket.io')(server).of('/api');
 var bodyParser = require('body-parser');
 
-var Message = require('identifi-lib/message');
-var identifiClient = require('identifi-lib/client');
+var identifi = require('identifi-lib');
+var Message = identifi.message;
+var identifiClient = identifi.client;
+var pkg = require('./package.json');
 
 var os = require('os');
 var fs = require('fs');
@@ -87,6 +89,7 @@ router.get('/', function(req, res) {
   var queries = [db.getMessageCount()];
   P.all(queries).then(function(results) {
     res.json({ message: 'Identifi API',
+                version: pkg.version,
                 msgCount: results[0][0].val,
                 publicKey: myKey.public.hex
               });
@@ -314,39 +317,68 @@ function handleMsgEvent(data) {
   });
 }
 
-// Websocket handler
-io.on('connection', function (socket) {
-  // Handle new websocket
-  log('connection from ' + socket.client.conn.remoteAddress);
+var outgoingConnections = {};
+
+function handleIncomingWebsocket(socket) {
+  log('connection from' + socket.client.conn.remoteAddress);
   if (socket.request.headers['x-accept-incoming-connections']) {
-    var peer = { url: 'http://' + socket.client.conn.remoteAddress + ':4944/api' };
+    var peer = { url: 'http://[' + socket.client.conn.remoteAddress + ']:4944/api', last_seen: new Date() };
     db.addPeer(peer).then(function() { log('saved peer ' + peer.url); });
   }
 
   socket.on('msg', function (data) {
     log('msg received from ' + socket.client.conn.remoteAddress + ': ' + data.hash);
-    // Handle incoming message
     handleMsgEvent(data);
   });
-});
+}
 
-// Start the server
+// Handle incoming websockets
+io.on('connection', handleIncomingWebsocket);
+
+// Start the http server
 server.listen(port);
 
-// Connect to saved peers
-var outgoingConnections = [];
-var maxOutgoingConnections = 10;
+function askForMorePeers(url, peersNeeded) {
+  identifiClient.request({
+    uri: url,
+    apiMethod: 'peers'
+  }).then(function(res) {
+    log('assking more peers');
+    log(res);
+    for (var i = 0; i < res.length && i < peersNeeded; i++) {
+      if (res[i].url) {
+        db.addPeer({ url: res[i].url }).return();
+      }
+    }
+  });
+}
+
+function makeConnectHandler(url, socket) {
+  return function() {
+    log('Connected to ' + url);
+    socket.on('msg', handleMsgEvent);
+    db.updatePeerLastSeen({ url: url, last_seen: new Date() }).return();
+    db.getPeerCount().then(function(res) {
+      var peersNeeded = config.maxPeerDBsize - res[0].count;
+      if (peersNeeded > 0) {
+        askForMorePeers(url, peersNeeded);
+      }
+    });
+  };
+}
+
+// Websocket connect to saved peers
 if (process.env.NODE_ENV !== 'test') {
   db.getPeers()
   .then(function(peers) {
     for (var i = 0; i < peers.length; i++) {
-      if (outgoingConnections.length >= maxOutgoingConnections) {
+      if (outgoingConnections.length >= config.maxConnectionsOut) {
         break;
       }
       log('Attempting connection to saved peer ' + peers[i].url);
-      var s = identifiClient.getSocket({ url: peers[i].url, isPeer: true });
-      s.on('msg', handleMsgEvent);
-      outgoingConnections.push(s);
+      var s = identifiClient.getSocket({ url: peers[i].url, isPeer: true, options: { connect_timeout: 5000 }});
+      outgoingConnections[peers[i].url] = s;
+      s.on('connect', makeConnectHandler(peers[i].url, s));
     }
   });
 }

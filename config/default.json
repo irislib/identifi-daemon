@@ -9,5 +9,8 @@
     },
     "port": 4944,
     "logfile": "identifi.log",
-    "datadir": "~/.identifi"
+    "datadir": "~/.identifi",
+    "maxConnectionsOut": 5,
+    "maxConnectionsIn": 5,
+    "maxPeerDBsize": 100
 }

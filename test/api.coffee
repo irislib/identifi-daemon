@@ -29,7 +29,7 @@ describe 'API', ->
     cleanup()
     # After hook fails to execute when errors are thrown
     server = require('../server.js')
-    identifi.apiRoot = 'http://localhost:4944/api'
+    identifi.apiRoot = 'http://127.0.0.1:4944/api'
     socket = identifi.getSocket({ isPeer: true })
   after cleanup
   after ->
@@ -419,9 +419,10 @@ describe 'API', ->
         return
       , 1000
   describe 'peers', ->
-    it 'should have 1 peer', (done) ->
+    it 'should have 3 peer addresses', (done) ->
       r = identifi.request
         apiMethod: 'peers'
       r.then (res) ->
-        res.length.should.equal 1
+        console.log res
+        res.length.should.equal 3
         done()

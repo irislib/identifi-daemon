@@ -484,13 +484,28 @@ module.exports = function(knex) {
       return query;
     },
 
+    updatePeerLastSeen: function(peer) {
+      return knex('Peers').where({ url: peer.url }).update({ last_seen: peer.last_seen || null });
+    },
+
     addPeer: function(peer) {
-      return knex('Peers').insert(peer);
+      return knex('Peers').where({ url: peer.url }).count('* as count')
+      .then(function(res) {
+        if (res[0].count === 0) {
+          return knex('Peers').insert(peer);
+        } else {
+          return this.updatePeerLastSeen(peer);
+        }
+      });
     },
 
     getPeers: function(where) {
       where = where || {};
       return knex('Peers').select('url', 'last_seen').where(where).orderBy('last_seen', 'desc');
+    },
+
+    getPeerCount: function() {
+      return knex('Peers').count('* as count');
     }
   };
 
