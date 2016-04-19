@@ -320,7 +320,7 @@ function handleMsgEvent(data) {
 var outgoingConnections = {};
 
 function handleIncomingWebsocket(socket) {
-  log('connection from' + socket.client.conn.remoteAddress);
+  log('connection from ' + socket.client.conn.remoteAddress);
   if (socket.request.headers['x-accept-incoming-connections']) {
     var peer = { url: 'http://[' + socket.client.conn.remoteAddress + ']:4944/api', last_seen: new Date() };
     db.addPeer(peer).then(function() { log('saved peer ' + peer.url); });
@@ -339,11 +339,11 @@ io.on('connection', handleIncomingWebsocket);
 server.listen(port);
 
 function askForMorePeers(url, peersNeeded) {
+  log('asking ' + url + ' for more peers');
   identifiClient.request({
     uri: url,
     apiMethod: 'peers'
   }).then(function(res) {
-    log('assking more peers');
     log(res);
     for (var i = 0; i < res.length && i < peersNeeded; i++) {
       if (res[i].url) {

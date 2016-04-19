@@ -489,12 +489,13 @@ module.exports = function(knex) {
     },
 
     addPeer: function(peer) {
+      var _ = this;
       return knex('Peers').where({ url: peer.url }).count('* as count')
       .then(function(res) {
         if (res[0].count === 0) {
           return knex('Peers').insert(peer);
         } else {
-          return this.updatePeerLastSeen(peer);
+          return _.updatePeerLastSeen(peer);
         }
       });
     },
