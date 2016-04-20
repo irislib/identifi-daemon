@@ -23,6 +23,7 @@ var myKey = keyutil.getDefault(datadir);
 process.env.NODE_CONFIG_DIR = __dirname + '/config';
 var config = require('config');
 
+var outgoingConnections = {};
 
 if (process.env.NODE_ENV !== 'test') {
   // Extend default config from datadir/config.json and write the result back to it
@@ -81,6 +82,14 @@ function handleError(err, req, res) {
   log(err);
   log(req);
   res.status(500).json('Server error');
+}
+
+
+function emitMsg(msg) {
+  io.emit('msg', { jws: msg.jws, hash: msg.hash });
+  Object.keys(outgoingConnections).forEach(function(key) {
+    outgoingConnections[key].emit('msg', { jws: msg.jws, hash: msg.hash });
+  });
 }
 
 
@@ -151,7 +160,7 @@ router.route('/messages')
       if (!exists) {
         Message.verify(m);
         db.saveMessage(m);
-        io.emit('msg', { jws: m.jws, hash: m.hash });
+        emitMsg(m);
         res.status(201).json(m);
       } else {
         res.status(200).json(m);
@@ -311,13 +320,11 @@ function handleMsgEvent(data) {
         return;
       }
       db.saveMessage(m).then(function() {
-        io.emit('msg', { jws: m.jws, hash: m.hash });
+        emitMsg(m);
       });
     }
   });
 }
-
-var outgoingConnections = {};
 
 function handleIncomingWebsocket(socket) {
   log('connection from ' + socket.client.conn.remoteAddress);
@@ -344,7 +351,6 @@ function askForMorePeers(url, peersNeeded) {
     uri: url,
     apiMethod: 'peers'
   }).then(function(res) {
-    log(res);
     for (var i = 0; i < res.length && i < peersNeeded; i++) {
       if (res[i].url) {
         db.addPeer({ url: res[i].url }).return();
@@ -353,10 +359,28 @@ function askForMorePeers(url, peersNeeded) {
   });
 }
 
-function makeConnectHandler(url, socket) {
+function getNewMessages(url, since) {
+  var sinceStr = since ? ('since ' + since) : '';
+  log('asking ' + url + ' for new messages ' + sinceStr);
+  identifiClient.request({
+    uri: url,
+    apiMethod: 'messages'
+  }).then(function(res) {
+    for (var i = 0; i < res.length; i++) {
+      if (res[i].jws) {
+        var m = res[i];
+        Message.verify(m);
+        db.saveMessage(m).return();
+      }
+    }
+  });
+}
+
+function makeConnectHandler(url, lastSeen, socket) {
   return function() {
     log('Connected to ' + url);
     socket.on('msg', handleMsgEvent);
+    getNewMessages(url, lastSeen);
     db.updatePeerLastSeen({ url: url, last_seen: new Date() }).return();
     db.getPeerCount().then(function(res) {
       var peersNeeded = config.maxPeerDBsize - res[0].count;
@@ -378,7 +402,7 @@ if (process.env.NODE_ENV !== 'test') {
       log('Attempting connection to saved peer ' + peers[i].url);
       var s = identifiClient.getSocket({ url: peers[i].url, isPeer: true, options: { connect_timeout: 5000 }});
       outgoingConnections[peers[i].url] = s;
-      s.on('connect', makeConnectHandler(peers[i].url, s));
+      s.on('connect', makeConnectHandler(peers[i].url, peers[i].last_seen, s));
     }
   });
 }

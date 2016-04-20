@@ -16,41 +16,49 @@ module.exports = function(knex) {
     saveMessage: function(message) {
       var queries = [];
 
-      return p.getPriority(message).then(function(priority) {
-        queries.push(knex('Messages').insert({
-          hash:           message.hash,
-          jws:            message.jws,
-          saved_at:       moment(message.signedData.timestamp).unix(),
-          timestamp:      message.signedData.timestamp,
-          type:           message.signedData.type || 'rating',
-          rating:         message.signedData.rating || 0,
-          max_rating:     message.signedData.maxRating || 0,
-          min_rating:     message.signedData.minRating || 0,
-          public:         message.signedData.public || true,
-          priority:       priority,
-          is_latest:      p.isLatest(message),
-          signer_keyid:   message.jwsHeader.kid,
-        }));
+      return this.messageExists(message.hash).then(function(exists) {
+        if (!exists) {
+          return p.getPriority(message).then(function(priority) {
+            queries.push(knex('Messages').insert({
+              hash:           message.hash,
+              jws:            message.jws,
+              saved_at:       moment(message.signedData.timestamp).unix(),
+              timestamp:      message.signedData.timestamp,
+              type:           message.signedData.type || 'rating',
+              rating:         message.signedData.rating || 0,
+              max_rating:     message.signedData.maxRating || 0,
+              min_rating:     message.signedData.minRating || 0,
+              public:         message.signedData.public || true,
+              priority:       priority,
+              is_latest:      p.isLatest(message),
+              signer_keyid:   message.jwsHeader.kid,
+            }));
 
-        var i;
-        for (i = 0; i < message.signedData.author.length; i++) {
-          queries.push(knex('MessageIdentifiers').insert({
-            message_hash: message.hash,
-            type: message.signedData.author[i][0],
-            value: message.signedData.author[i][1],
-            is_recipient: false
-          }));
+            var i;
+            for (i = 0; i < message.signedData.author.length; i++) {
+              queries.push(knex('MessageIdentifiers').insert({
+                message_hash: message.hash,
+                type: message.signedData.author[i][0],
+                value: message.signedData.author[i][1],
+                is_recipient: false
+              }));
+            }
+            for (i = 0; i < message.signedData.recipient.length; i++) {
+              queries.push(knex('MessageIdentifiers').insert({
+                message_hash: message.hash,
+                type: message.signedData.recipient[i][0],
+                value: message.signedData.recipient[i][1],
+                is_recipient: true
+              }));
+            }
+            queries.push(p.saveMessageTrustDistances(message));
+            return P.all(queries);
+          });
+        } else {
+          return new P(function(resolve) {
+            resolve(false);
+          });
         }
-        for (i = 0; i < message.signedData.recipient.length; i++) {
-          queries.push(knex('MessageIdentifiers').insert({
-            message_hash: message.hash,
-            type: message.signedData.recipient[i][0],
-            value: message.signedData.recipient[i][1],
-            is_recipient: true
-          }));
-        }
-        queries.push(p.saveMessageTrustDistances(message));
-        return P.all(queries);
       });
     },
 

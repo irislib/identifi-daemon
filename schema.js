@@ -93,7 +93,7 @@ var init = function(db) {
   .createTable('Peers', function(t) {
     t.string('url').primary();
     t.integer('misbehaving').unsigned().notNullable().default(0);
-    t.timestamp('last_seen');
+    t.datetime('last_seen');
   })
 
   .then(function() {
