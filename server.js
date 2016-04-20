@@ -366,7 +366,8 @@ function getNewMessages(url, since) {
     uri: url,
     apiMethod: 'messages',
     qs: {
-      created_gte: since
+      created_gte: since,
+      limit: 100
     }
   }).then(function(res) {
     for (var i = 0; i < res.length; i++) {
