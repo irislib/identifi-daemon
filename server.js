@@ -364,7 +364,10 @@ function getNewMessages(url, since) {
   log('asking ' + url + ' for new messages ' + sinceStr);
   identifiClient.request({
     uri: url,
-    apiMethod: 'messages'
+    apiMethod: 'messages',
+    qs: {
+      created_gte: since
+    }
   }).then(function(res) {
     for (var i = 0; i < res.length; i++) {
       if (res[i].jws) {
