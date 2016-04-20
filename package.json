@@ -1,6 +1,6 @@
 {
   "name": "identifi-daemon",
-  "version": "0.0.20",
+  "version": "0.0.21",
   "description": "Identifi daemon",
   "homepage": "https://github.com/identifi/identifi-daemon",
   "author": {
