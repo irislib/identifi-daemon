@@ -1,6 +1,11 @@
 #!/usr/bin/env node
 
+var fs = require('fs');
 var datadir = process.env.IDENTIFI_DATADIR || (require('os').homedir() + '/.identifi');
+
+if (!fs.existsSync(datadir)) {
+  fs.mkdirSync(datadir);
+}
 
 var daemon = require("daemonize2").setup({
     main: require.resolve('identifi-daemon'),

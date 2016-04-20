@@ -86,8 +86,8 @@ var init = function(db) {
 
   .createTable('Keys', function(t) {
     t.string('pubkey').unique();
-    t.string('key_id');
-    t.primary(['pubkey', 'key_id']);
+    t.string('hash');
+    t.primary(['pubkey', 'hash']);
   })
 
   .createTable('Peers', function(t) {

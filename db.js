@@ -515,6 +515,20 @@ module.exports = function(knex) {
 
     getPeerCount: function() {
       return knex('Peers').count('* as count');
+    },
+
+    getKeys: function() {
+      return knex('Keys').select('*');
+    },
+
+    saveKey: function(key) {
+      return knex('Keys').where({ pubkey: key.pubkey }).count('* as count')
+      .then(function(res) {
+        if (!res[0].count) {
+          return knex('Keys').insert(key);
+        }
+        return new P(function(resolve) { return resolve(true); });
+      });
     }
   };
 
