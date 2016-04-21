@@ -7,6 +7,7 @@ var moment = require('moment');
 
 var keyutil = require('identifi-lib/keyutil');
 var myKey = keyutil.getDefault();
+var myId = ['keyID', myKey.hash];
 
 module.exports = function(knex) {
   schema.init(knex);
@@ -31,7 +32,7 @@ module.exports = function(knex) {
               public:         message.signedData.public || true,
               priority:       priority,
               is_latest:      p.isLatest(message),
-              signer_keyid:   message.jwsHeader.kid,
+              signer_keyid:   message.signerKeyHash,
             }));
 
             var i;
@@ -280,13 +281,19 @@ module.exports = function(knex) {
 
     getTrustDistance: function(id1, id2) {
       if (id1[0] === id2[0] && id1[1] === id2[1]) {
-        return new P(function(resolve) { resolve(1); });
+        return new P(function(resolve) { resolve(0); });
       }
       return knex.select('distance').from('TrustDistances').where({
         'start_id_type': id1[0],
         'start_id_value': id1[1],
         'end_id_type': id2[0],
         'end_id_value': id2[1]
+      }).then(function(res) {
+        var distance = -1;
+        if (res.length) {
+          distance = res[0].distance;
+        }
+        return new P(function(resolve) { resolve(distance); });
       });
     },
 
@@ -529,7 +536,7 @@ module.exports = function(knex) {
         }
         return new P(function(resolve) { return resolve(true); });
       });
-    }
+    },
   };
 
   p = {
@@ -538,33 +545,19 @@ module.exports = function(knex) {
       var keyType = 'keyID';
       var priority;
 
-      var shortestPathToSignature = 1000000;
-      /*
-      var i, j;
-      return publicMethods.listMyKeys().then(function(res) {
-        var queries = [];
-        for (i = 0; i < res.length; i++) {
-          var key = res[i].keyID;
-          queries.push(publicMethods.getTrustDistance([keyType, key], [keyType, message.jwsHeader.kid]));
-        }
-        return P.all(queries);
-      }).then(function(res) {
-        for (i = 0; i < res.length; i++) {
-          if (res[i].length > 0 && res[i][0] < shortestPathToSignature) {
-            shortestPathToSignature = res[i][0];
-          }
-        }
+      var distanceToSigner = 1000000;
+
+      message.signerKeyHash = Message.getSignerKeyHash(message);
+
+      return publicMethods.getTrustDistance(myId, ['keyID', message.signerKeyHash])
+      .then(function(distance) {
         return new P(function(resolve) {
-          resolve(Math.round(maxPriority / shortestPathToSignature));
+          if (distance > -1 && distance < distanceToSigner) {
+            distanceToSigner = distance;
+          }
+          priority = Math.round(maxPriority / (distanceToSigner + 1));
+          resolve(priority);
         });
-      }); */
-      if (message.jwsHeader.kid === myKey.public.hex) {
-        priority = maxPriority;
-      } else {
-        priority = Math.round(maxPriority / shortestPathToSignature);
-      }
-      return new P(function(resolve) {
-        resolve(priority);
       });
     },
 

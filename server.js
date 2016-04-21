@@ -180,6 +180,7 @@ router.route('/messages/:hash')
     }).catch(function(err) { handleError(err, req, res); });
   })
 
+  // TODO: permissions...
   .delete(function(req, res) {
     db.dropMessage(req.params.hash).then(function(dbRes) {
       if (!dbRes) {

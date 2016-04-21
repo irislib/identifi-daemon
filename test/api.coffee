@@ -13,9 +13,10 @@ chaiAsPromised = require('chai-as-promised')
 chai.should()
 chai.use chaiAsPromised
 
-myKey = keyutil.generate()
-privKeyPEM = myKey.private.pem
-hex = myKey.public.hex
+datadir = process.env.IDENTIFI_DATADIR || (require('os').homedir() + '/.identifi')
+myKey = null
+privKeyPEM = null
+hex = null
 m = null
 
 cleanup = ->
@@ -29,6 +30,11 @@ describe 'API', ->
     cleanup()
     # After hook fails to execute when errors are thrown
     server = require('../server.js')
+
+    myKey = keyutil.getDefault(datadir)
+    privKeyPEM = myKey.private.pem
+    hex = myKey.public.hex
+
     identifi.apiRoot = 'http://127.0.0.1:4944/api'
     socket = identifi.getSocket({ isPeer: true })
   after cleanup

@@ -10,9 +10,11 @@ chai.should()
 chai.use chaiAsPromised
 Message = require('identifi-lib/message')
 keyutil = require('identifi-lib/keyutil')
-key = keyutil.generate()
-privKey = key.private.pem
-pubKey = key.public.hex
+key = null
+anotherKey = null
+yetAnotherKey = null
+privKey = null
+pubKey = null
 
 cleanup = ->
   fs.unlink '../' + config.db.connection.filename, (err) ->
@@ -23,6 +25,9 @@ describe 'Database', ->
   before ->
     cleanup()
     # After hook fails to execute when errors are thrown
+    key = keyutil.getDefault()
+    privKey = key.private.pem
+    pubKey = key.public.hex
     knex = require('knex')(config.get('db'))
     db = require('../db.js')(knex)
   after ->
@@ -165,6 +170,48 @@ describe 'Database', ->
       .then (res) ->
         res[0].priority.should.equal 0
         done()
+    it 'should be 50 for a message from a 1st degree trusted signer', (done) ->
+      anotherKey = keyutil.generate()
+      message = Message.createRating
+        author: [['keyID', key.hash]]
+        recipient: [['keyID', anotherKey.hash]]
+        rating: 10
+      Message.sign message, privKey, pubKey
+      db.saveMessage(message)
+      .then ->
+        message = Message.createRating
+          author: [['email', 'user1@example.com']]
+          recipient: [['email', 'user2@example.com']]
+          rating: 1
+        Message.sign message, anotherKey.private.pem, anotherKey.public.hex
+        db.saveMessage(message)
+      .then ->
+        db.getMessages({ where: { hash: message.hash } })
+        .then (res) ->
+          res[0].priority.should.equal 50
+          done()
+    it 'should be 33 for a message from a 2nd degree trusted signer', (done) ->
+      yetAnotherKey = keyutil.generate()
+      message = Message.createRating
+        author: [['keyID', anotherKey.hash]]
+        recipient: [['keyID', yetAnotherKey.hash]]
+        rating: 10
+      Message.sign message, anotherKey.private.pem, anotherKey.public.hex
+      db.saveMessage(message)
+      .then ->
+        db.generateTrustMap(['keyID', key.hash], 3) # TODO: This should maybe happen automatically?
+      .then ->
+        message = Message.createRating
+          author: [['email', 'user1@example.com']]
+          recipient: [['email', 'user2@example.com']]
+          rating: 1
+        Message.sign message, yetAnotherKey.private.pem, yetAnotherKey.public.hex
+        db.saveMessage(message)
+      .then ->
+        db.getMessages({ where: { hash: message.hash } })
+        .then (res) ->
+          res[0].priority.should.equal 33
+          done()
   describe 'stats', ->
     it 'should return the stats of an identifier', (done) ->
       db.getStats(['email', 'bob@example.com'], ['email', 'alice@example.com']).then (res) ->
