@@ -43,7 +43,7 @@ describe 'Database', ->
         author: [['email', 'alice@example.com']]
         recipient: [['email', 'bob@example.com']]
         rating: 1
-
+        context: 'identifi'
       Message.sign message, privKey, pubKey
       db.saveMessage(message).should.eventually.notify done
     it 'should save another rating', (done) ->
@@ -51,6 +51,7 @@ describe 'Database', ->
         author: [['email', 'charles@example.com']]
         recipient: [['email','bob@example.com']]
         rating: -1
+        context: 'identifi'
       Message.sign message, privKey, pubKey
       db.saveMessage(message).should.eventually.notify done
     it 'should save yet another rating', (done) ->
@@ -58,6 +59,7 @@ describe 'Database', ->
         author: [['email', 'bob@example.com']]
         recipient: [['email', 'charles@example.com']]
         rating: 1
+        context: 'identifi'
       Message.sign message, privKey, pubKey
       hash = message.hash
       db.saveMessage(message).should.eventually.notify done
@@ -164,6 +166,7 @@ describe 'Database', ->
         author: [['email', 'alice@example.com']]
         recipient: [['email', 'bob@example.com']]
         rating: 1
+        context: 'identifi'
       Message.sign message, privKey, pubKey
       db.saveMessage(message).then ->
         db.getMessages({ where: { hash: message.hash } })
@@ -175,6 +178,7 @@ describe 'Database', ->
         author: [['email', 'alice@example.com']]
         recipient: [['email', 'bob@example.com']]
         rating: 1
+        context: 'identifi'
       unknownKey = keyutil.generate()
       Message.sign message, unknownKey.private.pem, unknownKey.public.hex
       db.saveMessage(message).then ->
@@ -188,6 +192,7 @@ describe 'Database', ->
         author: [['keyID', key.hash]]
         recipient: [['keyID', anotherKey.hash]]
         rating: 10
+        context: 'identifi'
       Message.sign message, privKey, pubKey
       db.saveMessage(message)
       .then ->
@@ -195,6 +200,7 @@ describe 'Database', ->
           author: [['email', 'user1@example.com']]
           recipient: [['email', 'user2@example.com']]
           rating: 1
+          context: 'identifi'
         Message.sign message, anotherKey.private.pem, anotherKey.public.hex
         db.saveMessage(message)
       .then ->
@@ -208,6 +214,7 @@ describe 'Database', ->
         author: [['keyID', anotherKey.hash]]
         recipient: [['keyID', yetAnotherKey.hash]]
         rating: 10
+        context: 'identifi'
       Message.sign message, anotherKey.private.pem, anotherKey.public.hex
       db.saveMessage(message)
       .then ->
@@ -217,6 +224,7 @@ describe 'Database', ->
           author: [['email', 'user1@example.com']]
           recipient: [['email', 'user2@example.com']]
           rating: 1
+          context: 'identifi'
         Message.sign message, yetAnotherKey.private.pem, yetAnotherKey.public.hex
         db.saveMessage(message)
       .then ->
