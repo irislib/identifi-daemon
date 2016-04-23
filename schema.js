@@ -14,15 +14,6 @@ function addDefaultUniqueIdentifierTypes(db) {
   );
 }
 
-function checkDefaultTrustList(db) {
-  return db('Messages').count('* as count')
-  .then(function(res) {
-    if (res[0].count === 0) {
-      // add default trust list as an entry point
-    }
-  });
-}
-
 function addDefaultPeers(db) {
   return db.table('Peers').count('* as count')
   .then(function(res) {
@@ -99,10 +90,6 @@ var init = function(db) {
 
   .then(function() {
     return addDefaultUniqueIdentifierTypes(db);
-  })
-
-  .then(function() {
-    return checkDefaultTrustList(db);
   })
 
   .then(function() {

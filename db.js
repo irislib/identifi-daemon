@@ -1,21 +1,19 @@
 /*jshint unused: false */
 'use strict';
 var schema = require('./schema.js');
-var Message = require('identifi-lib/message');
 var P = require("bluebird");
 var moment = require('moment');
 
+var Message = require('identifi-lib/message');
 var keyutil = require('identifi-lib/keyutil');
 var myKey = keyutil.getDefault();
 var myId = ['keyID', myKey.hash];
 var myTrustIndexDepth = 4;
 
 module.exports = function(knex) {
-  var init = schema.init(knex);
   var p; // Private methods
 
   var pub = {
-    init: init,
     saveMessage: function(message) {
       var queries = [];
 
@@ -543,6 +541,27 @@ module.exports = function(knex) {
     getPeerCount: function() {
       return knex('Peers').count('* as count');
     },
+
+    checkDefaultTrustList: function(db) {
+      var _ = this;
+      return knex('Messages').count('* as count')
+      .then(function(res) {
+        if (res[0].count === 0) {
+          var queries = [];
+          var message = Message.createRating({
+            author: [myId],
+            recipient: [['keyID', 'NK0R68KzRFFOZq8mHsyu7GL1jtJXS7LFdATPyXkMBb0=']],
+            comment: 'An Identifi seed node, trusted by default',
+            rating: 10,
+            context: 'identifi_network',
+            public: false
+          });
+          Message.sign(message, myKey.private.pem, myKey.public.hex);
+          queries.push(_.saveMessage(message));
+          return P.all(queries);
+        }
+      });
+    }
   };
 
   p = {
@@ -608,7 +627,14 @@ module.exports = function(knex) {
     }
   };
 
-  pub.addTrustIndexedIdentifier(myId, myTrustIndexDepth).return();
+  pub.init = schema.init(knex)
+    .then(function() {
+      // TODO: if myId is changed, the old one should be removed from TrustIndexedIdentifiers
+      return pub.addTrustIndexedIdentifier(myId, myTrustIndexDepth);
+    })
+    .then(function() {
+      return pub.checkDefaultTrustList().return();
+    });
 
   return pub;
 };

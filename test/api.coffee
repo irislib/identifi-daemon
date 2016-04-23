@@ -247,7 +247,7 @@ describe 'API', ->
         r = identifi.request
           apiMethod: 'id'
         r.then (res) ->
-          res.length.should.equal 6
+          res.length.should.equal 8
           done()
       it 'should filter identities by identifier type', (done) ->
         r = identifi.request
@@ -427,10 +427,9 @@ describe 'API', ->
         return
       , 1000
   describe 'peers', ->
-    it 'should have 3 peer addresses', (done) ->
+    it 'should have 4 peer addresses', (done) ->
       r = identifi.request
         apiMethod: 'peers'
       r.then (res) ->
-        console.log res
-        res.length.should.equal 3
+        res.length.should.equal 4
         done()

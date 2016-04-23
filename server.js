@@ -101,7 +101,8 @@ router.get('/', function(req, res) {
     res.json({ message: 'Identifi API',
                 version: pkg.version,
                 msgCount: results[0][0].val,
-                publicKey: myKey.public.hex
+                publicKey: myKey.public.hex,
+                keyID: myKey.hash
               });
   }).catch(function(err) { handleError(err, req, res); });
 });
