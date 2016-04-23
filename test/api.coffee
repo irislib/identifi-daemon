@@ -3,6 +3,7 @@
 'use strict'
 process.env.NODE_ENV = 'test'
 fs = require('fs')
+osHomedir = require('os-homedir')
 errors = require('request-promise/errors')
 config = require('config')
 identifi = require('identifi-lib/client')
@@ -13,7 +14,7 @@ chaiAsPromised = require('chai-as-promised')
 chai.should()
 chai.use chaiAsPromised
 
-datadir = process.env.IDENTIFI_DATADIR || (require('os').homedir() + '/.identifi')
+datadir = process.env.IDENTIFI_DATADIR || (osHomedir() + '/.identifi')
 myKey = null
 privKeyPEM = null
 hex = null

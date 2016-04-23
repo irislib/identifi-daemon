@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
 var fs = require('fs');
-var datadir = process.env.IDENTIFI_DATADIR || (require('os').homedir() + '/.identifi');
+var osHomedir = require('os-homedir');
+var datadir = process.env.IDENTIFI_DATADIR || (osHomedir() + '/.identifi');
 
 if (!fs.existsSync(datadir)) {
   fs.mkdirSync(datadir);

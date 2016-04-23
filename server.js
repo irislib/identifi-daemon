@@ -12,12 +12,12 @@ var Message = identifi.message;
 var identifiClient = identifi.client;
 var pkg = require('./package.json');
 
-var os = require('os');
+var osHomedir = require('os-homedir');
 var fs = require('fs');
 var util = require('util');
 
 var keyutil = require('identifi-lib/keyutil');
-var datadir = process.env.IDENTIFI_DATADIR || (os.homedir() + '/.identifi');
+var datadir = process.env.IDENTIFI_DATADIR || (osHomedir() + '/.identifi');
 var myKey = keyutil.getDefault(datadir);
 
 process.env.NODE_CONFIG_DIR = __dirname + '/config';
