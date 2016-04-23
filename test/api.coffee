@@ -26,7 +26,7 @@ cleanup = ->
 describe 'API', ->
   server = undefined
   socket = undefined
-  before ->
+  before (done) ->
     cleanup()
     # After hook fails to execute when errors are thrown
     server = require('../server.js')
@@ -36,7 +36,9 @@ describe 'API', ->
     hex = myKey.public.hex
 
     identifi.apiRoot = 'http://127.0.0.1:4944/api'
-    socket = identifi.getSocket({ isPeer: true })
+    server.ready.then ->
+      socket = identifi.getSocket({ isPeer: true })
+      done()
   after cleanup
   after ->
     console.log 'Test server at ' + config.get('port') + ' shutting down'

@@ -344,9 +344,6 @@ function handleIncomingWebsocket(socket) {
 // Handle incoming websockets
 io.on('connection', handleIncomingWebsocket);
 
-// Start the http server
-server.listen(port);
-
 function askForMorePeers(url, peersNeeded) {
   log('asking ' + url + ' for more peers');
   identifiClient.request({
@@ -415,6 +412,13 @@ if (process.env.NODE_ENV !== 'test') {
   });
 }
 
-module.exports = server;
+// Ready promise
+server.ready = db.init;
 
-log('Identifi server started on port ' + port);
+// Start the http server
+db.init.then(function() {
+  server.listen(port);
+  log('Identifi server started on port ' + port);
+});
+
+module.exports = server;
