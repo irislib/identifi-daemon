@@ -84,10 +84,11 @@ var init = function(db) {
     t.primary(['type', 'value', 'viewpoint_type', 'viewpoint_value']);
   })
 
-  .createTable('Keys', function(t) {
-    t.string('pubkey').unique();
-    t.string('hash');
-    t.primary(['pubkey', 'hash']);
+  .createTable('TrustIndexedIdentifiers', function(t) {
+    t.string('type');
+    t.string('value');
+    t.integer('depth').unsigned().notNullable();
+    t.primary(['type', 'value', 'depth']);
   })
 
   .createTable('Peers', function(t) {

@@ -63,6 +63,7 @@ try {
   var dbConf = config.get('db');
   knex = require('knex')(dbConf);
   db = require('./db.js')(knex);
+  db.init.return();
 } catch (ex) {
   log(ex);
   process.exit(0);
@@ -398,7 +399,9 @@ function makeConnectHandler(url, lastSeen, socket) {
 
 // Websocket connect to saved peers
 if (process.env.NODE_ENV !== 'test') {
-  db.getPeers()
+  db.init.then(function() {
+    return db.getPeers();
+  })
   .then(function(peers) {
     for (var i = 0; i < peers.length; i++) {
       if (outgoingConnections.length >= config.maxConnectionsOut) {

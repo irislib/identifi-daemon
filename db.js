@@ -8,12 +8,14 @@ var moment = require('moment');
 var keyutil = require('identifi-lib/keyutil');
 var myKey = keyutil.getDefault();
 var myId = ['keyID', myKey.hash];
+var myTrustIndexDepth = 4;
 
 module.exports = function(knex) {
-  schema.init(knex);
+  var init = schema.init(knex);
   var p; // Private methods
 
-  var publicMethods = {
+  var pub = {
+    init: init,
     saveMessage: function(message) {
       var queries = [];
 
@@ -311,7 +313,7 @@ module.exports = function(knex) {
         });
     },
 
-    generateTrustMap: function(id, maxDepth) {
+    generateTrustMap: function(id, maxDepth, maintain) {
       var sql = "WITH RECURSIVE transitive_closure(id1type, id1val, id2type, id2val, distance, path_string) AS ";
       sql += "(";
       sql += "SELECT id1.type, id1.value, id2.type, id2.value, 1 AS distance, ";
@@ -337,6 +339,9 @@ module.exports = function(knex) {
       sql += ") ";
       sql += "INSERT OR REPLACE INTO TrustDistances (start_id_type, start_id_value, end_id_type, end_id_value, distance) SELECT :id1type, :id1value, id2type, id2val, distance FROM transitive_closure ";
 
+      if (maintain) {
+        this.addTrustIndexedIdentifier(id, maxDepth).return();
+      }
       return knex('TrustDistances')
         .where({ start_id_type: id[0], start_id_value: id[1] }).del()
         .then(function() {
@@ -346,6 +351,21 @@ module.exports = function(knex) {
           return knex('TrustDistances').count('* as trustmap_size')
             .where({ start_id_type: id[0], start_id_value: id[1] });
         });
+    },
+
+    addTrustIndexedIdentifier: function(id, depth) {
+      return knex('TrustIndexedIdentifiers').where({ type: id[0], value: id[1] }).count('* as count')
+      .then(function(res) {
+        if (res[0].count) {
+          return knex('TrustIndexedIdentifiers').where({ type: id[0], value: id[1] }).update({ depth: depth });
+        } else {
+          return knex('TrustIndexedIdentifiers').insert({ type: id[0], value: id[1], depth: depth });
+        }
+      });
+    },
+
+    getTrustIndexedIdentifiers: function() {
+      return knex('TrustIndexedIdentifiers').select('*');
     },
 
     identitySearch: function(query, limit, offset, viewpoint) {
@@ -523,20 +543,6 @@ module.exports = function(knex) {
     getPeerCount: function() {
       return knex('Peers').count('* as count');
     },
-
-    getKeys: function() {
-      return knex('Keys').select('*');
-    },
-
-    saveKey: function(key) {
-      return knex('Keys').where({ pubkey: key.pubkey }).count('* as count')
-      .then(function(res) {
-        if (!res[0].count) {
-          return knex('Keys').insert(key);
-        }
-        return new P(function(resolve) { return resolve(true); });
-      });
-    },
   };
 
   p = {
@@ -549,7 +555,7 @@ module.exports = function(knex) {
 
       message.signerKeyHash = Message.getSignerKeyHash(message);
 
-      return publicMethods.getTrustDistance(myId, ['keyID', message.signerKeyHash])
+      return pub.getTrustDistance(myId, ['keyID', message.signerKeyHash])
       .then(function(distance) {
         return new P(function(resolve) {
           if (distance > -1 && distance < distanceToSigner) {
@@ -602,5 +608,7 @@ module.exports = function(knex) {
     }
   };
 
-  return publicMethods;
+  pub.addTrustIndexedIdentifier(myId, myTrustIndexDepth).return();
+
+  return pub;
 };
