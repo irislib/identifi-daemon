@@ -28,11 +28,11 @@ function addDefaultPeers(db) {
 }
 
 var init = function(db) {
-  return db.schema.createTable('UniqueIdentifierTypes', function(t) {
+  return db.schema.createTableIfNotExists('UniqueIdentifierTypes', function(t) {
     t.string('type').primary();
   })
 
-  .createTable('Messages', function(t) {
+  .createTableIfNotExists('Messages', function(t) {
     t.string('hash').primary();
     t.string('jws').notNullable();
     t.timestamp('saved_at');
@@ -47,7 +47,7 @@ var init = function(db) {
     t.string('signer_keyid');
   })
 
-  .createTable('MessageIdentifiers', function(t) {
+  .createTableIfNotExists('MessageIdentifiers', function(t) {
     t.string('message_hash').references('Messages.hash');
     t.string('type').notNullable();
     t.string('value').notNullable();
@@ -55,7 +55,7 @@ var init = function(db) {
     t.primary(['type', 'value', 'message_hash', 'is_recipient']);
   })
 
-  .createTable('TrustDistances', function(t) {
+  .createTableIfNotExists('TrustDistances', function(t) {
     t.string('start_id_type').notNullable();
     t.string('start_id_value').notNullable();
     t.string('end_id_type').notNullable();
@@ -64,7 +64,7 @@ var init = function(db) {
     t.primary(['start_id_type', 'start_id_value', 'end_id_type', 'end_id_value']);
   })
 
-  .createTable('Identities', function(t) {
+  .createTableIfNotExists('Identities', function(t) {
     t.integer('identity_id').unsigned();
     t.string('type').notNullable();
     t.string('value').notNullable();
@@ -75,14 +75,14 @@ var init = function(db) {
     t.primary(['type', 'value', 'viewpoint_type', 'viewpoint_value']);
   })
 
-  .createTable('TrustIndexedIdentifiers', function(t) {
+  .createTableIfNotExists('TrustIndexedIdentifiers', function(t) {
     t.string('type');
     t.string('value');
     t.integer('depth').unsigned().notNullable();
     t.primary(['type', 'value', 'depth']);
   })
 
-  .createTable('Peers', function(t) {
+  .createTableIfNotExists('Peers', function(t) {
     t.string('url').primary();
     t.integer('misbehaving').unsigned().notNullable().default(0);
     t.datetime('last_seen');

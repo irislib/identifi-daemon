@@ -14,7 +14,8 @@ module.exports = function(knex) {
   var p; // Private methods
 
   var pub = {
-    saveMessage: function(message) {
+    saveMessage: function(message, updateTrustIndexes) {
+      if (typeof updateTrustIndexes === 'undefined') { updateTrustIndexes = true; }
       var queries = [];
 
       return this.messageExists(message.hash).then(function(exists) {
@@ -52,7 +53,9 @@ module.exports = function(knex) {
                 is_recipient: true
               }));
             }
-            queries.push(p.saveMessageTrustDistances(message));
+            if (updateTrustIndexes) {
+              queries.push(p.updateTrustIndexesByMessage(message));
+            }
             return P.all(queries);
           });
         } else {
@@ -608,17 +611,39 @@ module.exports = function(knex) {
       });
     },
 
-    saveMessageTrustDistances: function(message) {
+    updateTrustIndexesByMessage: function(message) {
       var queries = [];
+
+      function makeSubquery(a, r) {
+        return knex
+        .from('TrustIndexedIdentifiers AS viewpoint')
+        .innerJoin('UniqueIdentifierTypes as uit', 'uit.type', knex.raw('?', r[0]))
+        .leftJoin('TrustDistances AS td', function() {
+          this.on('td.start_id_type', '=', 'viewpoint.type')
+          .andOn('td.start_id_value', '=', 'viewpoint.value')
+          .andOn('td.end_id_type', '=', knex.raw('?', a[0]))
+          .andOn('td.end_id_value', '=', knex.raw('?', a[1]));
+        })
+        .leftJoin('TrustDistances AS existing', function() { // TODO: fix with REPLACE or sth. Should update if new distance is shorter.
+          this.on('existing.start_id_type', '=', 'viewpoint.type')
+          .andOn('existing.start_id_value', '=', 'viewpoint.value')
+          .andOn('existing.end_id_type', '=', knex.raw('?', r[0]))
+          .andOn('existing.end_id_value', '=', knex.raw('?', r[1]));
+        })
+        .whereRaw('existing.distance IS NULL AND ((viewpoint.type = :author_type AND viewpoint.value = :author_value) ' +
+          'OR (td.end_id_type = :author_type AND td.end_id_value = :author_value))',
+          { author_type: a[0], author_value: a[1] })
+        .select('viewpoint.type as start_id_type', 'viewpoint.value as start_id_value', knex.raw('? as end_id_type', r[0]), knex.raw('? as end_id_value', r[1]), knex.raw('IFNULL(td.distance, 0) + 1 as distance'));
+      }
+
       if (Message.isPositive(message)) {
         var i, j;
         for (i = 0; i < message.signedData.author.length; i++) {
+          var a = message.signedData.author[i];
           for (j = 0; j < message.signedData.recipient.length; j++) {
-            queries.push(this.saveTrustDistance(
-              message.signedData.author[i],
-              message.signedData.recipient[i],
-              1
-            ));
+            var r = message.signedData.recipient[j];
+            var q = knex('TrustDistances').insert(makeSubquery(a, r));
+            queries.push(q);
           }
         }
       }

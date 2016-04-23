@@ -218,8 +218,6 @@ describe 'Database', ->
       Message.sign message, anotherKey.private.pem, anotherKey.public.hex
       db.saveMessage(message)
       .then ->
-        db.generateTrustMap(['keyID', key.hash], 3) # TODO: This should maybe happen automatically?
-      .then ->
         message = Message.createRating
           author: [['email', 'user1@example.com']]
           recipient: [['email', 'user2@example.com']]
