@@ -20,6 +20,9 @@ var keyutil = require('identifi-lib/keyutil');
 var datadir = process.env.IDENTIFI_DATADIR || (osHomedir() + '/.identifi');
 var myKey = keyutil.getDefault(datadir);
 
+var jwt = require('express-jwt');
+var authRequired = jwt({ secret: new Buffer(myKey.public.pem) });
+
 process.env.NODE_CONFIG_DIR = __dirname + '/config';
 var config = require('config');
 
@@ -121,11 +124,11 @@ router.route('/peers')
     }).catch(function(err) { handleError(err, req, res); });
   })
 
-  .post(function(req, res) { // TODO: permissions
+  .post(authRequired, function(req, res) {
     res.json("add peer");
   })
 
-  .delete(function(req, res) { // TODO: permissions
+  .delete(authRequired, function(req, res) {
     res.json("remove peer");
   });
 
@@ -187,8 +190,7 @@ router.route('/messages/:hash')
     }).catch(function(err) { handleError(err, req, res); });
   })
 
-  // TODO: permissions
-  .delete(function(req, res) {
+  .delete(authRequired, function(req, res) {
     db.dropMessage(req.params.hash).then(function(dbRes) {
       if (!dbRes) {
         return res.status(404).json('Message not found');
@@ -304,8 +306,7 @@ router.get('/id/:id_type/:id_value/trustpaths', function(req, res) {
   }).catch(function(err) { handleError(err, req, res); });
 });
 
-// TODO: costly operation, require permissions
-router.get('/id/:id_type/:id_value/generatetrustmap', function(req, res) {
+router.get('/id/:id_type/:id_value/generatetrustmap', authRequired, function(req, res) {
   var depth = parseInt(req.query.depth) || 3;
   db.generateTrustMap([req.params.id_type, req.params.id_value], depth)
   .then(function(dbRes) {

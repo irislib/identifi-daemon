@@ -129,7 +129,7 @@ describe 'API', ->
         r = identifi.request
               apiMethod: 'messages'
               apiId: '1234'
-        r.should.be.rejectedWith Error
+        r.should.be.rejected
       it 'should return the previously saved message', (done) ->
         r = identifi.request
           apiMethod: 'messages'
@@ -153,7 +153,7 @@ describe 'API', ->
           r = identifi.request
             apiMethod: 'messages'
             apiId: privMsg.hash
-          r.should.be.rejectedWith Error
+          r.should.be.rejected
           identifi.request
             apiMethod: 'messages'
           .then (res) ->
@@ -186,6 +186,15 @@ describe 'API', ->
           res.should.not.be.empty
           res[0].path_string.split(':').length.should.equal 9
           done()
+      it 'should not generate a trustmap without auth', ->
+        r = identifi.request
+          apiMethod: 'id'
+          apiIdType: 'email'
+          apiId: 'alice@example.com'
+          apiAction: 'generatetrustmap'
+          qs:
+            depth: 3
+        r.should.be.rejected
       it 'should generate a trustmap', (done) ->
         r = identifi.request
           apiMethod: 'id'
@@ -194,6 +203,8 @@ describe 'API', ->
           apiAction: 'generatetrustmap'
           qs:
             depth: 3
+          headers:
+            'Authorization': 'Bearer ' + identifi.getJwt(privKeyPEM)
         r.then (res) ->
           res.should.not.be.empty
           res[0].trustmap_size.should.equal 3
@@ -234,25 +245,35 @@ describe 'API', ->
           res.length.should.equal 6
           done()
     describe 'delete', ->
-      it 'should fail if the message was not found', ->
+      it 'should fail without auth', ->
         r = identifi.request
           apiMethod: 'messages'
-          apiId: '1234'
+          apiId: m.hash
           method: 'DELETE'
-        r.should.be.rejectedWith Error
+        r.should.be.rejected
       it 'should delete the previously saved message', (done) ->
         r = identifi.request
           apiMethod: 'messages'
           apiId: m.hash
           method: 'DELETE'
+          headers:
+            'Authorization': 'Bearer ' + identifi.getJwt(privKeyPEM)
         r.then (res) ->
           res.should.equal 'OK'
           done()
+      it 'should fail if the message was not found', ->
+        r = identifi.request
+          apiMethod: 'messages'
+          apiId: '1234'
+          method: 'DELETE'
+          headers:
+            'Authorization': 'Bearer ' + identifi.getJwt(privKeyPEM)
+        r.should.be.rejected
       it 'should have removed the message', ->
         r = identifi.request
               apiMethod: 'messages'
               apiId: m.hash
-        r.should.be.rejectedWith Error
+        r.should.be.rejected
   describe 'identifiers', ->
       it 'should return an empty set if an identity was not found', (done) ->
         r = identifi.request
