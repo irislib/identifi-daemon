@@ -113,7 +113,7 @@ describe 'API', ->
           method: 'POST'
           apiMethod: 'messages'
           body: m
-      it 'add another connection msg', ->
+      it 'add another connection msg', (done) ->
         m = message.create
           author: [['email', 'bob@example.com']]
           recipient: [['email', 'charles@example.com'], ['url', 'http://twitter.com/charles']]
@@ -123,6 +123,7 @@ describe 'API', ->
           method: 'POST'
           apiMethod: 'messages'
           body: m
+        r.then -> done()
     describe 'retrieve', ->
       it 'should fail if the message was not found', ->
         r = identifi.request
@@ -136,6 +137,28 @@ describe 'API', ->
         r.then (res) ->
           res.hash.should.equal m.hash
           done()
+    describe 'non-public messages', ->
+      it 'should add a non-public msg', (done) ->
+        privMsg = message.create
+          author: [['email', 'bob@example.com']]
+          recipient: [['email', 'charles@example.com'], ['url', 'http://twitter.com/charles']]
+          type: 'confirm_connection'
+          public: false
+        message.sign(privMsg, privKeyPEM, hex)
+        identifi.request
+          method: 'POST'
+          apiMethod: 'messages'
+          body: privMsg
+        .then ->
+          r = identifi.request
+            apiMethod: 'messages'
+            apiId: privMsg.hash
+          r.should.be.rejectedWith Error
+          identifi.request
+            apiMethod: 'messages'
+          .then (res) ->
+            res[0].hash.should.not.equal privMsg.hash
+            done()
     describe 'trustpaths', ->
       it 'should return a trustpath from alice to bob', (done) ->
         r = identifi.request
@@ -253,7 +276,7 @@ describe 'API', ->
         r = identifi.request
           apiMethod: 'id'
         r.then (res) ->
-          res.length.should.equal 8
+          res.length.should.equal 9
           done()
       it 'should filter identities by identifier type', (done) ->
         r = identifi.request
@@ -269,10 +292,11 @@ describe 'API', ->
           qs:
             search_value: 'i'
         r.then (res) ->
-          res.length.should.equal 3
+          res.length.should.equal 4
           res[0].value.should.equal 'Bob the Builder'
           res[1].value.should.equal 'alice@example.com'
           res[2].value.should.equal 'david@example.com'
+          res[3].value.should.equal 'http://twitter.com/charles'
           done()
       it 'should return a list of peers as identifi identities', (done) ->
         r = identifi.request

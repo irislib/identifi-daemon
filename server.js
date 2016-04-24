@@ -87,6 +87,9 @@ function handleError(err, req, res) {
 
 
 function emitMsg(msg) {
+  if (typeof msg.signedData !== 'object' || msg.signedData.public === false) {
+    return;
+  }
   io.emit('msg', { jws: msg.jws, hash: msg.hash });
   Object.keys(outgoingConnections).forEach(function(key) {
     outgoingConnections[key].emit('msg', { jws: msg.jws, hash: msg.hash });
@@ -118,11 +121,11 @@ router.route('/peers')
     }).catch(function(err) { handleError(err, req, res); });
   })
 
-  .post(function(req, res) {
+  .post(function(req, res) { // TODO: permissions
     res.json("add peer");
   })
 
-  .delete(function(req, res) {
+  .delete(function(req, res) { // TODO: permissions
     res.json("remove peer");
   });
 
@@ -131,6 +134,7 @@ router.route('/peers')
 function getMessages(req, res, options) {
     options = options || {};
     options.where = options.where || {};
+    options.where.public = true;
 
     if (req.query.viewpoint_type && req.query.viewpoint_value) {
       options.viewpoint = [req.query.viewpoint_type, req.query.viewpoint_value];
@@ -183,7 +187,7 @@ router.route('/messages/:hash')
     }).catch(function(err) { handleError(err, req, res); });
   })
 
-  // TODO: permissions...
+  // TODO: permissions
   .delete(function(req, res) {
     db.dropMessage(req.params.hash).then(function(dbRes) {
       if (!dbRes) {
@@ -300,7 +304,7 @@ router.get('/id/:id_type/:id_value/trustpaths', function(req, res) {
   }).catch(function(err) { handleError(err, req, res); });
 });
 
-
+// TODO: costly operation, require permissions
 router.get('/id/:id_type/:id_value/generatetrustmap', function(req, res) {
   var depth = parseInt(req.query.depth) || 3;
   db.generateTrustMap([req.params.id_type, req.params.id_value], depth)

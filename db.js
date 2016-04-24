@@ -20,6 +20,7 @@ module.exports = function(knex) {
 
       return this.messageExists(message.hash).then(function(exists) {
         if (!exists) {
+          var isPublic = typeof message.signedData.public === 'undefined' ? true : message.signedData.public;
           return p.getPriority(message).then(function(priority) {
             queries.push(knex('Messages').insert({
               hash:           message.hash,
@@ -30,7 +31,7 @@ module.exports = function(knex) {
               rating:         message.signedData.rating || 0,
               max_rating:     message.signedData.maxRating || 0,
               min_rating:     message.signedData.minRating || 0,
-              public:         message.signedData.public || true,
+              public:         isPublic,
               priority:       priority,
               is_latest:      p.isLatest(message),
               signer_keyid:   message.signerKeyHash,
