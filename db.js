@@ -653,14 +653,16 @@ module.exports = function(knex) {
     }
   };
 
-  pub.init = schema.init(knex)
-    .then(function() {
-      // TODO: if myId is changed, the old one should be removed from TrustIndexedIdentifiers
-      return pub.addTrustIndexedIdentifier(myId, myTrustIndexDepth);
-    })
-    .then(function() {
-      return pub.checkDefaultTrustList().return();
-    });
+  pub.init = function(config) {
+    return schema.init(knex, config)
+      .then(function() {
+        // TODO: if myId is changed, the old one should be removed from TrustIndexedIdentifiers
+        return pub.addTrustIndexedIdentifier(myId, myTrustIndexDepth);
+      })
+      .then(function() {
+        return pub.checkDefaultTrustList().return();
+      });
+  };
 
   return pub;
 };

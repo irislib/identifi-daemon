@@ -22,7 +22,7 @@ cleanup = ->
 describe 'Database', ->
   db = undefined
   hash = undefined
-  before ->
+  before (done) ->
     cleanup()
     # After hook fails to execute when errors are thrown
     key = keyutil.getDefault()
@@ -30,13 +30,14 @@ describe 'Database', ->
     pubKey = key.public.hex
     knex = require('knex')(config.get('db'))
     db = require('../db.js')(knex)
+    db.init(config).then -> done()
   after ->
     cleanup()
 
   describe 'save and retrieve messages', ->
-    it 'should initially have 0 messages', (done) ->
+    it 'should initially have 1 message', (done) ->
       db.getMessageCount().then (res) ->
-        res[0].val.should.equal 0
+        res[0].val.should.equal 1
         done()
     it 'should save a rating', (done) ->
       message = Message.createRating
@@ -63,9 +64,9 @@ describe 'Database', ->
       Message.sign message, privKey, pubKey
       hash = message.hash
       db.saveMessage(message).should.eventually.notify done
-    it 'should have 3 messages', (done) ->
+    it 'should have 4 messages', (done) ->
       db.getMessageCount().then (res) ->
-        res[0].val.should.equal 3
+        res[0].val.should.equal 4
         done()
     it 'should return message by hash', (done) ->
       db.getMessages({ where: { hash: hash } }).then (res) ->
@@ -146,7 +147,7 @@ describe 'Database', ->
   describe 'identity search', ->
     it 'should find 4 identifiers matching "a"', (done) ->
       db.getIdentities({ searchValue: 'a' }).then (res) ->
-        res.length.should.equal 4
+        res.length.should.equal 6
         done()
     it 'should find 1 identifier matching "alice"', (done) ->
       db.getIdentities({ searchValue: 'alice' }).then (res) ->
@@ -154,7 +155,7 @@ describe 'Database', ->
         done()
     it 'should find 4 identities matching "a"', (done) ->
       db.identitySearch(['', 'a']).then (res) ->
-        res.length.should.equal 4
+        res.length.should.equal 6
         done()
     it 'should find 1 identity matching "alice"', (done) ->
       db.identitySearch(['', 'alice']).then (res) ->

@@ -27,7 +27,26 @@ function addDefaultPeers(db) {
   });
 }
 
-var init = function(db) {
+function setSqliteMaxSize(db, config) {
+  var sqliteMaxSizeMB = config.sqliteMaxSizeMB;
+  if (db.client.config.dialect !== 'sqlite3') {
+    return;
+  }
+  if (!sqliteMaxSizeMB || sqliteMaxSizeMB < 1) {
+    sqliteMaxSizeMB = 100;
+  }
+  return db.raw('PRAGMA page_size')
+  .then(function(res) {
+    var maxPageCount = Math.floor(sqliteMaxSizeMB * 1000000 / res[0].page_size);
+    return db.raw('PRAGMA max_page_count = ' + maxPageCount);
+  });
+}
+
+function catcher(e) {
+  console.error(e);
+}
+
+var init = function(db, config) {
   return db.schema.createTableIfNotExists('UniqueIdentifierTypes', function(t) {
     t.string('type').primary();
   })
@@ -89,18 +108,18 @@ var init = function(db) {
   })
 
   .then(function() {
-    return addDefaultUniqueIdentifierTypes(db);
+    return addDefaultUniqueIdentifierTypes(db).catch(catcher);
   })
 
   .then(function() {
-    return addDefaultPeers(db);
+    return addDefaultPeers(db).catch(catcher);
   })
 
-  .catch(function(e) {
-    if (e.code !== 'SQLITE_ERROR') {
-      console.error(e);
-    }
-  });
+  .then(function() {
+    return setSqliteMaxSize(db, config).catch(catcher);
+  })
+
+  .catch(catcher);
 };
 
 module.exports = { init: init };

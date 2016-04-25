@@ -66,7 +66,7 @@ try {
   var dbConf = config.get('db');
   knex = require('knex')(dbConf);
   db = require('./db.js')(knex);
-  db.init.return();
+  server.ready = db.init(config).return();
 } catch (ex) {
   log(ex);
   process.exit(0);
@@ -403,7 +403,7 @@ function makeConnectHandler(url, lastSeen, socket) {
 
 // Websocket connect to saved peers
 if (process.env.NODE_ENV !== 'test') {
-  db.init.then(function() {
+  server.ready.then(function() {
     return db.getPeers();
   })
   .then(function(peers) {
@@ -419,11 +419,8 @@ if (process.env.NODE_ENV !== 'test') {
   });
 }
 
-// Ready promise
-server.ready = db.init;
-
 // Start the http server
-db.init.then(function() {
+server.ready.then(function() {
   server.listen(port);
   log('Identifi server started on port ' + port);
 });

@@ -12,5 +12,6 @@
     "datadir": "~/.identifi",
     "maxConnectionsOut": 5,
     "maxConnectionsIn": 5,
-    "maxPeerDBsize": 100
+    "maxPeerDBsize": 100,
+    "sqliteMaxSizeMB": 100
 }
