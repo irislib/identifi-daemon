@@ -604,6 +604,23 @@ module.exports = function(knex) {
             distanceToSigner = distance;
           }
           priority = Math.round(maxPriority / (distanceToSigner + 1));
+
+          var hasAuthorKeyID, hasRecipientKeyID, i;
+          for (i = 0; i < message.signedData.author.length; i++) {
+            if (message.signedData.author[i][0] === 'keyID') {
+              hasAuthorKeyID = true;
+              break;
+            }
+          }
+          for (i = 0; i < message.signedData.author.length; i++) {
+            if (message.signedData.author[i][0] === 'keyID') {
+              hasRecipientKeyID = true;
+              break;
+            }
+          }
+          if (!hasAuthorKeyID) { priority -= 1; }
+          if (!hasRecipientKeyID) { priority -= 1; }
+          priority = Math.max(priority, 0);
           resolve(priority);
         });
       });
