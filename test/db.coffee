@@ -255,3 +255,40 @@ describe 'Database', ->
       .then (res) ->
         (originalCount - res[0].val).should.equal 1
         done()
+  describe 'maxMessageCount', ->
+    lowPrioMsg = null
+    before (done) ->
+      # Save a 0-priority message
+      k = keyutil.generate()
+      lowPrioMsg = Message.createRating
+        author: [['email', 'user1@example.com']]
+        recipient: [['email', 'user2@example.com']]
+        rating: 1
+        context: 'identifi'
+      Message.sign lowPrioMsg, k.private.pem, k.public.hex
+      db.saveMessage(lowPrioMsg).then -> done()
+
+    it 'should not be exceeded', (done) ->
+      saveMessages = (counter, max) ->
+        message = Message.createRating
+          author: [['email', 'user1@example.com']]
+          recipient: [['email', 'user2@example.com']]
+          rating: 1
+          context: 'identifi'
+        Message.sign message, privKey, pubKey
+        r = db.saveMessage(message)
+        if counter <= max
+          r.then -> saveMessages(counter + 1, max)
+        else
+          return r
+
+      saveMessages(0, 120).then ->
+        db.getMessageCount()
+      .then (res) ->
+        res[0].val.should.be.below 100
+        done()
+
+    it 'should have deleted the 0-priority message', (done) ->
+      db.getMessages({ where: { hash: lowPrioMsg.hash } }).then (res) ->
+        res.length.should.equal 0
+        done()

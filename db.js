@@ -577,7 +577,7 @@ module.exports = function(knex) {
         .then(function(res) {
           if (res[0].val > config.maxMessageCount) {
             var nMessagesToDelete = Math.min(100, Math.ceil(config.maxMessageCount / 10));
-            var messagesToDelete = knex('Messages').select('hash').limit(nMessagesToDelete).orderBy('priority', 'desc').orderBy('created', 'asc');
+            var messagesToDelete = knex('Messages').select('hash').limit(nMessagesToDelete).orderBy('priority', 'asc').orderBy('created', 'asc');
             return knex('Messages').whereIn('hash', messagesToDelete).del()
               .then(function(res) {
                 return knex('MessageIdentifiers').whereIn('message_hash', messagesToDelete).del();
