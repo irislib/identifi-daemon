@@ -1,3 +1,4 @@
+/*jshint unused:false*/
 'use strict';
 
 function addDefaultUniqueIdentifierTypes(db) {
@@ -24,21 +25,6 @@ function addDefaultPeers(db) {
         { url: 'http://seed3.identifi.org:4944/api' }
       ]);
     }
-  });
-}
-
-function setSqliteMaxSize(db, config) {
-  var sqliteMaxSizeMB = config.sqliteMaxSizeMB;
-  if (db.client.config.dialect !== 'sqlite3') {
-    return;
-  }
-  if (!sqliteMaxSizeMB || sqliteMaxSizeMB < 1) {
-    sqliteMaxSizeMB = 100;
-  }
-  return db.raw('PRAGMA page_size')
-  .then(function(res) {
-    var maxPageCount = Math.floor(sqliteMaxSizeMB * 1000000 / res[0].page_size);
-    return db.raw('PRAGMA max_page_count = ' + maxPageCount);
   });
 }
 
@@ -113,10 +99,6 @@ var init = function(db, config) {
 
   .then(function() {
     return addDefaultPeers(db).catch(catcher);
-  })
-
-  .then(function() {
-    return setSqliteMaxSize(db, config).catch(catcher);
   })
 
   .catch(catcher);

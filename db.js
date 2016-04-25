@@ -9,6 +9,7 @@ var keyutil = require('identifi-lib/keyutil');
 var myKey = keyutil.getDefault();
 var myId = ['keyID', myKey.hash];
 var myTrustIndexDepth = 4;
+var config;
 
 module.exports = function(knex) {
   var p; // Private methods
@@ -18,53 +19,57 @@ module.exports = function(knex) {
       if (typeof updateTrustIndexes === 'undefined') { updateTrustIndexes = true; }
       var queries = [];
 
-      return this.messageExists(message.hash).then(function(exists) {
-        if (!exists) {
-          var isPublic = typeof message.signedData.public === 'undefined' ? true : message.signedData.public;
-          return p.getPriority(message).then(function(priority) {
-            queries.push(knex('Messages').insert({
-              hash:           message.hash,
-              jws:            message.jws,
-              saved_at:       moment(message.signedData.timestamp).unix(),
-              timestamp:      message.signedData.timestamp,
-              type:           message.signedData.type || 'rating',
-              rating:         message.signedData.rating || 0,
-              max_rating:     message.signedData.maxRating || 0,
-              min_rating:     message.signedData.minRating || 0,
-              public:         isPublic,
-              priority:       priority,
-              is_latest:      p.isLatest(message),
-              signer_keyid:   message.signerKeyHash,
-            }));
+      var q = this.messageExists(message.hash).then(function(exists) {
+          if (!exists) {
+            var isPublic = typeof message.signedData.public === 'undefined' ? true : message.signedData.public;
+            return p.getPriority(message).then(function(priority) {
+              queries.push(knex('Messages').insert({
+                hash:           message.hash,
+                jws:            message.jws,
+                saved_at:       moment(message.signedData.timestamp).unix(),
+                timestamp:      message.signedData.timestamp,
+                type:           message.signedData.type || 'rating',
+                rating:         message.signedData.rating || 0,
+                max_rating:     message.signedData.maxRating || 0,
+                min_rating:     message.signedData.minRating || 0,
+                public:         isPublic,
+                priority:       priority,
+                is_latest:      p.isLatest(message),
+                signer_keyid:   message.signerKeyHash,
+              }));
 
-            var i;
-            for (i = 0; i < message.signedData.author.length; i++) {
-              queries.push(knex('MessageIdentifiers').insert({
-                message_hash: message.hash,
-                type: message.signedData.author[i][0],
-                value: message.signedData.author[i][1],
-                is_recipient: false
-              }));
-            }
-            for (i = 0; i < message.signedData.recipient.length; i++) {
-              queries.push(knex('MessageIdentifiers').insert({
-                message_hash: message.hash,
-                type: message.signedData.recipient[i][0],
-                value: message.signedData.recipient[i][1],
-                is_recipient: true
-              }));
-            }
-            if (updateTrustIndexes) {
-              queries.push(p.updateTrustIndexesByMessage(message));
-            }
-            return P.all(queries);
-          });
-        } else {
-          return new P(function(resolve) {
-            resolve(false);
-          });
-        }
-      });
+              var i;
+              for (i = 0; i < message.signedData.author.length; i++) {
+                queries.push(knex('MessageIdentifiers').insert({
+                  message_hash: message.hash,
+                  type: message.signedData.author[i][0],
+                  value: message.signedData.author[i][1],
+                  is_recipient: false
+                }));
+              }
+              for (i = 0; i < message.signedData.recipient.length; i++) {
+                queries.push(knex('MessageIdentifiers').insert({
+                  message_hash: message.hash,
+                  type: message.signedData.recipient[i][0],
+                  value: message.signedData.recipient[i][1],
+                  is_recipient: true
+                }));
+              }
+              if (updateTrustIndexes) {
+                queries.push(p.updateTrustIndexesByMessage(message));
+              }
+              return P.all(queries);
+            });
+          } else {
+            return new P(function(resolve) {
+              resolve(false);
+            });
+          }
+        });
+
+        return this.ensureFreeSpace().then(function() {
+          return q;
+        });
     },
 
     messageExists: function(hash) {
@@ -565,6 +570,20 @@ module.exports = function(knex) {
           return P.all(queries);
         }
       });
+    },
+
+    ensureFreeSpace: function() {
+      return this.getMessageCount()
+        .then(function(res) {
+          if (res[0].val > config.maxMessageCount) {
+            var nMessagesToDelete = Math.min(100, Math.ceil(config.maxMessageCount / 10));
+            var messagesToDelete = knex('Messages').select('hash').limit(nMessagesToDelete).orderBy('priority', 'desc').orderBy('created', 'asc');
+            return knex('Messages').whereIn('hash', messagesToDelete).del()
+              .then(function(res) {
+                return knex('MessageIdentifiers').whereIn('message_hash', messagesToDelete).del();
+              });
+          }
+        });
     }
   };
 
@@ -653,14 +672,15 @@ module.exports = function(knex) {
     }
   };
 
-  pub.init = function(config) {
+  pub.init = function(conf) {
+    config = conf;
     return schema.init(knex, config)
       .then(function() {
         // TODO: if myId is changed, the old one should be removed from TrustIndexedIdentifiers
         return pub.addTrustIndexedIdentifier(myId, myTrustIndexDepth);
       })
       .then(function() {
-        return pub.checkDefaultTrustList().return();
+        return pub.checkDefaultTrustList();
       });
   };
 

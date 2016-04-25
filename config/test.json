@@ -9,5 +9,5 @@
     },
     "logfile": "identifi_test.log",
     "port": 4944,
-    "sqliteMaxSizeMB": 100
+    "maxMessageCount": 100
 }
