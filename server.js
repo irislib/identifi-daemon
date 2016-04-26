@@ -308,7 +308,13 @@ router.get('/id/:id_type/:id_value/trustpaths', function(req, res) {
 
 router.get('/id/:id_type/:id_value/generatewotindex', authRequired, function(req, res) {
   var depth = parseInt(req.query.depth) || 3;
-  db.generateWebOfTrustIndex([req.params.id_type, req.params.id_value], depth)
+  var trustedKeyID = null;
+  if (req.params.trusted_keyid) {
+    trustedKeyID = req.params.trusted_keyid;
+  } else if (req.params.id_type !== 'keyID') {
+    trustedKeyID = myKey.hash;
+  }
+  db.generateWebOfTrustIndex([req.params.id_type, req.params.id_value], depth, false, trustedKeyID)
   .then(function(dbRes) {
     res.json(dbRes);
   }).catch(function(err) { handleError(err, req, res); });

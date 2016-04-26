@@ -131,7 +131,7 @@ describe 'Database', ->
         res[0].value.should.equal key.hash
         done()
     it 'should generate a web of trust index', (done) ->
-      db.generateWebOfTrustIndex(['email', 'alice@example.com'], 3, true).then (res) ->
+      db.generateWebOfTrustIndex(['email', 'alice@example.com'], 3, true, key.hash).then (res) ->
         res[0].wot_size.should.equal 2
         done()
     it 'should have 2 trust indexed identifiers', (done) ->
@@ -144,18 +144,35 @@ describe 'Database', ->
       db.getTrustPaths(['email', 'alice@example.com'], ['email', 'charles@example.com'], 3).then (res) ->
         res.length.should.equal 1
         done()
+    it 'should not extend trust with a msg from an untrusted signer', (done) ->
+      untrustedKey = keyutil.generate()
+      message = Message.createRating
+        author: [['email', 'alice@example.com']]
+        recipient: [['email', 'darwin@example.com']]
+        rating: 1
+        context: 'identifi'
+      Message.sign message, untrustedKey.private.pem, untrustedKey.public.hex
+      db.saveMessage(message).then ->
+        db.generateWebOfTrustIndex(['email', 'alice@example.com'], 3, true, key.hash)
+      .then (res) ->
+        res[0].wot_size.should.equal 2
+        done()
+      ###
+      db.getTrustPaths(['email', 'alice@example.com'], ['email', 'charles@example.com'], 3).then (res) ->
+        res.length.should.equal 1
+        done() ###
   describe 'identity search', ->
-    it 'should find 4 identifiers matching "a"', (done) ->
+    it 'should find 7 identifiers matching "a"', (done) ->
       db.getIdentities({ searchValue: 'a' }).then (res) ->
-        res.length.should.equal 6
+        res.length.should.equal 7
         done()
     it 'should find 1 identifier matching "alice"', (done) ->
       db.getIdentities({ searchValue: 'alice' }).then (res) ->
         res.length.should.equal 1
         done()
-    it 'should find 4 identities matching "a"', (done) ->
+    it 'should find 7 identities matching "a"', (done) ->
       db.identitySearch(['', 'a']).then (res) ->
-        res.length.should.equal 6
+        res.length.should.equal 7
         done()
     it 'should find 1 identity matching "alice"', (done) ->
       db.identitySearch(['', 'alice']).then (res) ->

@@ -322,42 +322,69 @@ module.exports = function(knex) {
 
     /*
       1. build a web of trust consisting of keyIDs only
-      2. build a web of trust consisting of all kinds of identifiers, sourcing from messages
+      2. build a web of trust consisting of all kinds of unique identifiers, sourcing from messages
           signed by keyIDs in our web of trust
     */
-    generateWebOfTrustIndex: function(id, maxDepth, maintain, betweenKeyIDsOnly) {
-      var sql = "WITH RECURSIVE transitive_closure(id1type, id1val, id2type, id2val, distance, path_string) AS ";
-      sql += "(";
-      sql += "SELECT id1.type, id1.value, id2.type, id2.value, 1 AS distance, ";
-      sql += "printf('%s:%s:%s:%s:',replace(id1.type,':','::'),replace(id1.value,':','::'),replace(id2.type,':','::'),replace(id2.value,':','::')) AS path_string ";
-      sql += "FROM Messages AS m ";
-      sql += "INNER JOIN MessageIdentifiers AS id1 ON m.hash = id1.message_hash AND id1.is_recipient = 0 ";
-      sql += "INNER JOIN UniqueIdentifierTypes AS uidt1 ON uidt1.type = id1.type ";
-      sql += "INNER JOIN MessageIdentifiers AS id2 ON m.hash = id2.message_hash AND (id1.type != id2.type OR id1.value != id2.value) ";
-      if (betweenKeyIDsOnly) {
-        sql += "AND id2.type = 'keyID' AND id2.is_recipient = 1 ";
-      } else {
-        sql += "INNER JOIN UniqueIdentifierTypes AS uidt2 ON uidt2.type = id2.type ";
+    generateWebOfTrustIndex: function(id, maxDepth, maintain, trustedKeyID) {
+      if (id[0] !== 'keyID' && !trustedKeyID) {
+        throw new Error('Please specify a trusted keyID');
       }
-      sql += "WHERE m.is_latest AND m.rating > (m.min_rating + m.max_rating) / 2 AND id1.type = :id1type AND id1.value = :id1value ";
+      function buildSql(betweenKeyIDsOnly) {
+        var sql = "WITH RECURSIVE transitive_closure(id1type, id1val, id2type, id2val, distance, path_string) AS ";
+        sql += "(";
+        sql += "SELECT id1.type, id1.value, id2.type, id2.value, 1 AS distance, ";
+        sql += "printf('%s:%s:%s:%s:',replace(id1.type,':','::'),replace(id1.value,':','::'),replace(id2.type,':','::'),replace(id2.value,':','::')) AS path_string ";
+        sql += "FROM Messages AS m ";
+        sql += "INNER JOIN MessageIdentifiers AS id1 ON m.hash = id1.message_hash AND id1.is_recipient = 0 ";
+        if (betweenKeyIDsOnly) {
+          sql += "AND id1.type = 'keyID' ";
+        } else {
+          sql += "INNER JOIN UniqueIdentifierTypes AS uidt1 ON uidt1.type = id1.type ";
+        }
+        sql += "INNER JOIN MessageIdentifiers AS id2 ON m.hash = id2.message_hash AND (id1.type != id2.type OR id1.value != id2.value) ";
+        if (betweenKeyIDsOnly) {
+          sql += "AND id2.type = 'keyID' AND id2.is_recipient = 1 ";
+        } else {
+          sql += "INNER JOIN UniqueIdentifierTypes AS uidt2 ON uidt2.type = id2.type ";
+          /* Only accept messages whose origin is verified by trusted keyID */
+          sql += "LEFT JOIN TrustDistances AS td ON ";
+          sql += "td.start_id_type = 'keyID' AND td.start_id_value = :trustedKeyID AND ";
+          sql += "td.end_id_type = 'keyID' AND td.end_id_value = m.signer_keyid ";
+        }
+        sql += "WHERE m.is_latest AND m.rating > (m.min_rating + m.max_rating) / 2 AND id1.type = :id1type AND id1.value = :id1value ";
+        if (!betweenKeyIDsOnly) {
+          sql += "AND (td.distance IS NOT NULL OR m.signer_keyid = :trustedKeyID) ";
+        }
 
-      sql += "UNION ALL ";
+        sql += "UNION ALL ";
 
-      sql += "SELECT tc.id1type, tc.id1val, id2.type, id2.value, tc.distance + 1, ";
-      sql += "printf('%s%s:%s:',tc.path_string,replace(id2.type,':','::'),replace(id2.value,':','::')) AS path_string ";
-      sql += "FROM Messages AS m ";
-      sql += "INNER JOIN MessageIdentifiers AS id1 ON m.hash = id1.message_hash AND id1.is_recipient = 0 ";
-      sql += "INNER JOIN UniqueIdentifierTypes AS uidt1 ON uidt1.type = id1.type ";
-      sql += "INNER JOIN MessageIdentifiers AS id2 ON m.hash = id2.message_hash AND (id1.type != id2.type OR id1.value != id2.value) ";
-      if (betweenKeyIDsOnly) {
-        sql += "AND id2.type = 'keyID' AND id2.is_recipient = 1 ";
-      } else {
-        sql += "INNER JOIN UniqueIdentifierTypes AS uidt2 ON uidt2.type = id2.type ";
+        sql += "SELECT tc.id1type, tc.id1val, id2.type, id2.value, tc.distance + 1, ";
+        sql += "printf('%s%s:%s:',tc.path_string,replace(id2.type,':','::'),replace(id2.value,':','::')) AS path_string ";
+        sql += "FROM Messages AS m ";
+        sql += "INNER JOIN MessageIdentifiers AS id1 ON m.hash = id1.message_hash AND id1.is_recipient = 0 ";
+        sql += "INNER JOIN UniqueIdentifierTypes AS uidt1 ON uidt1.type = id1.type ";
+        sql += "INNER JOIN MessageIdentifiers AS id2 ON m.hash = id2.message_hash AND (id1.type != id2.type OR id1.value != id2.value) ";
+        if (betweenKeyIDsOnly) {
+          sql += "AND id2.type = 'keyID' AND id2.is_recipient = 1 ";
+        } else {
+          sql += "INNER JOIN UniqueIdentifierTypes AS uidt2 ON uidt2.type = id2.type ";
+          /* Only accept messages whose origin is verified by trusted keyID */
+          sql += "LEFT JOIN TrustDistances AS td ON ";
+          sql += "td.start_id_type = 'keyID' AND td.start_id_value = :trustedKeyID AND ";
+          sql += "td.end_id_type = 'keyID' AND td.end_id_value = m.signer_keyid ";
+        }
+        sql += "JOIN transitive_closure AS tc ON id1.type = tc.id2type AND id1.value = tc.id2val ";
+        sql += "WHERE m.is_latest AND m.rating > (m.min_rating + m.max_rating) / 2 AND tc.distance < :maxDepth AND tc.path_string NOT LIKE printf('%%%s:%s:%%',replace(id2.type,':','::'),replace(id2.value,':','::')) ";
+        if (!betweenKeyIDsOnly) {
+          sql += "AND (td.distance IS NOT NULL OR m.signer_keyid = :trustedKeyID) ";
+        }
+        sql += ") ";
+        sql += "INSERT OR REPLACE INTO TrustDistances (start_id_type, start_id_value, end_id_type, end_id_value, distance) SELECT :id1type, :id1value, id2type, id2val, distance FROM transitive_closure ";
+        return sql;
       }
-      sql += "JOIN transitive_closure AS tc ON id1.type = tc.id2type AND id1.value = tc.id2val ";
-      sql += "WHERE m.is_latest AND m.rating > (m.min_rating + m.max_rating) / 2 AND tc.distance < :maxDepth AND tc.path_string NOT LIKE printf('%%%s:%s:%%',replace(id2.type,':','::'),replace(id2.value,':','::')) ";
-      sql += ") ";
-      sql += "INSERT OR REPLACE INTO TrustDistances (start_id_type, start_id_value, end_id_type, end_id_value, distance) SELECT :id1type, :id1value, id2type, id2val, distance FROM transitive_closure ";
+
+      var keyIdsSql = buildSql(true),
+        allIdsSql = buildSql(false);
 
       if (maintain) {
         this.addTrustIndexedIdentifier(id, maxDepth).return();
@@ -365,7 +392,12 @@ module.exports = function(knex) {
       return knex('TrustDistances')
         .where({ start_id_type: id[0], start_id_value: id[1] }).del()
         .then(function() {
-          return knex.raw(sql, { id1type: id[0], id1value: id[1], maxDepth: maxDepth });
+          console.log('generating keyID wot');
+          return knex.raw(keyIdsSql, { id1type: 'keyID', id1value: trustedKeyID || id[1], maxDepth: maxDepth });
+        })
+        .then(function() {
+          console.log('generating target key wot');
+          return knex.raw(allIdsSql, { id1type: id[0], id1value: id[1], maxDepth: maxDepth, trustedKeyID: trustedKeyID || id[1] });
         })
         .then(function() {
           return knex('TrustDistances').count('* as wot_size')
@@ -625,8 +657,8 @@ module.exports = function(knex) {
               break;
             }
           }
-          for (i = 0; i < message.signedData.author.length; i++) {
-            if (message.signedData.author[i][0] === 'keyID') {
+          for (i = 0; i < message.signedData.recipient.length; i++) {
+            if (message.signedData.recipient[i][0] === 'keyID') {
               hasRecipientKeyID = true;
               break;
             }
