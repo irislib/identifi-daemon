@@ -125,17 +125,17 @@ describe 'Database', ->
         done()
   describe 'trust functions', ->
     it 'should have 1 trust indexed identifier', (done) ->
-      db.getTrustIndexedIdentifiers().then (res) ->
+      db.getWebOfTrustIndexes().then (res) ->
         res.length.should.equal 1
         res[0].type.should.equal 'keyID'
         res[0].value.should.equal key.hash
         done()
-    it 'should generate a trust map', (done) ->
-      db.generateTrustMap(['email', 'alice@example.com'], 3, true).then (res) ->
-        res[0].trustmap_size.should.equal 2
+    it 'should generate a web of trust index', (done) ->
+      db.generateWebOfTrustIndex(['email', 'alice@example.com'], 3, true).then (res) ->
+        res[0].wot_size.should.equal 2
         done()
     it 'should have 2 trust indexed identifiers', (done) ->
-      db.getTrustIndexedIdentifiers().then (res) ->
+      db.getWebOfTrustIndexes().then (res) ->
         res.length.should.equal 2
         res[1].type.should.equal 'email'
         res[1].value.should.equal 'alice@example.com'

@@ -186,28 +186,28 @@ describe 'API', ->
           res.should.not.be.empty
           res[0].path_string.split(':').length.should.equal 9
           done()
-      it 'should not generate a trustmap without auth', ->
+      it 'should not generate a web of trust without auth', ->
         r = identifi.request
           apiMethod: 'id'
           apiIdType: 'email'
           apiId: 'alice@example.com'
-          apiAction: 'generatetrustmap'
+          apiAction: 'generatewotindex'
           qs:
             depth: 3
         r.should.be.rejected
-      it 'should generate a trustmap', (done) ->
+      it 'should generate a web of trust index', (done) ->
         r = identifi.request
           apiMethod: 'id'
           apiIdType: 'email'
           apiId: 'alice@example.com'
-          apiAction: 'generatetrustmap'
+          apiAction: 'generatewotindex'
           qs:
             depth: 3
           headers:
             'Authorization': 'Bearer ' + identifi.getJwt(privKeyPEM)
         r.then (res) ->
           res.should.not.be.empty
-          res[0].trustmap_size.should.equal 3
+          res[0].wot_size.should.equal 3
           done()
     describe 'list', ->
       it 'should list messages ordered by date', (done) ->

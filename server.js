@@ -306,9 +306,9 @@ router.get('/id/:id_type/:id_value/trustpaths', function(req, res) {
   }).catch(function(err) { handleError(err, req, res); });
 });
 
-router.get('/id/:id_type/:id_value/generatetrustmap', authRequired, function(req, res) {
+router.get('/id/:id_type/:id_value/generatewotindex', authRequired, function(req, res) {
   var depth = parseInt(req.query.depth) || 3;
-  db.generateTrustMap([req.params.id_type, req.params.id_value], depth)
+  db.generateWebOfTrustIndex([req.params.id_type, req.params.id_value], depth)
   .then(function(dbRes) {
     res.json(dbRes);
   }).catch(function(err) { handleError(err, req, res); });
