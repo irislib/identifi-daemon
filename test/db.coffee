@@ -192,7 +192,19 @@ describe 'Database', ->
       .then (res) ->
         res[0].priority.should.equal 100
         done()
-    it 'should be 98 for a message signed by own key', (done) ->
+    it 'should be 99 for a message signed & authored by own key, recipient type email', (done) ->
+      message = Message.createRating
+        author: [['keyID', key.hash]]
+        recipient: [['email', 'alice@example.com']]
+        rating: 10
+        context: 'identifi'
+      Message.sign message, privKey, pubKey
+      db.saveMessage(message).then ->
+        db.getMessages({ where: { hash: message.hash } })
+      .then (res) ->
+        res[0].priority.should.equal 99
+        done()
+    it 'should be 81 for a message signed by own key, authored by known', (done) ->
       message = Message.createRating
         author: [['email', 'alice@example.com']]
         recipient: [['email', 'bob@example.com']]
@@ -202,7 +214,19 @@ describe 'Database', ->
       db.saveMessage(message).then ->
         db.getMessages({ where: { hash: message.hash } })
       .then (res) ->
-        res[0].priority.should.equal 98
+        res[0].priority.should.equal 81
+        done()
+    it 'should be 48 for a message signed by own key, authored by unknown', (done) ->
+      message = Message.createRating
+        author: [['email', 'user@example.com']]
+        recipient: [['email', 'bob@example.com']]
+        rating: 1
+        context: 'identifi'
+      Message.sign message, privKey, pubKey
+      db.saveMessage(message).then ->
+        db.getMessages({ where: { hash: message.hash } })
+      .then (res) ->
+        res[0].priority.should.equal 48
         done()
     it 'should be 0 for a message from an unknown signer', (done) ->
       message = Message.createRating
@@ -217,7 +241,7 @@ describe 'Database', ->
       .then (res) ->
         res[0].priority.should.equal 0
         done()
-    it 'should be 48 for a message from a 1st degree trusted signer', (done) ->
+    it 'should be 23 for a message from a 1st degree trusted signer, unknown author', (done) ->
       message = Message.createRating
         author: [['email', 'user1@example.com']]
         recipient: [['email', 'user2@example.com']]
@@ -228,9 +252,22 @@ describe 'Database', ->
       .then ->
         db.getMessages({ where: { hash: message.hash } })
         .then (res) ->
-          res[0].priority.should.equal 48
+          res[0].priority.should.equal 23
           done()
-    it 'should be 31 for a message from a 2nd degree trusted signer', (done) ->
+    it 'should be 40 for a message from a 1st degree trusted signer, known author', (done) ->
+      message = Message.createRating
+        author: [['email', 'alice@example.com']]
+        recipient: [['email', 'user2@example.com']]
+        rating: 1
+        context: 'identifi'
+      Message.sign message, anotherKey.private.pem, anotherKey.public.hex
+      db.saveMessage(message)
+      .then ->
+        db.getMessages({ where: { hash: message.hash } })
+        .then (res) ->
+          res[0].priority.should.equal 40
+          done()
+    it 'should be 15 for a message from a 2nd degree trusted signer, unknown author', (done) ->
       yetAnotherKey = keyutil.generate()
       message = Message.createRating
         author: [['keyID', anotherKey.hash]]
@@ -250,7 +287,7 @@ describe 'Database', ->
       .then ->
         db.getMessages({ where: { hash: message.hash } })
         .then (res) ->
-          res[0].priority.should.equal 31
+          res[0].priority.should.equal 15
           done()
   describe 'stats', ->
     it 'should return the stats of an identifier', (done) ->
@@ -259,7 +296,7 @@ describe 'Database', ->
         res[0].sentPositive.should.equal 1
         res[0].sentNeutral.should.equal 0
         res[0].sentNegative.should.equal 0
-        res[0].receivedPositive.should.equal 3
+        res[0].receivedPositive.should.equal 4
         res[0].receivedNeutral.should.equal 0
         res[0].receivedNegative.should.equal 1
         res[0].firstSeen.should.not.be.empty

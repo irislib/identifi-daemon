@@ -288,15 +288,15 @@ module.exports = function(knex) {
         });
     },
 
-    getTrustDistance: function(id1, id2) {
-      if (id1[0] === id2[0] && id1[1] === id2[1]) {
+    getTrustDistance: function(from, to) {
+      if (from[0] === to[0] && from[1] === to[1]) {
         return new P(function(resolve) { resolve(0); });
       }
       return knex.select('distance').from('TrustDistances').where({
-        'start_id_type': id1[0],
-        'start_id_value': id1[1],
-        'end_id_type': id2[0],
-        'end_id_value': id2[1]
+        'start_id_type': from[0],
+        'start_id_value': from[1],
+        'end_id_type': to[0],
+        'end_id_value': to[1]
       }).then(function(res) {
         var distance = -1;
         if (res.length) {
@@ -392,11 +392,9 @@ module.exports = function(knex) {
       return knex('TrustDistances')
         .where({ start_id_type: id[0], start_id_value: id[1] }).del()
         .then(function() {
-          console.log('generating keyID wot');
           return knex.raw(keyIdsSql, { id1type: 'keyID', id1value: trustedKeyID || id[1], maxDepth: maxDepth });
         })
         .then(function() {
-          console.log('generating target key wot');
           return knex.raw(allIdsSql, { id1type: id[0], id1value: id[1], maxDepth: maxDepth, trustedKeyID: trustedKeyID || id[1] });
         })
         .then(function() {
@@ -633,22 +631,46 @@ module.exports = function(knex) {
   };
 
   p = {
+    /*
+      Message priority algorithm based on
+      1. trust distance of signer from our key
+      2. trust distance of message author from our key.
+      In addition to trust distance, the amount and strength of positive and
+      negative ratings and their distance could be taken into account.
+
+      Messages authored or received by identifiers of type keyID have slightly
+      higher priority.
+    */
     getPriority: function(message) {
       var maxPriority = 100;
       var keyType = 'keyID';
       var priority;
 
-      var distanceToSigner = 1000000;
-
       message.signerKeyHash = Message.getSignerKeyHash(message);
 
       return pub.getTrustDistance(myId, ['keyID', message.signerKeyHash])
-      .then(function(distance) {
-        return new P(function(resolve) {
-          if (distance > -1 && distance < distanceToSigner) {
-            distanceToSigner = distance;
+      .then(function(distanceToSigner) {
+        if (distanceToSigner === -1) { // Unknown signer
+          return new P(function(resolve) { resolve(0); });
+        }
+        var i, queries = [];
+        // Get distances to message authors
+        for (i = 0; i < message.signedData.author.length; i++) {
+          var q = pub.getTrustDistance(myId, message.signedData.author[i]);
+          queries.push(q);
+        }
+
+        return P.all(queries).then(function(authorDistances) {
+          var shortestDistanceToAuthor = 10000000;
+          for (var j = 0; j < authorDistances.length; j++) {
+            if (authorDistances[j] > -1 && authorDistances[j] < shortestDistanceToAuthor) {
+              shortestDistanceToAuthor = authorDistances[j];
+            }
           }
-          priority = Math.round(maxPriority / (distanceToSigner + 1));
+
+          priority = maxPriority / (distanceToSigner + 1);
+          priority = priority / 2 + priority / (shortestDistanceToAuthor + 2);
+          priority = Math.round(priority);
 
           var hasAuthorKeyID, hasRecipientKeyID, i;
           for (i = 0; i < message.signedData.author.length; i++) {
@@ -666,7 +688,7 @@ module.exports = function(knex) {
           if (!hasAuthorKeyID) { priority -= 1; }
           if (!hasRecipientKeyID) { priority -= 1; }
           priority = Math.max(priority, 0);
-          resolve(priority);
+          return new P(function(resolve) { resolve(priority); });
         });
       });
     },
