@@ -56,7 +56,7 @@ module.exports = function(knex) {
                 }));
               }
               if (updateTrustIndexes) {
-                queries.push(p.updateTrustIndexesByMessage(message));
+                queries.push(p.updateWotIndexesByMessage(message));
               }
               return P.all(queries);
             });
@@ -693,7 +693,7 @@ module.exports = function(knex) {
       });
     },
 
-    updateTrustIndexesByMessage: function(message) {
+    updateWotIndexesByMessage: function(message, trustedKeyID) {
       var queries = [];
 
       function makeSubquery(a, r) {
@@ -718,13 +718,24 @@ module.exports = function(knex) {
         .select('viewpoint.type as start_id_type', 'viewpoint.value as start_id_value', knex.raw('? as end_id_type', r[0]), knex.raw('? as end_id_value', r[1]), knex.raw('IFNULL(td.distance, 0) + 1 as distance'));
       }
 
+      function getSaveFunction(a, r) {
+        return function(distance) {
+          if (distance > -1) {
+            return knex('TrustDistances').insert(makeSubquery(a, r));
+          }
+        };
+      }
+
       if (Message.isPositive(message)) {
         var i, j;
         for (i = 0; i < message.signedData.author.length; i++) {
           var a = message.signedData.author[i];
           for (j = 0; j < message.signedData.recipient.length; j++) {
+            var t = a[0] === 'keyID' ? a[1] : trustedKeyID;
+            if (!t) { continue; }
             var r = message.signedData.recipient[j];
-            var q = knex('TrustDistances').insert(makeSubquery(a, r));
+            var q = pub.getTrustDistance(['keyID', t], ['keyID', message.signerKeyHash])
+            .then(getSaveFunction(a, r));
             queries.push(q);
           }
         }
