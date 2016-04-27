@@ -14,6 +14,7 @@ var pkg = require('./package.json');
 
 var osHomedir = require('os-homedir');
 var fs = require('fs');
+var path = require('path');
 var util = require('util');
 
 var keyutil = require('identifi-lib/keyutil');
@@ -322,6 +323,14 @@ router.get('/id/:id_type/:id_value/generatewotindex', authRequired, function(req
 
 // Register the routes
 app.use('/api', router);
+
+// Serve identifi-angular if the node module is available
+try {
+  var angular = path.dirname(require.resolve('identifi-angular'));
+  app.use('/', express.static(angular + '/dist'));
+} catch (e) {
+//  console.log(e);
+}
 
 function handleMsgEvent(data) {
   var m = data;
