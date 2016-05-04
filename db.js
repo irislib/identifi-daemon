@@ -114,6 +114,14 @@ module.exports = function(knex) {
         .offset(options.offset)
         .groupBy('Messages.hash');
 
+      if (options.timestampGte) {
+        query.andWhere('Messages.timestamp', '>=', options.timestampGte);
+      }
+
+      if (options.timestampLte) {
+        query.andWhere('Messages.timestamp', '<=', options.timestampLte);
+      }
+
       if (options.where['Messages.type'] && options.where['Messages.type'].match(/^rating:(positive|neutral|negative)$/i)) {
         var ratingType = options.where['Messages.type'].match(/(positive|neutral|negative)$/i)[0];
         options.where['Messages.type'] = 'rating';

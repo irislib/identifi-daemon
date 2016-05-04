@@ -234,6 +234,23 @@ describe 'API', ->
         r.then (res) ->
           res.length.should.equal 4
           done()
+      it 'should filter messages by timestamp_lte', (done) ->
+        console.log m.signedData.timestamp
+        r = identifi.request
+          apiMethod: 'messages'
+          qs:
+            timestamp_lte: m.signedData.timestamp
+        r.then (res) ->
+          res.length.should.equal 7
+          done()
+      it 'should filter messages by timestamp_gte', (done) ->
+        r = identifi.request
+          apiMethod: 'messages'
+          qs:
+            timestamp_gte: m.signedData.timestamp
+        r.then (res) ->
+          res.length.should.equal 1
+          done()
       it 'should filter messages by viewpoint, max_distance 2', (done) ->
         r = identifi.request
           apiMethod: 'messages'

@@ -151,6 +151,8 @@ function getMessages(req, res, options) {
     }
     if (req.query.limit)    { options.limit = parseInt(req.query.limit); }
     if (req.query.offset)   { options.offset = parseInt(req.query.offset); }
+    if (req.query.timestamp_gte)   { options.timestampGte = req.query.timestamp_gte; }
+    if (req.query.timestamp_lte)   { options.timestampLte = req.query.timestamp_lte; }
     db.getMessages(options).then(function(dbRes) {
       res.json(dbRes);
     }).catch(function(err) { handleError(err, req, res); });
@@ -387,7 +389,7 @@ function getNewMessages(url, since) {
     uri: url,
     apiMethod: 'messages',
     qs: {
-      created_gte: since,
+      timestamp_gte: since,
       limit: 100
     }
   }).then(function(res) {
