@@ -382,16 +382,12 @@ function askForMorePeers(url, peersNeeded) {
   });
 }
 
-function getNewMessages(url, since) {
-  var sinceStr = since ? ('since ' + since) : '';
-  log('asking ' + url + ' for new messages ' + sinceStr);
-  identifiClient.request({
+/* TODO: prevent infinite loops & peer misbehavior. Should maybe request by trust distance. */
+function requestMessages(url, qs) {
+  return identifiClient.request({
     uri: url,
     apiMethod: 'messages',
-    qs: {
-      timestamp_gte: since,
-      limit: 100
-    }
+    qs: qs
   }).then(function(res) {
     for (var i = 0; i < res.length; i++) {
       if (res[i].jws) {
@@ -400,7 +396,22 @@ function getNewMessages(url, since) {
         db.saveMessage(m).return();
       }
     }
+    if (res.length === qs.limit) {
+      qs.offset += qs.limit;
+      return requestMessages(url, qs);
+    }
   });
+}
+
+function getNewMessages(url, since) {
+  var sinceStr = since ? ('since ' + since) : '';
+  log('asking ' + url + ' for new messages ' + sinceStr);
+  var qs = {
+    timestamp_gte: since,
+    limit: 100,
+    offset: 0
+  };
+  return requestMessages(url, qs);
 }
 
 function makeConnectHandler(url, lastSeen, socket) {
