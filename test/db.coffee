@@ -81,7 +81,7 @@ describe 'Database', ->
         res.length.should.equal 2
         done()
     it 'should find a saved attribute', (done) ->
-      db.getIdentities({ searchValue: 'bob' }).then (res) ->
+      db.getIdentityAttributes({ searchValue: 'bob' }).then (res) ->
         res.length.should.equal 1
         res[0].name.should.equal 'email'
         res[0].value.should.equal 'bob@example.com'
@@ -163,11 +163,11 @@ describe 'Database', ->
         done() ###
   describe 'identity search', ->
     it 'should find 7 attributes matching "a"', (done) ->
-      db.getIdentities({ searchValue: 'a' }).then (res) ->
+      db.getIdentityAttributes({ searchValue: 'a' }).then (res) ->
         res.length.should.equal 7
         done()
     it 'should find 1 attribute matching "alice"', (done) ->
-      db.getIdentities({ searchValue: 'alice' }).then (res) ->
+      db.getIdentityAttributes({ searchValue: 'alice' }).then (res) ->
         res.length.should.equal 1
         done()
     it 'should find 7 identities matching "a"', (done) ->

@@ -69,7 +69,7 @@ var init = function(db, config) {
     t.primary(['start_attr_name', 'start_attr_value', 'end_attr_name', 'end_attr_value']);
   })
 
-  .createTableIfNotExists('Identities', function(t) {
+  .createTableIfNotExists('IdentityAttributes', function(t) {
     t.integer('identity_id').unsigned();
     t.string('name').notNullable();
     t.string('value').notNullable();

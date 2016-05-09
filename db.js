@@ -179,7 +179,7 @@ module.exports = function(knex) {
         });
     },
 
-    getIdentities: function(options) {
+    getIdentityAttributes: function(options) {
       var defaultOptions = {
         orderBy: 'value',
         direction: 'asc',
@@ -208,18 +208,18 @@ module.exports = function(knex) {
     },
 
     getConnectedAttributes: function(options) {
-      var sql = 'identity_id IN (SELECT identity_id FROM Identities WHERE name = ? AND value = ? AND viewpoint_name = ? AND viewpoint_value = ?)';
+      var sql = 'identity_id IN (SELECT identity_id FROM IdentityAttributes WHERE name = ? AND value = ? AND viewpoint_name = ? AND viewpoint_value = ?)';
       var countBefore;
       options.viewpoint = options.viewpoint || ['', ''];
 
-      return knex('Identities')
+      return knex('IdentityAttributes')
         .whereRaw(sql, [options.id[0], options.id[1], options.viewpoint[0], options.viewpoint[1]]).del()
         .then(function() {
-          return knex('Identities').count('* as count');
+          return knex('IdentityAttributes').count('* as count');
         })
         .then(function(res) {
           countBefore = res[0].count;
-          return knex.raw("SELECT IFNULL(MAX(identity_id), 0) + 1 AS val FROM Identities");
+          return knex.raw("SELECT IFNULL(MAX(identity_id), 0) + 1 AS val FROM IdentityAttributes");
         })
         .then(function(res) {
           var identityID = res[0].val;
@@ -258,7 +258,7 @@ module.exports = function(knex) {
           sql += "AND tc.path_string NOT LIKE printf('%%%s:%s:%%',replace(attr2.name,':','::'),replace(attr2.value,':','::'))";
           sql += ") ";
 
-          sql += "INSERT INTO Identities ";
+          sql += "INSERT INTO IdentityAttributes ";
           sql += "SELECT " + identityID + ", attr2name, attr2val, :viewpointType, :viewpointID, 1, 0 FROM transitive_closure ";
           sql += "GROUP BY attr2name, attr2val ";
           sql += "UNION SELECT " + identityID + ", :name, :id, :viewpointType, :viewpointID, 1, 0 ";
@@ -275,7 +275,7 @@ module.exports = function(knex) {
 
           return knex.raw(sql, sqlValues);
         }).then(function() {
-          return knex('Identities').count('* as val');
+          return knex('IdentityAttributes').count('* as val');
         })
         .then(function(res) {
           if (countBefore === res[0].val) {
@@ -285,17 +285,17 @@ module.exports = function(knex) {
           var hasSearchedAttributes = options.searchedAttributes && options.searchedAttributes.length > 0;
 
           if (hasSearchedAttributes) {
-            return knex('Identities')
+            return knex('IdentityAttributes')
               .select('name', 'value', 'confirmations', 'refutations')
-              .where(knex.raw('NOT (Name = ? AND value = ?) AND identity_id = (SELECT MAX(identity_id) FROM Identities)', [options.id[0], options.id[1]]))
+              .where(knex.raw('NOT (Name = ? AND value = ?) AND identity_id = (SELECT MAX(identity_id) FROM IdentityAttributes)', [options.id[0], options.id[1]]))
               .whereIn('name', options.searchedAttributes)
               .groupBy('name', 'value')
               .orderByRaw('confirmations - refutations DESC');
           }
 
-          return knex('Identities')
+          return knex('IdentityAttributes')
             .select('name', 'value', 'confirmations', 'refutations')
-            .where(knex.raw('NOT (Name = ? AND value = ?) AND identity_id = (SELECT MAX(identity_id) FROM Identities)', [options.id[0], options.id[1]]))
+            .where(knex.raw('NOT (Name = ? AND value = ?) AND identity_id = (SELECT MAX(identity_id) FROM IdentityAttributes)', [options.id[0], options.id[1]]))
             .groupBy('name', 'value')
             .orderByRaw('confirmations - refutations DESC');
         });
@@ -445,7 +445,7 @@ module.exports = function(knex) {
       }
 
       sql += "UNION ";
-      sql += "SELECT DISTINCT ii.name as attrname, ii.value as attrvalue, ii.identity_id AS iid FROM Identities AS ii ";
+      sql += "SELECT DISTINCT ii.name as attrname, ii.value as attrvalue, ii.identity_id AS iid FROM IdentityAttributes AS ii ";
       sql += "WHERE ";
       sql += "ii.value LIKE '%' || :query || '%' ";
 
@@ -462,7 +462,7 @@ module.exports = function(knex) {
       }
 
       sql += "LEFT JOIN UniqueAttributes AS UID ON UID.name = attrname ";
-      sql += "LEFT JOIN Identities AS OtherAttributes ON OtherAttributes.identity_id = iid AND OtherAttributes.confirmations >= OtherAttributes.refutations ";
+      sql += "LEFT JOIN IdentityAttributes AS OtherAttributes ON OtherAttributes.identity_id = iid AND OtherAttributes.confirmations >= OtherAttributes.refutations ";
 
       if (useViewpoint) {
         sql += "AND OtherAttributes.viewpoint_name = :viewType AND OtherAttributes.viewpoint_value = :viewID ";
@@ -564,14 +564,14 @@ module.exports = function(knex) {
           maxDistance: options.maxDistance
         }));
 
-        var subquery = knex('Identities').where({
+        var subquery = knex('IdentityAttributes').where({
           viewpoint_name: options.viewpoint[0],
           viewpoint_value: options.viewpoint[1],
           name: id[0],
           value: id[1]
         }).select('identity_id');
 
-        query.leftJoin('Identities AS i', function() {
+        query.leftJoin('IdentityAttributes AS i', function() {
           this.on('attr.name', '=', 'i.name')
             .andOn('attr.value', '=', 'i.value');
         })

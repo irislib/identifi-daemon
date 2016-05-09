@@ -215,7 +215,7 @@ router.get('/id', function(req, res) {
                                     { options.direction = req.query.order_by; }
     if (req.query.limit)            { options.limit = parseInt(req.query.limit); }
     if (req.query.offset)           { options.offset = parseInt(req.query.offset); }
-    db.getIdentities(options).then(function(dbRes) {
+    db.getIdentityAttributes(options).then(function(dbRes) {
       res.json(dbRes);
     }).catch(function(err) { handleError(err, req, res); });
 });
@@ -223,7 +223,7 @@ router.get('/id', function(req, res) {
 
 
 router.get('/id/:name/:value', function(req, res) {
-  db.getIdentities({ where: { name: req.params.name, value: req.params.value } }).then(function(dbRes) {
+  db.getIdentityAttributes({ where: { name: req.params.name, value: req.params.value } }).then(function(dbRes) {
     res.json(dbRes);
   }).catch(function(err) { handleError(err, req, res); });
 });
