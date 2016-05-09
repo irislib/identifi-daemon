@@ -83,7 +83,7 @@ describe 'Database', ->
     it 'should find a saved attribute', (done) ->
       db.getIdentities({ searchValue: 'bob' }).then (res) ->
         res.length.should.equal 1
-        res[0].type.should.equal 'email'
+        res[0].name.should.equal 'email'
         res[0].value.should.equal 'bob@example.com'
         done()
   describe 'connections', ->
@@ -103,8 +103,8 @@ describe 'Database', ->
       db.saveMessage(message).should.eventually.notify done
     it 'should return connecting messages', (done) ->
       db.getConnectingMessages({
-        id1: ['email', 'bob@example.com']
-        id2: ['url', 'http://www.example.com/bob']
+        attr1: ['email', 'bob@example.com']
+        attr2: ['url', 'http://www.example.com/bob']
       }).then (res) ->
         res.length.should.equal 1
         done()
@@ -115,11 +115,11 @@ describe 'Database', ->
       }).then (res) ->
         res.length.should.equal 2
         done()
-    it 'should return connections of type url', (done) ->
+    it 'should return connections of attribute url', (done) ->
       db.getConnectedAttributes({
         id: ['email','bob@example.com']
         viewpoint: ['email', 'alice@example.com']
-        searchedTypes: ['url']
+        searchedAttributes: ['url']
       }).then (res) ->
         res.length.should.equal 1
         done()
@@ -127,7 +127,7 @@ describe 'Database', ->
     it 'should have 1 trust indexed attribute', (done) ->
       db.getWebOfTrustIndexes().then (res) ->
         res.length.should.equal 1
-        res[0].type.should.equal 'keyID'
+        res[0].name.should.equal 'keyID'
         res[0].value.should.equal key.hash
         done()
     it 'should generate a web of trust index', (done) ->
@@ -137,7 +137,7 @@ describe 'Database', ->
     it 'should have 2 trust indexed attributes', (done) ->
       db.getWebOfTrustIndexes().then (res) ->
         res.length.should.equal 2
-        res[1].type.should.equal 'email'
+        res[1].name.should.equal 'email'
         res[1].value.should.equal 'alice@example.com'
         done()
     it 'should return a trust path', (done) ->
@@ -179,7 +179,7 @@ describe 'Database', ->
         res.length.should.equal 1
         done()
   describe 'Priority', ->
-    it 'should be 100 for a message signed & authored by own key, recipient type keyID', (done) ->
+    it 'should be 100 for a message signed & authored by own key, recipient attribute keyID', (done) ->
       anotherKey = keyutil.generate()
       message = Message.createRating
         author: [['keyID', key.hash]]
@@ -192,7 +192,7 @@ describe 'Database', ->
       .then (res) ->
         res[0].priority.should.equal 100
         done()
-    it 'should be 99 for a message signed & authored by own key, recipient type email', (done) ->
+    it 'should be 99 for a message signed & authored by own key, recipient attribute email', (done) ->
       message = Message.createRating
         author: [['keyID', key.hash]]
         recipient: [['email', 'alice@example.com']]

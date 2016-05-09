@@ -1,16 +1,16 @@
 /*jshint unused:false*/
 'use strict';
 
-function addDefaultUniqueAttributeTypes(db) {
-  return db.table('UniqueAttributeTypes').insert(
+function addDefaultUniqueAttributes(db) {
+  return db.table('UniqueAttributes').insert(
     [
-      { type: 'email' },
-      { type: 'account' },
-      { type: 'url' },
-      { type: 'tel' },
-      { type: 'keyID' },
-      { type: 'bitcoin' },
-      { type: 'identifiNode' }
+      { name: 'email' },
+      { name: 'account' },
+      { name: 'url' },
+      { name: 'tel' },
+      { name: 'keyID' },
+      { name: 'bitcoin' },
+      { name: 'identifiNode' }
     ]
   );
 }
@@ -33,8 +33,8 @@ function catcher(e) {
 }
 
 var init = function(db, config) {
-  return db.schema.createTableIfNotExists('UniqueAttributeTypes', function(t) {
-    t.string('type').primary();
+  return db.schema.createTableIfNotExists('UniqueAttributes', function(t) {
+    t.string('name').primary();
   })
 
   .createTableIfNotExists('Messages', function(t) {
@@ -54,37 +54,37 @@ var init = function(db, config) {
 
   .createTableIfNotExists('MessageAttributes', function(t) {
     t.string('message_hash').references('Messages.hash');
-    t.string('type').notNullable();
+    t.string('name').notNullable();
     t.string('value').notNullable();
     t.boolean('is_recipient');
-    t.primary(['type', 'value', 'message_hash', 'is_recipient']);
+    t.primary(['name', 'value', 'message_hash', 'is_recipient']);
   })
 
   .createTableIfNotExists('TrustDistances', function(t) {
-    t.string('start_id_type').notNullable();
-    t.string('start_id_value').notNullable();
-    t.string('end_id_type').notNullable();
-    t.string('end_id_value').notNullable();
+    t.string('start_attr_name').notNullable();
+    t.string('start_attr_value').notNullable();
+    t.string('end_attr_name').notNullable();
+    t.string('end_attr_value').notNullable();
     t.integer('distance').notNullable();
-    t.primary(['start_id_type', 'start_id_value', 'end_id_type', 'end_id_value']);
+    t.primary(['start_attr_name', 'start_attr_value', 'end_attr_name', 'end_attr_value']);
   })
 
   .createTableIfNotExists('Identities', function(t) {
     t.integer('identity_id').unsigned();
-    t.string('type').notNullable();
+    t.string('name').notNullable();
     t.string('value').notNullable();
-    t.string('viewpoint_type').notNullable();
+    t.string('viewpoint_name').notNullable();
     t.string('viewpoint_value').notNullable();
     t.integer('confirmations').unsigned();
     t.integer('refutations').unsigned();
-    t.primary(['type', 'value', 'viewpoint_type', 'viewpoint_value']);
+    t.primary(['name', 'value', 'viewpoint_name', 'viewpoint_value']);
   })
 
   .createTableIfNotExists('TrustIndexedAttributes', function(t) {
-    t.string('type');
+    t.string('name');
     t.string('value');
     t.integer('depth').unsigned().notNullable();
-    t.primary(['type', 'value', 'depth']);
+    t.primary(['name', 'value', 'depth']);
   })
 
   .createTableIfNotExists('Peers', function(t) {
@@ -94,7 +94,7 @@ var init = function(db, config) {
   })
 
   .then(function() {
-    return addDefaultUniqueAttributeTypes(db).catch(catcher);
+    return addDefaultUniqueAttributes(db).catch(catcher);
   })
 
   .then(function() {

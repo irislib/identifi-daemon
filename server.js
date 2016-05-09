@@ -140,8 +140,8 @@ function getMessages(req, res, options) {
     options.where = options.where || {};
     options.where.public = true;
 
-    if (req.query.viewpoint_type && req.query.viewpoint_value) {
-      options.viewpoint = [req.query.viewpoint_type, req.query.viewpoint_value];
+    if (req.query.viewpoint_name && req.query.viewpoint_value) {
+      options.viewpoint = [req.query.viewpoint_name, req.query.viewpoint_value];
     }
     if (req.query.max_distance) { options.maxDistance = parseInt(req.query.max_distance); }
     if (req.query.type)     { options.where['Messages.type'] = req.query.type; }
@@ -208,7 +208,7 @@ router.get('/id', function(req, res) {
     var options = {
       where: {}
     };
-    if (req.query.type)             { options.where.type = req.query.type; }
+    if (req.query.name)             { options.where.name = req.query.name; }
     if (req.query.search_value)     { options.searchValue = req.query.search_value; }
     if (req.query.order_by)         { options.orderBy = req.query.order_by; }
     if (req.query.direction && (req.query.direction === 'asc' || req.query.direction === 'desc'))
@@ -222,57 +222,57 @@ router.get('/id', function(req, res) {
 
 
 
-router.get('/id/:type/:value', function(req, res) {
-  db.getIdentities({ where: { type: req.params.type, value: req.params.value } }).then(function(dbRes) {
+router.get('/id/:name/:value', function(req, res) {
+  db.getIdentities({ where: { name: req.params.name, value: req.params.value } }).then(function(dbRes) {
     res.json(dbRes);
   }).catch(function(err) { handleError(err, req, res); });
 });
 
 
 
-router.get('/id/:id_type/:id_value/stats', function(req, res) {
+router.get('/id/:attr_name/:attr_value/stats', function(req, res) {
   var options = {};
 
-  if (req.query.viewpoint_type && req.query.viewpoint_value) {
-    options.viewpoint = [req.query.viewpoint_type, req.query.viewpoint_value];
+  if (req.query.viewpoint_name && req.query.viewpoint_value) {
+    options.viewpoint = [req.query.viewpoint_name, req.query.viewpoint_value];
   }
   if (req.query.max_distance) { options.maxDistance = parseInt(req.query.max_distance); }
 
-  db.getStats([req.params.id_type, req.params.id_value], options).then(function(dbRes) {
+  db.getStats([req.params.attr_name, req.params.attr_value], options).then(function(dbRes) {
     res.json(dbRes);
   }).catch(function(err) { handleError(err, req, res); });
 });
 
 
-router.get('/id/:id_type/:id_value/sent', function(req, res) {
+router.get('/id/:attr_name/:attr_value/sent', function(req, res) {
   var options = {
-    author: [req.params.id_type, req.params.id_value],
+    author: [req.params.attr_name, req.params.attr_value],
   };
   getMessages(req, res, options);
 });
 
 
-router.get('/id/:id_type/:id_value/received', function(req, res) {
+router.get('/id/:attr_name/:attr_value/received', function(req, res) {
   var options = {
-    recipient: [req.params.id_type, req.params.id_value],
+    recipient: [req.params.attr_name, req.params.attr_value],
   };
   getMessages(req, res, options);
 });
 
 
 
-router.get('/id/:id_type/:id_value/connections', function(req, res) {
+router.get('/id/:attr_name/:attr_value/connections', function(req, res) {
   var options = {
-    id: [req.params.id_type, req.params.id_value],
+    id: [req.params.attr_name, req.params.attr_value],
   };
 
-  if (req.query.viewpoint_type && req.query.viewpoint_value) {
-    options.viewpoint = [req.query.viewpoint_type, req.query.viewpoint_value];
+  if (req.query.viewpoint_name && req.query.viewpoint_value) {
+    options.viewpoint = [req.query.viewpoint_name, req.query.viewpoint_value];
   }
   if (req.query.max_distance) { options.maxDistance = parseInt(req.query.max_distance); }
 
   if (req.query.type) {
-    options.searchedTypes = [req.query.type];
+    options.searchedAttributes = [req.query.type];
   }
   db.getConnectedAttributes(options).then(function(dbRes) {
     res.json(dbRes);
@@ -281,14 +281,14 @@ router.get('/id/:id_type/:id_value/connections', function(req, res) {
 
 
 
-router.get('/id/:id_type/:id_value/connecting_msgs', function(req, res) {
-  if (!(req.query.target_type && req.query.target_value)) {
-    res.status(400).json('target_type and target_value must be specified');
+router.get('/id/:attr_name/:attr_value/connecting_msgs', function(req, res) {
+  if (!(req.query.target_name && req.query.target_value)) {
+    res.status(400).json('target_name and target_value must be specified');
     return;
   }
   var options = {
-    id1: [req.params.id_type, req.params.id_value],
-    id2: [req.query.target_type, req.query.target_value]
+    attr1: [req.params.attr_name, req.params.attr_value],
+    attr2: [req.query.target_name, req.query.target_value]
   };
   db.getConnectingMessages(options).then(function(dbRes) {
     res.json(dbRes);
@@ -297,27 +297,27 @@ router.get('/id/:id_type/:id_value/connecting_msgs', function(req, res) {
 
 
 
-router.get('/id/:id_type/:id_value/trustpaths', function(req, res) {
-  if (!(req.query.target_type && req.query.target_value)) {
-    res.status(400).json('target_type and target_value must be specified');
+router.get('/id/:attr_name/:attr_value/trustpaths', function(req, res) {
+  if (!(req.query.target_name && req.query.target_value)) {
+    res.status(400).json('target_name and target_value must be specified');
     return;
   }
   var maxLength = req.query.max_length || 5;
   var shortestOnly = req.query.max_length !== undefined;
-  db.getTrustPaths([req.params.id_type, req.params.id_value], [req.query.target_type, req.query.target_value], maxLength, shortestOnly).then(function(dbRes) {
+  db.getTrustPaths([req.params.attr_name, req.params.attr_value], [req.query.target_name, req.query.target_value], maxLength, shortestOnly).then(function(dbRes) {
     res.json(dbRes);
   }).catch(function(err) { handleError(err, req, res); });
 });
 
-router.get('/id/:id_type/:id_value/generatewotindex', authRequired, function(req, res) {
+router.get('/id/:attr_name/:attr_value/generatewotindex', authRequired, function(req, res) {
   var depth = parseInt(req.query.depth) || 3;
   var trustedKeyID = null;
   if (req.params.trusted_keyid) {
     trustedKeyID = req.params.trusted_keyid;
-  } else if (req.params.id_type !== 'keyID') {
+  } else if (req.params.attr_name !== 'keyID') {
     trustedKeyID = myKey.hash;
   }
-  db.generateWebOfTrustIndex([req.params.id_type, req.params.id_value], depth, false, trustedKeyID)
+  db.generateWebOfTrustIndex([req.params.attr_name, req.params.attr_value], depth, false, trustedKeyID)
   .then(function(dbRes) {
     res.json(dbRes);
   }).catch(function(err) { handleError(err, req, res); });

@@ -167,7 +167,7 @@ describe 'API', ->
           apiId: 'alice@example.com'
           apiAction: 'trustpaths'
           qs:
-            target_type: 'email'
+            target_name: 'email'
             target_value: 'bob@example.com'
         r.then (res) ->
           res.should.not.be.empty
@@ -180,7 +180,7 @@ describe 'API', ->
           apiId: 'alice@example.com'
           apiAction: 'trustpaths'
           qs:
-            target_type: 'email'
+            target_name: 'email'
             target_value: 'david@example.com'
         r.then (res) ->
           res.should.not.be.empty
@@ -228,7 +228,7 @@ describe 'API', ->
         r = identifi.request
           apiMethod: 'messages'
           qs:
-            viewpoint_type: 'email'
+            viewpoint_name: 'email'
             viewpoint_value: 'alice@example.com'
             max_distance: 1
         r.then (res) ->
@@ -255,7 +255,7 @@ describe 'API', ->
         r = identifi.request
           apiMethod: 'messages'
           qs:
-            viewpoint_type: 'email'
+            viewpoint_name: 'email'
             viewpoint_value: 'alice@example.com'
             max_distance: 2
         r.then (res) ->
@@ -316,11 +316,11 @@ describe 'API', ->
         r.then (res) ->
           res.length.should.equal 9
           done()
-      it 'should filter identities by attribute type', (done) ->
+      it 'should filter identities by attribute name', (done) ->
         r = identifi.request
           apiMethod: 'id'
           qs:
-            type: 'email'
+            name: 'email'
         r.then (res) ->
           res.length.should.equal 5
           done()
@@ -340,7 +340,7 @@ describe 'API', ->
         r = identifi.request
           apiMethod: 'id'
           qs:
-            type: 'identifi_node'
+            name: 'identifi_node'
         r.then (res) ->
           res.length.should.equal 0
           done()
@@ -352,7 +352,7 @@ describe 'API', ->
           apiId: 'bob@example.com'
           apiAction: 'connections'
           qs:
-            viewpoint_type: 'email'
+            viewpoint_name: 'email'
             viewpoint_value: 'alice@example.com'
         r.then (res) ->
           res.should.not.be.empty
@@ -365,7 +365,7 @@ describe 'API', ->
             apiId: 'bob@example.com'
             apiAction: 'connecting_msgs'
             qs:
-              target_type: 'name'
+              target_name: 'name'
               target_value: 'Bob the Builder'
           r.then (res) ->
             res.should.not.be.empty
@@ -394,7 +394,7 @@ describe 'API', ->
           apiId: 'bob@example.com'
           apiAction: 'stats'
           qs:
-            viewpoint_type: 'email'
+            viewpoint_name: 'email'
             viewpoint_value: 'alice@example.com'
             max_distance: 1
         r.then (res) ->
@@ -417,7 +417,7 @@ describe 'API', ->
           apiId: 'bob@example.com'
           apiAction: 'stats'
           qs:
-            viewpoint_type: 'email'
+            viewpoint_name: 'email'
             viewpoint_value: 'alice@example.com'
             max_distance: 1
         r.then (res) ->
