@@ -40,7 +40,7 @@ module.exports = function(knex) {
 
               var i;
               for (i = 0; i < message.signedData.author.length; i++) {
-                queries.push(knex('MessageIdentifiers').insert({
+                queries.push(knex('MessageAttributes').insert({
                   message_hash: message.hash,
                   type: message.signedData.author[i][0],
                   value: message.signedData.author[i][1],
@@ -48,7 +48,7 @@ module.exports = function(knex) {
                 }));
               }
               for (i = 0; i < message.signedData.recipient.length; i++) {
-                queries.push(knex('MessageIdentifiers').insert({
+                queries.push(knex('MessageAttributes').insert({
                   message_hash: message.hash,
                   type: message.signedData.recipient[i][0],
                   value: message.signedData.recipient[i][1],
@@ -56,7 +56,12 @@ module.exports = function(knex) {
                 }));
               }
               if (updateTrustIndexes) {
-                queries.push(p.updateWotIndexesByMessage(message));
+                queries.push(
+                  p.updateWotIndexesByMessage(message)
+                  .then(function() {
+                    return p.updateIdentityIndexesByMessage(message);
+                  })
+                );
               }
               return P.all(queries);
             });
@@ -107,7 +112,7 @@ module.exports = function(knex) {
       }
 
       var query = knex.select('Messages.*').from('Messages')
-        .innerJoin('MessageIdentifiers as id', 'Messages.hash', 'id.message_hash')
+        .innerJoin('MessageAttributes as id', 'Messages.hash', 'id.message_hash')
         .where(options.where)
         .orderBy(options.orderBy, options.direction)
         .limit(options.limit)
@@ -168,7 +173,7 @@ module.exports = function(knex) {
       return knex('Messages').where({ hash: messageHash }).del()
         .then(function(res) {
           messageDeleted = res;
-          return knex('MessageIdentifiers').where({ message_hash: messageHash }).del();
+          return knex('MessageAttributes').where({ message_hash: messageHash }).del();
         }).then(function(res) {
           return new P(function(resolve) { resolve(messageDeleted ? true : false); });
         });
@@ -188,21 +193,21 @@ module.exports = function(knex) {
       }
 
       if (options.searchValue) {
-        return knex.from('MessageIdentifiers').distinct('type', 'value').select()
+        return knex.from('MessageAttributes').distinct('type', 'value').select()
           .where(options.where)
           .where('value', 'like', '%' + options.searchValue + '%')
           .orderBy(options.orderBy, options.direction)
           .limit(options.limit)
           .offset(options.offset);
       }
-      return knex.from('MessageIdentifiers').distinct('type', 'value').select()
+      return knex.from('MessageAttributes').distinct('type', 'value').select()
         .where(options.where)
         .orderBy(options.orderBy, options.direction)
         .limit(options.limit)
         .offset(options.offset);
     },
 
-    getConnectedIdentifiers: function(options) {
+    getConnectedAttributes: function(options) {
       var sql = 'identity_id IN (SELECT identity_id FROM Identities WHERE type = ? AND value = ? AND viewpoint_type = ? AND viewpoint_value = ?)';
       var countBefore;
       options.viewpoint = options.viewpoint || ['', ''];
@@ -225,8 +230,8 @@ module.exports = function(knex) {
           sql += "1 AS Confirmations, "; // TODO fix
           sql += "0 AS Refutations ";
           sql += "FROM Messages AS p ";
-          sql += "INNER JOIN MessageIdentifiers AS id1 ON p.hash = id1.message_hash ";
-          sql += "INNER JOIN MessageIdentifiers AS id2 ON p.hash = id2.message_hash AND id2.is_recipient = id1.is_recipient AND (id1.type != id2.type OR id1.value != id2.value) ";
+          sql += "INNER JOIN MessageAttributes AS id1 ON p.hash = id1.message_hash ";
+          sql += "INNER JOIN MessageAttributes AS id2 ON p.hash = id2.message_hash AND id2.is_recipient = id1.is_recipient AND (id1.type != id2.type OR id1.value != id2.value) ";
 
           // AddMessageFilterSQL(sql, viewpoint, maxDistance, msgType);
 
@@ -240,15 +245,15 @@ module.exports = function(knex) {
           sql += "1 AS Confirmations, "; // TODO fix
           sql += "0 AS Refutations ";
           sql += "FROM Messages AS p ";
-          sql += "JOIN MessageIdentifiers AS id1 ON p.hash = id1.message_hash AND id1.is_recipient = 1 ";
-          sql += "JOIN UniqueIdentifierTypes AS tpp1 ON tpp1.type = id1.type ";
-          sql += "JOIN MessageIdentifiers AS id2 ON p.hash = id2.message_hash AND id2.is_recipient = 1 AND (id1.type != id2.type OR id1.value != id2.value) ";
+          sql += "JOIN MessageAttributes AS id1 ON p.hash = id1.message_hash AND id1.is_recipient = 1 ";
+          sql += "JOIN UniqueAttributeTypes AS tpp1 ON tpp1.type = id1.type ";
+          sql += "JOIN MessageAttributes AS id2 ON p.hash = id2.message_hash AND id2.is_recipient = 1 AND (id1.type != id2.type OR id1.value != id2.value) ";
           sql += "JOIN transitive_closure AS tc ON tc.confirmations > tc.refutations AND id1.type = tc.id2type AND id1.value = tc.id2val ";
-          sql += "INNER JOIN UniqueIdentifierTypes AS tpp2 ON tpp2.type = tc.id1type ";
+          sql += "INNER JOIN UniqueAttributeTypes AS tpp2 ON tpp2.type = tc.id1type ";
 
           // AddMessageFilterSQL(sql, viewpoint, maxDistance, msgType);
 
-          sql += "WHERE p.type IN ('confirm_connection','refute_connections') AND tc.distance < 10 ";
+          sql += "WHERE p.type IN ('verify_identity','refute_identitys') AND tc.distance < 10 ";
           // AddMessageFilterSQLWhere(sql, viewpoint);
           sql += "AND tc.path_string NOT LIKE printf('%%%s:%s:%%',replace(id2.type,':','::'),replace(id2.value,':','::'))";
           sql += ") ";
@@ -257,8 +262,8 @@ module.exports = function(knex) {
           sql += "SELECT " + identityID + ", id2type, id2val, :viewpointType, :viewpointID, 1, 0 FROM transitive_closure ";
           sql += "GROUP BY id2type, id2val ";
           sql += "UNION SELECT " + identityID + ", :type, :id, :viewpointType, :viewpointID, 1, 0 ";
-          sql += "FROM MessageIdentifiers AS mi ";
-          sql += "INNER JOIN UniqueIdentifierTypes AS ui ON ui.type = mi.type ";
+          sql += "FROM MessageAttributes AS mi ";
+          sql += "INNER JOIN UniqueAttributeTypes AS ui ON ui.type = mi.type ";
           sql += "WHERE mi.type = :type AND mi.value = :id  ";
 
           var sqlValues = {
@@ -316,8 +321,8 @@ module.exports = function(knex) {
 
     getConnectingMessages: function(options) {
       return knex.select('Messages.*').from('Messages')
-        .innerJoin('MessageIdentifiers as id1', 'Messages.hash', 'id1.message_hash')
-        .innerJoin('MessageIdentifiers as id2', 'id1.message_hash', 'id2.message_hash')
+        .innerJoin('MessageAttributes as id1', 'Messages.hash', 'id1.message_hash')
+        .innerJoin('MessageAttributes as id2', 'id1.message_hash', 'id2.message_hash')
         .where({
           'id1.type': options.id1[0],
           'id1.value': options.id1[1],
@@ -330,7 +335,7 @@ module.exports = function(knex) {
 
     /*
       1. build a web of trust consisting of keyIDs only
-      2. build a web of trust consisting of all kinds of unique identifiers, sourcing from messages
+      2. build a web of trust consisting of all kinds of unique attributes, sourcing from messages
           signed by keyIDs in our web of trust
     */
     generateWebOfTrustIndex: function(id, maxDepth, maintain, trustedKeyID) {
@@ -343,17 +348,17 @@ module.exports = function(knex) {
         sql += "SELECT id1.type, id1.value, id2.type, id2.value, 1 AS distance, ";
         sql += "printf('%s:%s:%s:%s:',replace(id1.type,':','::'),replace(id1.value,':','::'),replace(id2.type,':','::'),replace(id2.value,':','::')) AS path_string ";
         sql += "FROM Messages AS m ";
-        sql += "INNER JOIN MessageIdentifiers AS id1 ON m.hash = id1.message_hash AND id1.is_recipient = 0 ";
+        sql += "INNER JOIN MessageAttributes AS id1 ON m.hash = id1.message_hash AND id1.is_recipient = 0 ";
         if (betweenKeyIDsOnly) {
           sql += "AND id1.type = 'keyID' ";
         } else {
-          sql += "INNER JOIN UniqueIdentifierTypes AS uidt1 ON uidt1.type = id1.type ";
+          sql += "INNER JOIN UniqueAttributeTypes AS uidt1 ON uidt1.type = id1.type ";
         }
-        sql += "INNER JOIN MessageIdentifiers AS id2 ON m.hash = id2.message_hash AND (id1.type != id2.type OR id1.value != id2.value) ";
+        sql += "INNER JOIN MessageAttributes AS id2 ON m.hash = id2.message_hash AND (id1.type != id2.type OR id1.value != id2.value) ";
         if (betweenKeyIDsOnly) {
           sql += "AND id2.type = 'keyID' AND id2.is_recipient = 1 ";
         } else {
-          sql += "INNER JOIN UniqueIdentifierTypes AS uidt2 ON uidt2.type = id2.type ";
+          sql += "INNER JOIN UniqueAttributeTypes AS uidt2 ON uidt2.type = id2.type ";
           /* Only accept messages whose origin is verified by trusted keyID */
           sql += "LEFT JOIN TrustDistances AS td ON ";
           sql += "td.start_id_type = 'keyID' AND td.start_id_value = :trustedKeyID AND ";
@@ -369,13 +374,13 @@ module.exports = function(knex) {
         sql += "SELECT tc.id1type, tc.id1val, id2.type, id2.value, tc.distance + 1, ";
         sql += "printf('%s%s:%s:',tc.path_string,replace(id2.type,':','::'),replace(id2.value,':','::')) AS path_string ";
         sql += "FROM Messages AS m ";
-        sql += "INNER JOIN MessageIdentifiers AS id1 ON m.hash = id1.message_hash AND id1.is_recipient = 0 ";
-        sql += "INNER JOIN UniqueIdentifierTypes AS uidt1 ON uidt1.type = id1.type ";
-        sql += "INNER JOIN MessageIdentifiers AS id2 ON m.hash = id2.message_hash AND (id1.type != id2.type OR id1.value != id2.value) ";
+        sql += "INNER JOIN MessageAttributes AS id1 ON m.hash = id1.message_hash AND id1.is_recipient = 0 ";
+        sql += "INNER JOIN UniqueAttributeTypes AS uidt1 ON uidt1.type = id1.type ";
+        sql += "INNER JOIN MessageAttributes AS id2 ON m.hash = id2.message_hash AND (id1.type != id2.type OR id1.value != id2.value) ";
         if (betweenKeyIDsOnly) {
           sql += "AND id2.type = 'keyID' AND id2.is_recipient = 1 ";
         } else {
-          sql += "INNER JOIN UniqueIdentifierTypes AS uidt2 ON uidt2.type = id2.type ";
+          sql += "INNER JOIN UniqueAttributeTypes AS uidt2 ON uidt2.type = id2.type ";
           /* Only accept messages whose origin is verified by trusted keyID */
           sql += "LEFT JOIN TrustDistances AS td ON ";
           sql += "td.start_id_type = 'keyID' AND td.start_id_value = :trustedKeyID AND ";
@@ -395,7 +400,7 @@ module.exports = function(knex) {
         allIdsSql = buildSql(false);
 
       if (maintain) {
-        this.addTrustIndexedIdentifier(id, maxDepth).return();
+        this.addTrustIndexedAttribute(id, maxDepth).return();
       }
       return knex('TrustDistances')
         .where({ start_id_type: id[0], start_id_value: id[1] }).del()
@@ -411,27 +416,27 @@ module.exports = function(knex) {
         });
     },
 
-    addTrustIndexedIdentifier: function(id, depth) {
-      return knex('TrustIndexedIdentifiers').where({ type: id[0], value: id[1] }).count('* as count')
+    addTrustIndexedAttribute: function(id, depth) {
+      return knex('TrustIndexedAttributes').where({ type: id[0], value: id[1] }).count('* as count')
       .then(function(res) {
         if (res[0].count) {
-          return knex('TrustIndexedIdentifiers').where({ type: id[0], value: id[1] }).update({ depth: depth });
+          return knex('TrustIndexedAttributes').where({ type: id[0], value: id[1] }).update({ depth: depth });
         } else {
-          return knex('TrustIndexedIdentifiers').insert({ type: id[0], value: id[1], depth: depth });
+          return knex('TrustIndexedAttributes').insert({ type: id[0], value: id[1], depth: depth });
         }
       });
     },
 
     getWebOfTrustIndexes: function() {
-      return knex('TrustIndexedIdentifiers').select('*');
+      return knex('TrustIndexedAttributes').select('*');
     },
 
     identitySearch: function(query, limit, offset, viewpoint) {
       viewpoint = viewpoint || ['', ''];
       var useViewpoint = viewpoint[0] && viewpoint[1];
 
-      var sql = "SELECT IFNULL(OtherIdentifiers.type,idtype) AS type, IFNULL(OtherIdentifiers.value,idvalue) AS value, MAX(iid) AS iid FROM (";
-      sql += "SELECT DISTINCT mi.type AS idtype, mi.value AS idvalue, -1 AS iid FROM MessageIdentifiers AS mi ";
+      var sql = "SELECT IFNULL(OtherAttributes.type,idtype) AS type, IFNULL(OtherAttributes.value,idvalue) AS value, MAX(iid) AS iid FROM (";
+      sql += "SELECT DISTINCT mi.type AS idtype, mi.value AS idvalue, -1 AS iid FROM MessageAttributes AS mi ";
       sql += "WHERE ";
       sql += "mi.value LIKE '%' || :query || '%' ";
 
@@ -456,17 +461,17 @@ module.exports = function(knex) {
         sql += "AND tp.start_type = :viewType AND tp.start_value = :viewID ";
       }
 
-      sql += "LEFT JOIN UniqueIdentifierTypes AS UID ON UID.type = idtype ";
-      sql += "LEFT JOIN Identities AS OtherIdentifiers ON OtherIdentifiers.identity_id = iid AND OtherIdentifiers.confirmations >= OtherIdentifiers.refutations ";
+      sql += "LEFT JOIN UniqueAttributeTypes AS UID ON UID.type = idtype ";
+      sql += "LEFT JOIN Identities AS OtherAttributes ON OtherAttributes.identity_id = iid AND OtherAttributes.confirmations >= OtherAttributes.refutations ";
 
       if (useViewpoint) {
-        sql += "AND OtherIdentifiers.viewpoint_type = :viewType AND OtherIdentifiers.viewpoint_value = :viewID ";
+        sql += "AND OtherAttributes.viewpoint_type = :viewType AND OtherAttributes.viewpoint_value = :viewID ";
       }
 
       //sql += "LEFT JOIN CachedNames AS cn ON cn.type = type AND cn.value = id ";
       //sql += "LEFT JOIN CachedEmails AS ce ON ce.type = type AND ce.value = id ";
 
-      sql += "GROUP BY IFNULL(OtherIdentifiers.type,idtype), IFNULL(OtherIdentifiers.value,idvalue) ";
+      sql += "GROUP BY IFNULL(OtherAttributes.type,idtype), IFNULL(OtherAttributes.value,idvalue) ";
 
       if (useViewpoint) {
         sql += "ORDER BY iid >= 0 DESC, IFNULL(tp.Distance,1000) ASC, CASE WHEN idvalue LIKE :query || '%' THEN 0 ELSE 1 END, UID.type IS NOT NULL DESC, idvalue ASC ";
@@ -483,10 +488,10 @@ module.exports = function(knex) {
       sql += "SELECT id1.type, id1.value, id2.type, id2.value, 1 AS distance, ";
       sql += "printf('%s:%s:%s:%s:',replace(id1.type,':','::'),replace(id1.value,':','::'),replace(id2.type,':','::'),replace(id2.value,':','::')) AS path_string ";
       sql += "FROM Messages AS m ";
-      sql += "INNER JOIN MessageIdentifiers AS id1 ON m.Hash = id1.message_hash AND id1.is_recipient = 0 ";
-      sql += "INNER JOIN UniqueIdentifierTypes AS tpp1 ON tpp1.type = id1.type ";
-      sql += "INNER JOIN MessageIdentifiers AS id2 ON m.Hash = id2.message_hash AND (id1.type != id2.type OR id1.value != id2.value) ";
-      sql += "INNER JOIN UniqueIdentifierTypes AS tpp2 ON tpp2.type = id2.type ";
+      sql += "INNER JOIN MessageAttributes AS id1 ON m.Hash = id1.message_hash AND id1.is_recipient = 0 ";
+      sql += "INNER JOIN UniqueAttributeTypes AS tpp1 ON tpp1.type = id1.type ";
+      sql += "INNER JOIN MessageAttributes AS id2 ON m.Hash = id2.message_hash AND (id1.type != id2.type OR id1.value != id2.value) ";
+      sql += "INNER JOIN UniqueAttributeTypes AS tpp2 ON tpp2.type = id2.type ";
       sql += "WHERE m.is_latest AND m.Rating > (m.min_rating + m.max_rating) / 2 AND id1.type = ? AND id1.value = ? ";
 
       sql += "UNION ALL ";
@@ -494,10 +499,10 @@ module.exports = function(knex) {
       sql += "SELECT tc.id1type, tc.id1val, id2.type, id2.value, tc.distance + 1, ";
       sql += "printf('%s%s:%s:',tc.path_string,replace(id2.type,':','::'),replace(id2.value,':','::')) AS path_string ";
       sql += "FROM Messages AS m ";
-      sql += "INNER JOIN MessageIdentifiers AS id1 ON m.Hash = id1.message_hash AND id1.is_recipient = 0 ";
-      sql += "INNER JOIN UniqueIdentifierTypes AS tpp1 ON tpp1.type = id1.type ";
-      sql += "INNER JOIN MessageIdentifiers AS id2 ON m.Hash = id2.message_hash AND (id1.type != id2.type OR id1.value != id2.value) ";
-      sql += "INNER JOIN UniqueIdentifierTypes AS tpp2 ON tpp2.type = id2.type ";
+      sql += "INNER JOIN MessageAttributes AS id1 ON m.Hash = id1.message_hash AND id1.is_recipient = 0 ";
+      sql += "INNER JOIN UniqueAttributeTypes AS tpp1 ON tpp1.type = id1.type ";
+      sql += "INNER JOIN MessageAttributes AS id2 ON m.Hash = id2.message_hash AND (id1.type != id2.type OR id1.value != id2.value) ";
+      sql += "INNER JOIN UniqueAttributeTypes AS tpp2 ON tpp2.type = id2.type ";
       sql += "JOIN transitive_closure AS tc ON id1.type = tc.id2type AND id1.value = tc.id2val ";
       sql += "WHERE m.is_latest AND m.Rating > (m.min_rating + m.max_rating) / 2 AND tc.distance < ? AND tc.path_string NOT LIKE printf('%%%s:%s:%%',replace(id2.type,':','::'),replace(id2.value,':','::')) ";
       sql += ") ";
@@ -532,8 +537,8 @@ module.exports = function(knex) {
       sql += "MIN(m.timestamp) AS firstSeen ";
 
       var query = knex('Messages as m')
-        .innerJoin('MessageIdentifiers AS id', 'id.message_hash', 'm.hash')
-        .innerJoin('UniqueIdentifierTypes as uit', 'uit.type', 'id.type')
+        .innerJoin('MessageAttributes AS id', 'id.message_hash', 'm.hash')
+        .innerJoin('UniqueAttributeTypes as uit', 'uit.type', 'id.type')
         .select(knex.raw(sql, {
           viewpointType: options.viewpoint ? options.viewpoint[0] : null,
           viewpointID: options.viewpoint ? options.viewpoint[1] : null
@@ -631,7 +636,7 @@ module.exports = function(knex) {
             var messagesToDelete = knex('Messages').select('hash').limit(nMessagesToDelete).orderBy('priority', 'asc').orderBy('created', 'asc');
             return knex('Messages').whereIn('hash', messagesToDelete).del()
               .then(function(res) {
-                return knex('MessageIdentifiers').whereIn('message_hash', messagesToDelete).del();
+                return knex('MessageAttributes').whereIn('message_hash', messagesToDelete).del();
               });
           }
         });
@@ -646,7 +651,7 @@ module.exports = function(knex) {
       In addition to trust distance, the amount and strength of positive and
       negative ratings and their distance could be taken into account.
 
-      Messages authored or received by identifiers of type keyID have slightly
+      Messages authored or received by attributes of type keyID have slightly
       higher priority.
     */
     getPriority: function(message) {
@@ -723,13 +728,25 @@ module.exports = function(knex) {
       });
     },
 
+    updateIdentityIndexesByMessage: function(message, trustedKeyID) {
+      if (message.signedData.type !== 'verify_identity') {
+        return;
+      }
+
+      // Get TrustIndexedAttributes as t
+      // Return unless message signer and author are trusted by t
+      // Find existing or new identity_id for message recipient UniqueAttributeTypes
+      // If the attribute exists on the identity_id, increase confirmations or refutations
+      // If the attribute doesn't exist, add it with 1 confirmation or refutation
+    },
+
     updateWotIndexesByMessage: function(message, trustedKeyID) {
       var queries = [];
 
       function makeSubquery(a, r) {
         return knex
-        .from('TrustIndexedIdentifiers AS viewpoint')
-        .innerJoin('UniqueIdentifierTypes as uit', 'uit.type', knex.raw('?', r[0]))
+        .from('TrustIndexedAttributes AS viewpoint')
+        .innerJoin('UniqueAttributeTypes as uit', 'uit.type', knex.raw('?', r[0]))
         .leftJoin('TrustDistances AS td', function() {
           this.on('td.start_id_type', '=', 'viewpoint.type')
           .andOn('td.start_id_value', '=', 'viewpoint.value')
@@ -779,8 +796,8 @@ module.exports = function(knex) {
     config = conf;
     return schema.init(knex, config)
       .then(function() {
-        // TODO: if myId is changed, the old one should be removed from TrustIndexedIdentifiers
-        return pub.addTrustIndexedIdentifier(myId, myTrustIndexDepth);
+        // TODO: if myId is changed, the old one should be removed from TrustIndexedAttributes
+        return pub.addTrustIndexedAttribute(myId, myTrustIndexDepth);
       })
       .then(function() {
         return pub.checkDefaultTrustList();

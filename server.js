@@ -274,7 +274,7 @@ router.get('/id/:id_type/:id_value/connections', function(req, res) {
   if (req.query.type) {
     options.searchedTypes = [req.query.type];
   }
-  db.getConnectedIdentifiers(options).then(function(dbRes) {
+  db.getConnectedAttributes(options).then(function(dbRes) {
     res.json(dbRes);
   }).catch(function(err) { handleError(err, req, res); });
 });

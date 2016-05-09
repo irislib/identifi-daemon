@@ -1,8 +1,8 @@
 /*jshint unused:false*/
 'use strict';
 
-function addDefaultUniqueIdentifierTypes(db) {
-  return db.table('UniqueIdentifierTypes').insert(
+function addDefaultUniqueAttributeTypes(db) {
+  return db.table('UniqueAttributeTypes').insert(
     [
       { type: 'email' },
       { type: 'account' },
@@ -33,7 +33,7 @@ function catcher(e) {
 }
 
 var init = function(db, config) {
-  return db.schema.createTableIfNotExists('UniqueIdentifierTypes', function(t) {
+  return db.schema.createTableIfNotExists('UniqueAttributeTypes', function(t) {
     t.string('type').primary();
   })
 
@@ -52,7 +52,7 @@ var init = function(db, config) {
     t.string('signer_keyid');
   })
 
-  .createTableIfNotExists('MessageIdentifiers', function(t) {
+  .createTableIfNotExists('MessageAttributes', function(t) {
     t.string('message_hash').references('Messages.hash');
     t.string('type').notNullable();
     t.string('value').notNullable();
@@ -73,14 +73,14 @@ var init = function(db, config) {
     t.integer('identity_id').unsigned();
     t.string('type').notNullable();
     t.string('value').notNullable();
-    t.string('viewpoint_type');
-    t.string('viewpoint_value');
+    t.string('viewpoint_type').notNullable();
+    t.string('viewpoint_value').notNullable();
     t.integer('confirmations').unsigned();
     t.integer('refutations').unsigned();
     t.primary(['type', 'value', 'viewpoint_type', 'viewpoint_value']);
   })
 
-  .createTableIfNotExists('TrustIndexedIdentifiers', function(t) {
+  .createTableIfNotExists('TrustIndexedAttributes', function(t) {
     t.string('type');
     t.string('value');
     t.integer('depth').unsigned().notNullable();
@@ -94,7 +94,7 @@ var init = function(db, config) {
   })
 
   .then(function() {
-    return addDefaultUniqueIdentifierTypes(db).catch(catcher);
+    return addDefaultUniqueAttributeTypes(db).catch(catcher);
   })
 
   .then(function() {

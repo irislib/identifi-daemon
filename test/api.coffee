@@ -107,7 +107,7 @@ describe 'API', ->
         m = message.create
           author: [['email', 'alice@example.com']]
           recipient: [['email', 'bob@example.com'], ['name', 'Bob the Builder']]
-          type: 'confirm_connection'
+          type: 'verify_identity'
         message.sign(m, privKeyPEM, hex)
         r = identifi.request
           method: 'POST'
@@ -117,7 +117,7 @@ describe 'API', ->
         m = message.create
           author: [['email', 'bob@example.com']]
           recipient: [['email', 'charles@example.com'], ['url', 'http://twitter.com/charles']]
-          type: 'confirm_connection'
+          type: 'verify_identity'
         message.sign(m, privKeyPEM, hex)
         r = identifi.request
           method: 'POST'
@@ -142,7 +142,7 @@ describe 'API', ->
         privMsg = message.create
           author: [['email', 'bob@example.com']]
           recipient: [['email', 'charles@example.com'], ['url', 'http://twitter.com/charles']]
-          type: 'confirm_connection'
+          type: 'verify_identity'
           public: false
         message.sign(privMsg, privKeyPEM, hex)
         identifi.request
@@ -291,7 +291,7 @@ describe 'API', ->
               apiMethod: 'messages'
               apiId: m.hash
         r.should.be.rejected
-  describe 'identifiers', ->
+  describe 'attributes', ->
       it 'should return an empty set if an identity was not found', (done) ->
         r = identifi.request
               apiMethod: 'id'
@@ -316,7 +316,7 @@ describe 'API', ->
         r.then (res) ->
           res.length.should.equal 9
           done()
-      it 'should filter identities by identifier type', (done) ->
+      it 'should filter identities by attribute type', (done) ->
         r = identifi.request
           apiMethod: 'id'
           qs:
@@ -345,7 +345,7 @@ describe 'API', ->
           res.length.should.equal 0
           done()
     describe 'connections', ->
-      it 'should return an identity, i.e. set of identifiers connected to the query param', (done) ->
+      it 'should return an identity, i.e. set of attributes connected to the query param', (done) ->
         r = identifi.request
           apiMethod: 'id'
           apiIdType: 'email'
@@ -371,7 +371,7 @@ describe 'API', ->
             res.should.not.be.empty
             done()
     describe 'stats', ->
-      it 'should return the stats of an identifier, no viewpoint', (done) ->
+      it 'should return the stats of an attribute, no viewpoint', (done) ->
         r = identifi.request
           apiMethod: 'id'
           apiIdType: 'email'
@@ -387,7 +387,7 @@ describe 'API', ->
           res[0].receivedNegative.should.equal 2
           res[0].firstSeen.should.not.be.empty
           done()
-      it 'should return the stats of an identifier, using a viewpoint & max_distance 1', (done) ->
+      it 'should return the stats of an attribute, using a viewpoint & max_distance 1', (done) ->
         r = identifi.request
           apiMethod: 'id'
           apiIdType: 'email'
@@ -410,7 +410,7 @@ describe 'API', ->
           done()
         .catch (e) ->
           done(e)
-      it 'should return the stats of an identifier, using a viewpoint & max_distance 2', (done) ->
+      it 'should return the stats of an attribute, using a viewpoint & max_distance 2', (done) ->
         r = identifi.request
           apiMethod: 'id'
           apiIdType: 'email'
@@ -434,7 +434,7 @@ describe 'API', ->
         .catch (e) ->
           done(e)
     describe 'sent', ->
-      it 'should return messages sent by an identifier / identity', (done) ->
+      it 'should return messages sent by an attribute / identity', (done) ->
         r = identifi.request
           apiMethod: 'id'
           apiIdType: 'email'
@@ -444,7 +444,7 @@ describe 'API', ->
           res.should.not.be.empty
           done()
     describe 'received', ->
-      it 'should return messages received by an identifier / identity', (done) ->
+      it 'should return messages received by an attribute / identity', (done) ->
         r = identifi.request
           apiMethod: 'id'
           apiIdType: 'email'
@@ -454,7 +454,7 @@ describe 'API', ->
           res.should.not.be.empty
           done()
     describe 'getname', ->
-      it 'should return a cached common name for the identifier'
+      it 'should return a cached common name for the attribute'
   describe 'websocket', ->
     it 'should be connected', ->
       socket.connected.should.be.true

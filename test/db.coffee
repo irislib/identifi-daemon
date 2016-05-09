@@ -80,7 +80,7 @@ describe 'Database', ->
       db.getMessages({ recipient: ['email', 'bob@example.com'] }).then (res) ->
         res.length.should.equal 2
         done()
-    it 'should find a saved identifier', (done) ->
+    it 'should find a saved attribute', (done) ->
       db.getIdentities({ searchValue: 'bob' }).then (res) ->
         res.length.should.equal 1
         res[0].type.should.equal 'email'
@@ -91,14 +91,14 @@ describe 'Database', ->
       message = Message.create
         author: [['email', 'alice@example.com']]
         recipient: [['email', 'bob@example.com'], ['url', 'http://www.example.com/bob']]
-        type: 'confirm_connection'
+        type: 'verify_identity'
       Message.sign message, privKey, pubKey
       db.saveMessage(message).should.eventually.notify done
     it 'should save another connection', (done) ->
       message = Message.create
         author: [['email', 'alice@example.com']]
         recipient: [['email', 'bob@example.com'], ['tel', '+3581234567']]
-        type: 'confirm_connection'
+        type: 'verify_identity'
       Message.sign message, privKey, pubKey
       db.saveMessage(message).should.eventually.notify done
     it 'should return connecting messages', (done) ->
@@ -109,14 +109,14 @@ describe 'Database', ->
         res.length.should.equal 1
         done()
     it 'should return connections', (done) ->
-      db.getConnectedIdentifiers({
+      db.getConnectedAttributes({
         id: ['email','bob@example.com']
         viewpoint: ['email', 'alice@example.com']
       }).then (res) ->
         res.length.should.equal 2
         done()
     it 'should return connections of type url', (done) ->
-      db.getConnectedIdentifiers({
+      db.getConnectedAttributes({
         id: ['email','bob@example.com']
         viewpoint: ['email', 'alice@example.com']
         searchedTypes: ['url']
@@ -124,7 +124,7 @@ describe 'Database', ->
         res.length.should.equal 1
         done()
   describe 'trust functions', ->
-    it 'should have 1 trust indexed identifier', (done) ->
+    it 'should have 1 trust indexed attribute', (done) ->
       db.getWebOfTrustIndexes().then (res) ->
         res.length.should.equal 1
         res[0].type.should.equal 'keyID'
@@ -134,7 +134,7 @@ describe 'Database', ->
       db.generateWebOfTrustIndex(['email', 'alice@example.com'], 3, true, key.hash).then (res) ->
         res[0].wot_size.should.equal 2
         done()
-    it 'should have 2 trust indexed identifiers', (done) ->
+    it 'should have 2 trust indexed attributes', (done) ->
       db.getWebOfTrustIndexes().then (res) ->
         res.length.should.equal 2
         res[1].type.should.equal 'email'
@@ -162,11 +162,11 @@ describe 'Database', ->
         res.length.should.equal 1
         done() ###
   describe 'identity search', ->
-    it 'should find 7 identifiers matching "a"', (done) ->
+    it 'should find 7 attributes matching "a"', (done) ->
       db.getIdentities({ searchValue: 'a' }).then (res) ->
         res.length.should.equal 7
         done()
-    it 'should find 1 identifier matching "alice"', (done) ->
+    it 'should find 1 attribute matching "alice"', (done) ->
       db.getIdentities({ searchValue: 'alice' }).then (res) ->
         res.length.should.equal 1
         done()
@@ -290,7 +290,7 @@ describe 'Database', ->
           res[0].priority.should.equal 15
           done()
   describe 'stats', ->
-    it 'should return the stats of an identifier', (done) ->
+    it 'should return the stats of an attribute', (done) ->
       db.getStats(['email', 'bob@example.com'], ['email', 'alice@example.com']).then (res) ->
         res.length.should.equal 1
         res[0].sentPositive.should.equal 1
