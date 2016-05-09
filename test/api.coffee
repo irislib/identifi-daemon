@@ -162,7 +162,7 @@ describe 'API', ->
     describe 'trustpaths', ->
       it 'should return a trustpath from alice to bob', (done) ->
         r = identifi.request
-          apiMethod: 'id'
+          apiMethod: 'identities'
           apiIdType: 'email'
           apiId: 'alice@example.com'
           apiAction: 'trustpaths'
@@ -175,7 +175,7 @@ describe 'API', ->
           done()
       it 'should return a trustpath from alice to david', (done) ->
         r = identifi.request
-          apiMethod: 'id'
+          apiMethod: 'identities'
           apiIdType: 'email'
           apiId: 'alice@example.com'
           apiAction: 'trustpaths'
@@ -188,7 +188,7 @@ describe 'API', ->
           done()
       it 'should not generate a web of trust without auth', ->
         r = identifi.request
-          apiMethod: 'id'
+          apiMethod: 'identities'
           apiIdType: 'email'
           apiId: 'alice@example.com'
           apiAction: 'generatewotindex'
@@ -197,7 +197,7 @@ describe 'API', ->
         r.should.be.rejected
       it 'should generate a web of trust index', (done) ->
         r = identifi.request
-          apiMethod: 'id'
+          apiMethod: 'identities'
           apiIdType: 'email'
           apiId: 'alice@example.com'
           apiAction: 'generatewotindex'
@@ -294,7 +294,7 @@ describe 'API', ->
   describe 'attributes', ->
       it 'should return an empty set if an identity was not found', (done) ->
         r = identifi.request
-              apiMethod: 'id'
+              apiMethod: 'identities'
               apiId: 'bob@example.com'
               apiIdType: 'nope'
         r.then (res) ->
@@ -303,7 +303,7 @@ describe 'API', ->
     describe 'retrieve', ->
       it 'should return an identity', (done) ->
         r = identifi.request
-          apiMethod: 'id'
+          apiMethod: 'identities'
           apiId: 'bob@example.com'
           apiIdType: 'email'
         r.then (res) ->
@@ -312,21 +312,21 @@ describe 'API', ->
     describe 'list', ->
       it 'should return identities', (done) ->
         r = identifi.request
-          apiMethod: 'id'
+          apiMethod: 'identities'
         r.then (res) ->
           res.length.should.equal 9
           done()
       it 'should filter identities by attribute name', (done) ->
         r = identifi.request
-          apiMethod: 'id'
+          apiMethod: 'identities'
           qs:
-            name: 'email'
+            attr_name: 'email'
         r.then (res) ->
           res.length.should.equal 5
           done()
       it 'should filter by search query', (done) ->
         r = identifi.request
-          apiMethod: 'id'
+          apiMethod: 'identities'
           qs:
             search_value: 'i'
         r.then (res) ->
@@ -338,19 +338,19 @@ describe 'API', ->
           done()
       it 'should return a list of peers as identifi identities', (done) ->
         r = identifi.request
-          apiMethod: 'id'
+          apiMethod: 'identities'
           qs:
-            name: 'identifi_node'
+            attr_name: 'identifi_node'
         r.then (res) ->
           res.length.should.equal 0
           done()
-    describe 'connections', ->
+    describe 'verifications', ->
       it 'should return an identity, i.e. set of attributes connected to the query param', (done) ->
         r = identifi.request
-          apiMethod: 'id'
+          apiMethod: 'identities'
           apiIdType: 'email'
           apiId: 'bob@example.com'
-          apiAction: 'connections'
+          apiAction: 'verifications'
           qs:
             viewpoint_name: 'email'
             viewpoint_value: 'alice@example.com'
@@ -360,7 +360,7 @@ describe 'API', ->
     describe 'connecting_msgs', ->
         it 'should return messages that connect id1 and id2 to the same identity', (done) ->
           r = identifi.request
-            apiMethod: 'id'
+            apiMethod: 'identities'
             apiIdType: 'email'
             apiId: 'bob@example.com'
             apiAction: 'connecting_msgs'
@@ -373,7 +373,7 @@ describe 'API', ->
     describe 'stats', ->
       it 'should return the stats of an attribute, no viewpoint', (done) ->
         r = identifi.request
-          apiMethod: 'id'
+          apiMethod: 'identities'
           apiIdType: 'email'
           apiId: 'bob@example.com'
           apiAction: 'stats'
@@ -389,7 +389,7 @@ describe 'API', ->
           done()
       it 'should return the stats of an attribute, using a viewpoint & max_distance 1', (done) ->
         r = identifi.request
-          apiMethod: 'id'
+          apiMethod: 'identities'
           apiIdType: 'email'
           apiId: 'bob@example.com'
           apiAction: 'stats'
@@ -412,7 +412,7 @@ describe 'API', ->
           done(e)
       it 'should return the stats of an attribute, using a viewpoint & max_distance 2', (done) ->
         r = identifi.request
-          apiMethod: 'id'
+          apiMethod: 'identities'
           apiIdType: 'email'
           apiId: 'bob@example.com'
           apiAction: 'stats'
@@ -436,7 +436,7 @@ describe 'API', ->
     describe 'sent', ->
       it 'should return messages sent by an attribute / identity', (done) ->
         r = identifi.request
-          apiMethod: 'id'
+          apiMethod: 'identities'
           apiIdType: 'email'
           apiId: 'bob@example.com'
           apiAction: 'sent'
@@ -446,7 +446,7 @@ describe 'API', ->
     describe 'received', ->
       it 'should return messages received by an attribute / identity', (done) ->
         r = identifi.request
-          apiMethod: 'id'
+          apiMethod: 'identities'
           apiIdType: 'email'
           apiId: 'bob@example.com'
           apiAction: 'received'

@@ -33,7 +33,7 @@
     "daemonize2": "^0.4.2",
     "express": "^4.12.3",
     "express-jwt": "^3.3.0",
-    "identifi-lib": "0.0.17",
+    "identifi-lib": "0.0.18",
     "jws": "^3.0.0",
     "knex": "^0.10.0",
     "moment": "^2.10.2",

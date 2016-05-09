@@ -1,8 +1,8 @@
 /*jshint unused:false*/
 'use strict';
 
-function addDefaultUniqueAttributes(db) {
-  return db.table('UniqueAttributes').insert(
+function addDefaultIdentifierAttributes(db) {
+  return db.table('IdentifierAttributes').insert(
     [
       { name: 'email' },
       { name: 'account' },
@@ -33,7 +33,7 @@ function catcher(e) {
 }
 
 var init = function(db, config) {
-  return db.schema.createTableIfNotExists('UniqueAttributes', function(t) {
+  return db.schema.createTableIfNotExists('IdentifierAttributes', function(t) {
     t.string('name').primary();
   })
 
@@ -94,7 +94,7 @@ var init = function(db, config) {
   })
 
   .then(function() {
-    return addDefaultUniqueAttributes(db).catch(catcher);
+    return addDefaultIdentifierAttributes(db).catch(catcher);
   })
 
   .then(function() {

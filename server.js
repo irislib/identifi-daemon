@@ -204,11 +204,11 @@ router.route('/messages/:hash')
 
 
 
-router.get('/id', function(req, res) {
+router.get('/identities', function(req, res) {
     var options = {
       where: {}
     };
-    if (req.query.name)             { options.where.name = req.query.name; }
+    if (req.query.attr_name)             { options.where.name = req.query.attr_name; }
     if (req.query.search_value)     { options.searchValue = req.query.search_value; }
     if (req.query.order_by)         { options.orderBy = req.query.order_by; }
     if (req.query.direction && (req.query.direction === 'asc' || req.query.direction === 'desc'))
@@ -222,15 +222,15 @@ router.get('/id', function(req, res) {
 
 
 
-router.get('/id/:name/:value', function(req, res) {
-  db.getIdentityAttributes({ where: { name: req.params.name, value: req.params.value } }).then(function(dbRes) {
+router.get('/identities/:attr_name/:attr_value', function(req, res) {
+  db.getIdentityAttributes({ where: { name: req.params.attr_name, value: req.params.attr_value } }).then(function(dbRes) {
     res.json(dbRes);
   }).catch(function(err) { handleError(err, req, res); });
 });
 
 
 
-router.get('/id/:attr_name/:attr_value/stats', function(req, res) {
+router.get('/identities/:attr_name/:attr_value/stats', function(req, res) {
   var options = {};
 
   if (req.query.viewpoint_name && req.query.viewpoint_value) {
@@ -244,7 +244,7 @@ router.get('/id/:attr_name/:attr_value/stats', function(req, res) {
 });
 
 
-router.get('/id/:attr_name/:attr_value/sent', function(req, res) {
+router.get('/identities/:attr_name/:attr_value/sent', function(req, res) {
   var options = {
     author: [req.params.attr_name, req.params.attr_value],
   };
@@ -252,7 +252,7 @@ router.get('/id/:attr_name/:attr_value/sent', function(req, res) {
 });
 
 
-router.get('/id/:attr_name/:attr_value/received', function(req, res) {
+router.get('/identities/:attr_name/:attr_value/received', function(req, res) {
   var options = {
     recipient: [req.params.attr_name, req.params.attr_value],
   };
@@ -261,7 +261,7 @@ router.get('/id/:attr_name/:attr_value/received', function(req, res) {
 
 
 
-router.get('/id/:attr_name/:attr_value/connections', function(req, res) {
+router.get('/identities/:attr_name/:attr_value/verifications', function(req, res) {
   var options = {
     id: [req.params.attr_name, req.params.attr_value],
   };
@@ -281,7 +281,7 @@ router.get('/id/:attr_name/:attr_value/connections', function(req, res) {
 
 
 
-router.get('/id/:attr_name/:attr_value/connecting_msgs', function(req, res) {
+router.get('/identities/:attr_name/:attr_value/connecting_msgs', function(req, res) {
   if (!(req.query.target_name && req.query.target_value)) {
     res.status(400).json('target_name and target_value must be specified');
     return;
@@ -297,7 +297,7 @@ router.get('/id/:attr_name/:attr_value/connecting_msgs', function(req, res) {
 
 
 
-router.get('/id/:attr_name/:attr_value/trustpaths', function(req, res) {
+router.get('/identities/:attr_name/:attr_value/trustpaths', function(req, res) {
   if (!(req.query.target_name && req.query.target_value)) {
     res.status(400).json('target_name and target_value must be specified');
     return;
@@ -309,7 +309,7 @@ router.get('/id/:attr_name/:attr_value/trustpaths', function(req, res) {
   }).catch(function(err) { handleError(err, req, res); });
 });
 
-router.get('/id/:attr_name/:attr_value/generatewotindex', authRequired, function(req, res) {
+router.get('/identities/:attr_name/:attr_value/generatewotindex', authRequired, function(req, res) {
   var depth = parseInt(req.query.depth) || 3;
   var trustedKeyID = null;
   if (req.params.trusted_keyid) {

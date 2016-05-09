@@ -86,7 +86,7 @@ describe 'Database', ->
         res[0].name.should.equal 'email'
         res[0].value.should.equal 'bob@example.com'
         done()
-  describe 'connections', ->
+  describe 'verifications', ->
     it 'should save a connection', (done) ->
       message = Message.create
         author: [['email', 'alice@example.com']]
