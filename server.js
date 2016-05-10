@@ -208,7 +208,7 @@ router.get('/identities', function(req, res) {
     var options = {
       where: {}
     };
-    if (req.query.attr_name)             { options.where.name = req.query.attr_name; }
+    if (req.query.attr_name)        { options.where['attr.name'] = req.query.attr_name; }
     if (req.query.search_value)     { options.searchValue = req.query.search_value; }
     if (req.query.order_by)         { options.orderBy = req.query.order_by; }
     if (req.query.direction && (req.query.direction === 'asc' || req.query.direction === 'desc'))
@@ -223,7 +223,7 @@ router.get('/identities', function(req, res) {
 
 
 router.get('/identities/:attr_name/:attr_value', function(req, res) {
-  db.getIdentityAttributes({ where: { name: req.params.attr_name, value: req.params.attr_value } }).then(function(dbRes) {
+  db.getIdentityAttributes({ where: { 'attr.name': req.params.attr_name, 'attr.value': req.params.attr_value } }).then(function(dbRes) {
     res.json(dbRes);
   }).catch(function(err) { handleError(err, req, res); });
 });

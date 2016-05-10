@@ -125,7 +125,7 @@ describe 'Database', ->
         done()
   describe 'trust functions', ->
     it 'should have 1 trust indexed attribute', (done) ->
-      db.getWebOfTrustIndexes().then (res) ->
+      db.getTrustIndexedAttributes().then (res) ->
         res.length.should.equal 1
         res[0].name.should.equal 'keyID'
         res[0].value.should.equal key.hash
@@ -135,7 +135,7 @@ describe 'Database', ->
         res[0].wot_size.should.equal 2
         done()
     it 'should have 2 trust indexed attributes', (done) ->
-      db.getWebOfTrustIndexes().then (res) ->
+      db.getTrustIndexedAttributes().then (res) ->
         res.length.should.equal 2
         res[1].name.should.equal 'email'
         res[1].value.should.equal 'alice@example.com'
