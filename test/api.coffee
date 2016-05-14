@@ -207,7 +207,7 @@ describe 'API', ->
             'Authorization': 'Bearer ' + identifi.getJwt(privKeyPEM)
         r.then (res) ->
           res.should.not.be.empty
-          res[0].wot_size.should.equal 3
+          res[0].wot_size.should.equal 4
           done()
     describe 'list', ->
       it 'should list messages ordered by date', (done) ->

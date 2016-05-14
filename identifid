@@ -19,6 +19,12 @@ switch (process.argv[2]) {
     case undefined:
     case "start":
         daemon.start();
+        try {
+          require.resolve('identifi-angular');
+          console.log('Identifi web app: http://127.0.0.1:4944/');
+        } catch (e) {
+          console.log('Identifi API: http://127.0.0.1:4944/api');
+        }
         break;
 
     case "stop":

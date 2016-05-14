@@ -172,9 +172,10 @@ router.route('/messages')
     .then(function(exists) {
       if (!exists) {
         Message.verify(m);
-        db.saveMessage(m);
+        db.saveMessage(m).then(function() {
+          res.status(201).json(m);
+        });
         emitMsg(m);
-        res.status(201).json(m);
       } else {
         res.status(200).json(m);
       }
@@ -331,7 +332,7 @@ try {
   var angular = path.dirname(require.resolve('identifi-angular'));
   app.use('/', express.static(angular + '/dist'));
 } catch (e) {
-//  console.log(e);
+  // console.log(e);
 }
 
 function handleMsgEvent(data) {

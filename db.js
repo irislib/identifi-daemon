@@ -205,7 +205,6 @@ module.exports = function(knex) {
         .offset(options.offset);
 
       return q.then(function(res) {
-        console.log(res);
         var arr = [], identities = {};
         for (var i = 0; i < res.length; i++) {
           var attr = res[i];
@@ -216,7 +215,6 @@ module.exports = function(knex) {
         for (var key in identities) {
             arr.push(identities[key]);
         }
-        console.log(arr);
 
         return new P(function(resolve) {
           resolve(arr);
@@ -532,13 +530,12 @@ module.exports = function(knex) {
       return knex.raw(sql, params);
     },
 
-    getTrustPaths: function(start, end, maxLength, shortestOnly, trustedKeyID) {
-      var t = trustedKeyID;
-      if (!t) {
+    getTrustPaths: function(start, end, maxLength, shortestOnly, viewpoint) {
+      if (!viewpoint) {
         if (start[0] === 'keyID') {
-          t = start[1];
+          viewpoint = start;
         } else {
-          t = myId;
+          viewpoint = myId;
         }
       }
 
@@ -555,7 +552,7 @@ module.exports = function(knex) {
       sql += "INNER JOIN IdentifierAttributes AS ia1 ON ia1.name = attr1.name ";
       sql += "INNER JOIN MessageAttributes as attr2 ON m.Hash = attr2.message_hash AND (attr1.name != attr2.name OR attr1.value != attr2.value) ";
       sql += "INNER JOIN IdentifierAttributes AS ia2 ON ia2.name = attr2.name ";
-      sql += "WHERE m.is_latest AND m.Rating > (m.min_rating + m.max_rating) / 2 AND attr1.name = ? AND attr1.value = ? ";
+      sql += "WHERE m.is_latest AND m.Rating > (m.min_rating + m.max_rating) / 2 AND attr1.name = :attr1name AND attr1.value = :attr1val ";
 
       sql += "UNION ALL ";
 
@@ -570,13 +567,21 @@ module.exports = function(knex) {
       sql += "INNER JOIN MessageAttributes as attr2 ON m.Hash = attr2.message_hash AND (attr1.name != attr2.name OR attr1.value != attr2.value) ";
       sql += "INNER JOIN IdentifierAttributes AS ia2 ON ia2.name = attr2.name ";
       sql += "JOIN transitive_closure AS tc ON attr1.name = tc.attr2name AND attr1.value = tc.attr2val ";
-      sql += "WHERE m.is_latest AND m.Rating > (m.min_rating + m.max_rating) / 2 AND tc.distance < ? AND tc.path_string NOT LIKE printf('%%%s:%s:%%',replace(attr2.name,':','::'),replace(attr2.value,':','::')) ";
+      sql += "WHERE m.is_latest AND m.Rating > (m.min_rating + m.max_rating) / 2 AND tc.distance < :max_length AND tc.path_string NOT LIKE printf('%%%s:%s:%%',replace(attr2.name,':','::'),replace(attr2.value,':','::')) ";
       sql += ") ";
       sql += "SELECT DISTINCT path_string FROM transitive_closure ";
-      sql += "WHERE attr2name = ? AND attr2val = ? ";
+      sql += "WHERE attr2name = :attr2name AND attr2val = :attr2val ";
       sql += "ORDER BY distance ";
 
-      return knex.raw(sql, [start[0], start[1], maxLength, end[0], end[1]]);
+      return knex.raw(sql,
+        { attr1name: start[0],
+          attr1val: start[1],
+          max_length: maxLength,
+          attr2name: end[0],
+          attr2val: end[1],
+          viewpoint_name: viewpoint[0],
+          viewpoint_value: viewpoint[1]
+        });
     },
 
     getMessageCount: function() {
