@@ -113,7 +113,6 @@ module.exports = function(knex) {
 
       var query = knex.select('Messages.*').from('Messages')
         .innerJoin('MessageAttributes as attr', 'Messages.hash', 'attr.message_hash')
-        .where(options.where)
         .orderBy(options.orderBy, options.direction)
         .limit(options.limit)
         .offset(options.offset)
@@ -145,6 +144,8 @@ module.exports = function(knex) {
         query.where(ratingTypeFilter[0], ratingTypeFilter[1], ratingTypeFilter[2]);
       }
 
+      query.where(options.where);
+
       if (options.viewpoint) {
         query.leftJoin('TrustDistances as td', function() {
           this.on('attr.name', '=', 'td.end_attr_name')
@@ -164,7 +165,6 @@ module.exports = function(knex) {
           maxDistance: options.maxDistance
         }));
       }
-
       return query;
     },
 
