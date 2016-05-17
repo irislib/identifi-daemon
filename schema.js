@@ -46,7 +46,7 @@ var init = function(db, config) {
     t.integer('rating');
     t.integer('max_rating');
     t.integer('min_rating');
-    t.boolean('public');
+    t.boolean('public').default(true);
     t.integer('priority').unsigned();
     t.boolean('is_latest');
     t.string('signer_keyid');

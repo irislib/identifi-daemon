@@ -138,6 +138,7 @@ describe 'API', ->
           res.hash.should.equal m.hash
           done()
     describe 'non-public messages', ->
+      privMsg = null
       it 'should add a non-public msg', (done) ->
         privMsg = message.create
           author: [['email', 'bob@example.com']]
@@ -149,16 +150,18 @@ describe 'API', ->
           method: 'POST'
           apiMethod: 'messages'
           body: privMsg
-        .then ->
-          r = identifi.request
-            apiMethod: 'messages'
-            apiId: privMsg.hash
-          r.should.be.rejected
-          identifi.request
-            apiMethod: 'messages'
-          .then (res) ->
-            res[0].hash.should.not.equal privMsg.hash
-            done()
+        .then -> done()
+      it 'should not be visible in message listing', ->
+        r = identifi.request
+          apiMethod: 'messages'
+          apiId: privMsg.hash
+        r.should.be.rejected
+      it 'should not be returned by hash', (done) ->
+        identifi.request
+          apiMethod: 'messages'
+        .then (res) ->
+          res[0].hash.should.not.equal privMsg.hash
+          done()
     describe 'trustpaths', ->
       it 'should return a trustpath from alice to bob', (done) ->
         r = identifi.request

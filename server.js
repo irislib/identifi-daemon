@@ -186,7 +186,7 @@ router.route('/messages')
 
 router.route('/messages/:hash')
   .get(function(req, res) {
-    db.getMessages({ where: { hash: req.params.hash } }).then(function(dbRes) {
+    db.getMessages({ where: { public: true, hash: req.params.hash } }).then(function(dbRes) {
       if (!dbRes.length) {
         return res.status(404).json('Message not found');
       }
