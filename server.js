@@ -209,7 +209,10 @@ router.get('/identities', function(req, res) {
     var options = {
       where: {}
     };
-    if (req.query.attr_name)        { options.where['attr.name'] = req.query.attr_name; }
+    if (req.query.viewpoint_name && req.query.viewpoint_value) {
+      options.viewpoint = [req.query.viewpoint_name, req.query.viewpoint_value];
+    }
+    if (req.query.attr_name)        { options.where['attribute'] = req.query.attr_name; }
     if (req.query.search_value)     { options.searchValue = req.query.search_value; }
     if (req.query.order_by)         { options.orderBy = req.query.order_by; }
     if (req.query.direction && (req.query.direction === 'asc' || req.query.direction === 'desc'))
@@ -275,7 +278,7 @@ router.get('/identities/:attr_name/:attr_value/verifications', function(req, res
   if (req.query.type) {
     options.searchedAttributes = [req.query.type];
   }
-  db.getConnectedAttributes(options).then(function(dbRes) {
+  db.mapIdentityAttributes(options).then(function(dbRes) {
     res.json(dbRes);
   }).catch(function(err) { handleError(err, req, res); });
 });
@@ -305,7 +308,8 @@ router.get('/identities/:attr_name/:attr_value/trustpaths', function(req, res) {
   }
   var maxLength = req.query.max_length || 5;
   var shortestOnly = req.query.max_length !== undefined;
-  db.getTrustPaths([req.params.attr_name, req.params.attr_value], [req.query.target_name, req.query.target_value], maxLength, shortestOnly).then(function(dbRes) {
+  var viewpoint = ['keyID', myKey.hash];
+  db.getTrustPaths([req.params.attr_name, req.params.attr_value], [req.query.target_name, req.query.target_value], maxLength, shortestOnly, viewpoint).then(function(dbRes) {
     res.json(dbRes);
   }).catch(function(err) { handleError(err, req, res); });
 });

@@ -185,24 +185,37 @@ module.exports = function(knex) {
         direction: 'asc',
         limit: 100,
         offset: 0,
-        where: {}
+        where: {},
+        viewpoint: myId
       };
       options = options || defaultOptions;
       for (var key in defaultOptions) {
         options[key] = options[key] !== undefined ? options[key] : defaultOptions[key];
       }
 
+      options.where['attr.viewpoint_name'] = options.viewpoint[0];
+      options.where['attr.viewpoint_value'] = options.viewpoint[1];
+
+      /* For debugging
+      knex('IdentityAttributes').select('*').then(function(res) {
+        console.log(res);
+      });
+      */
+
       var q = knex.from('IdentityAttributes AS attr')
         .select(knex.raw('IFNULL(other_attributes.name, attr.name) AS attribute, IFNULL(other_attributes.value, attr.value) AS value, attr.identity_id AS identity_id'))
         .distinct()
         .leftJoin('IdentityAttributes AS other_attributes', function() {
-          this.on('other_attributes.identity_id', '=', 'attr.identity_id')
-          .andOn(knex.raw('(other_attributes.name != attr.name OR other_attributes.value != attr.value)'));
+          this.on('other_attributes.identity_id', '=', 'attr.identity_id');
         })
         .where(options.where)
         .orderBy(options.orderBy, options.direction)
         .limit(options.limit)
         .offset(options.offset);
+
+      if (options.searchValue) {
+        q.where('attr.value', 'LIKE', '%' + options.searchValue + '%');
+      }
 
       return q.then(function(res) {
         var arr = [], identities = {};
@@ -237,7 +250,7 @@ module.exports = function(knex) {
         .offset(options.offset); */
     },
 
-    getConnectedAttributes: function(options) {
+    mapIdentityAttributes: function(options) {
       var sql = 'identity_id IN (SELECT identity_id FROM IdentityAttributes WHERE name = ? AND value = ? AND viewpoint_name = ? AND viewpoint_value = ?)';
       var countBefore;
 
@@ -352,6 +365,13 @@ module.exports = function(knex) {
       });
     },
 
+    getTrustDistances: function(from) {
+      return knex.select('*').from('TrustDistances').where({
+        'start_attr_name': from[0],
+        'start_attr_value': from[1]
+      });
+    },
+
     getConnectingMessages: function(options) {
       return knex.select('Messages.*').from('Messages')
         .innerJoin('MessageAttributes as attr1', 'Messages.hash', 'attr1.message_hash')
@@ -444,9 +464,15 @@ module.exports = function(knex) {
           return knex.raw(allIdsSql, { attr1name: id[0], attr1value: id[1], maxDepth: maxDepth, trustedKeyID: trustedKeyID || id[1] });
         })
         .then(function() {
-          // Add trust distance to self = 0
-          return knex('TrustDistances')
-          .insert({ start_attr_name: id[0], start_attr_value: id[1], end_attr_name: id[0], end_attr_value: id[1], distance: 0 });
+          return knex('TrustDistances').where({ start_attr_name: id[0], start_attr_value: id[1], end_attr_name: id[0], end_attr_value: id[1], distance: 0 })
+          .count('* as count');
+        })
+        .then(function(res) {
+          if (!res[0].count) {
+            // Add trust distance to self = 0
+            return knex('TrustDistances')
+            .insert({ start_attr_name: id[0], start_attr_value: id[1], end_attr_name: id[0], end_attr_value: id[1], distance: 0 });
+          }
         })
         .then(function() {
           return knex('TrustDistances').count('* as wot_size')
@@ -468,7 +494,7 @@ module.exports = function(knex) {
         .count('* as c');
       })
       .then(function(res) {
-        if (res.c === 0) {
+        if (res[0].c === 0) {
           // Add trust distance to self = 0
           return knex('TrustDistances')
           .insert({ start_attr_name: id[0], start_attr_value: id[1], end_attr_name: id[0], end_attr_value: id[1], distance: 0 }).return();
@@ -480,6 +506,7 @@ module.exports = function(knex) {
       return knex('TrustIndexedAttributes').select('*');
     },
 
+    /*
     identitySearch: function(query, limit, offset, viewpoint) {
       viewpoint = viewpoint || ['', ''];
       var useViewpoint = viewpoint[0] && viewpoint[1];
@@ -528,7 +555,7 @@ module.exports = function(knex) {
 
       var params = { query: query[1], name: query[0], viewType: viewpoint[0], viewID: viewpoint[1] };
       return knex.raw(sql, params);
-    },
+    }, */
 
     getTrustPaths: function(start, end, maxLength, shortestOnly, viewpoint) {
       if (!viewpoint) {
@@ -814,7 +841,7 @@ module.exports = function(knex) {
           var viewpoint = [viewpoints[j].name, viewpoints[j].value];
           for (var i = 0; i < message.signedData.recipient.length; i++) {
             queries.push(
-              pub.getConnectedAttributes({ id: message.signedData.recipient[i], viewpoint: viewpoint })
+              pub.mapIdentityAttributes({ id: message.signedData.recipient[i], viewpoint: viewpoint })
             );
           }
         }
