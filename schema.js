@@ -10,7 +10,9 @@ function addDefaultIdentifierAttributes(db) {
       { name: 'tel' },
       { name: 'keyID' },
       { name: 'bitcoin' },
-      { name: 'identifiNode' }
+      { name: 'identifiNode' },
+      { name: 'gpg_fingerprint'},
+      { name: 'gpg_keyid'}
     ]
   );
 }
@@ -39,7 +41,7 @@ var init = function(db, config) {
 
   .createTableIfNotExists('Messages', function(t) {
     t.string('hash').primary();
-    t.string('jws').notNullable();
+    t.string('jws', 10000).notNullable();
     t.timestamp('saved_at');
     t.datetime('timestamp');
     t.string('type');

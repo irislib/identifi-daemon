@@ -37,7 +37,7 @@ describe 'Database', ->
   describe 'save and retrieve messages', ->
     it 'should initially have 1 message', (done) ->
       db.getMessageCount().then (res) ->
-        res[0].val.should.equal 1
+        res.should.equal 1
         done()
     it 'should save a rating', (done) ->
       message = Message.createRating
@@ -66,7 +66,7 @@ describe 'Database', ->
       db.saveMessage(message).should.eventually.notify done
     it 'should have 4 messages', (done) ->
       db.getMessageCount().then (res) ->
-        res[0].val.should.equal 4
+        res.should.equal 4
         done()
     it 'should return message by hash', (done) ->
       db.getMessages({ where: { hash: hash } }).then (res) ->
@@ -298,13 +298,13 @@ describe 'Database', ->
     it 'should delete a message', (done) ->
       originalCount = null
       db.getMessageCount().then (res) ->
-        originalCount = res[0].val
+        originalCount = res
         db.dropMessage(hash)
       .then (res) ->
         res.should.be.true
         db.getMessageCount()
       .then (res) ->
-        (originalCount - res[0].val).should.equal 1
+        (originalCount - res).should.equal 1
         done()
   describe 'maxMessageCount', ->
     lowPrioMsg = null
@@ -337,7 +337,7 @@ describe 'Database', ->
       saveMessages(0, config.maxMessageCount + 20).then ->
         db.getMessageCount()
       .then (res) ->
-        res[0].val.should.be.below config.maxMessageCount
+        res.should.be.below config.maxMessageCount
         done()
 
     it 'should have deleted the 0-priority message', (done) ->

@@ -13,5 +13,5 @@
     "maxConnectionsOut": 5,
     "maxConnectionsIn": 5,
     "maxPeerDBsize": 100,
-    "maxMessageCount": 30000
+    "maxMessageCount": 15000
 }

@@ -11,6 +11,10 @@ var myId = ['keyID', myKey.hash];
 var myTrustIndexDepth = 4;
 var config;
 
+var SQL_IFNULL = 'IFNULL';
+var SQL_INSERT_OR_REPLACE = 'INSERT OR REPLACE';
+var SQL_PRINTF = 'PRINTF';
+
 module.exports = function(knex) {
   var p; // Private methods
 
@@ -23,10 +27,9 @@ module.exports = function(knex) {
           if (!exists) {
             var isPublic = typeof message.signedData.public === 'undefined' ? true : message.signedData.public;
             return p.getPriority(message).then(function(priority) {
-              queries.push(knex('Messages').insert({
+              var messageSave = knex('Messages').insert({
                 hash:           message.hash,
                 jws:            message.jws,
-                saved_at:       moment(message.signedData.timestamp).unix(),
                 timestamp:      message.signedData.timestamp,
                 type:           message.signedData.type || 'rating',
                 rating:         message.signedData.rating || 0,
@@ -36,7 +39,7 @@ module.exports = function(knex) {
                 priority:       priority,
                 is_latest:      p.isLatest(message),
                 signer_keyid:   message.signerKeyHash,
-              }));
+              });
 
               var i;
               for (i = 0; i < message.signedData.author.length; i++) {
@@ -56,7 +59,10 @@ module.exports = function(knex) {
                 }));
               }
 
-              return P.all(queries).then(function() {
+              return messageSave.then(function() {
+                return P.all(queries);
+              })
+              .then(function() {
                 if (updateTrustIndexes) {
                   return p.updateWotIndexesByMessage(message)
                   .then(function() {
@@ -81,7 +87,7 @@ module.exports = function(knex) {
       return knex('Messages').where('hash', hash).count('* as exists')
         .then(function(res) {
           return new P(function(resolve) {
-            resolve(!!res[0].exists);
+            resolve(!!parseInt(res[0].exists));
           });
         });
     },
@@ -158,11 +164,13 @@ module.exports = function(knex) {
           sql += 'AND td.distance <= :maxDistance ';
         }
         // A bit messy way to pick also messages that were authored by the viewpointId
-        sql += ') OR (attr.is_recipient = 0 AND attr.name = :viewpoint_name AND attr.value = :viewpoint_value)';
+        sql += ') OR (attr.is_recipient = :false AND attr.name = :viewpoint_name AND attr.value = :viewpoint_value)';
         query.where(knex.raw(sql, {
           viewpoint_name: options.viewpoint[0],
           viewpoint_value: options.viewpoint[1],
-          maxDistance: options.maxDistance
+          maxDistance: options.maxDistance,
+          true: true,
+          false: false
         }));
       }
       return query;
@@ -203,7 +211,7 @@ module.exports = function(knex) {
       */
 
       var q = knex.from('IdentityAttributes AS attr')
-        .select(knex.raw('IFNULL(other_attributes.name, attr.name) AS attribute, IFNULL(other_attributes.value, attr.value) AS value, attr.identity_id AS identity_id'))
+        .select(knex.raw(SQL_IFNULL + '(other_attributes.name, attr.name) AS attribute, '+SQL_IFNULL+'(other_attributes.value, attr.value) AS value, attr.identity_id AS identity_id'))
         .distinct()
         .leftJoin('IdentityAttributes AS other_attributes', function() {
           this.on('other_attributes.identity_id', '=', 'attr.identity_id');
@@ -251,7 +259,7 @@ module.exports = function(knex) {
     },
 
     mapIdentityAttributes: function(options) {
-      var sql = 'identity_id IN (SELECT identity_id FROM IdentityAttributes WHERE name = ? AND value = ? AND viewpoint_name = ? AND viewpoint_value = ?)';
+      var sql = 'identity_id IN (SELECT identity_id FROM "IdentityAttributes" WHERE "name" = ? AND "value" = ? AND "viewpoint_name" = ? AND "viewpoint_value" = ?)';
       var countBefore;
 
       options.viewpoint = options.viewpoint || myId;
@@ -265,15 +273,15 @@ module.exports = function(knex) {
           sql = "WITH RECURSIVE transitive_closure(attr1name, attr1val, attr2name, attr2val, distance, path_string, confirmations, refutations) AS ";
           sql += "( ";
           sql += "SELECT attr1.name, attr1.value, attr2.name, attr2.value, 1 AS distance, ";
-          sql += "printf('%s:%s:%s:%s:',replace(attr1.name,':','::'),replace(attr1.value,':','::'),replace(attr2.name,':','::'),replace(attr2.value,':','::')) AS path_string, ";
+          sql += SQL_PRINTF + "('%s:%s:%s:%s:',replace(attr1.name,':','::'),replace(attr1.value,':','::'),replace(attr2.name,':','::'),replace(attr2.value,':','::')) AS path_string, ";
           sql += "1 AS Confirmations, "; // TODO fix
           sql += "0 AS Refutations ";
-          sql += "FROM Messages AS p ";
-          sql += "INNER JOIN TrustDistances AS td1 ON ";
+          sql += "FROM \"Messages\" AS p ";
+          sql += "INNER JOIN \"TrustDistances\" AS td1 ON ";
           sql += "td1.start_attr_name = :viewpoint_name AND td1.start_attr_value = :viewpoint_value AND ";
           sql += "td1.end_attr_name = 'keyID' AND td1.end_attr_value = p.signer_keyid ";
-          sql += "INNER JOIN MessageAttributes as attr1 ON p.hash = attr1.message_hash ";
-          sql += "INNER JOIN MessageAttributes as attr2 ON p.hash = attr2.message_hash AND attr2.is_recipient = attr1.is_recipient AND (attr1.name != attr2.name OR attr1.value != attr2.value) ";
+          sql += "INNER JOIN \"MessageAttributes\" as attr1 ON p.hash = attr1.message_hash ";
+          sql += "INNER JOIN \"MessageAttributes\" as attr2 ON p.hash = attr2.message_hash AND attr2.is_recipient = attr1.is_recipient AND (attr1.name != attr2.name OR attr1.value != attr2.value) ";
 
           // AddMessageFilterSQL(sql, viewpoint, maxDistance, msgType);
 
@@ -283,40 +291,41 @@ module.exports = function(knex) {
           sql += "UNION ALL ";
 
           sql += "SELECT tc.attr1name, tc.attr1val, attr2.name, attr2.value, tc.distance + 1, ";
-          sql += "printf('%s%s:%s:',tc.path_string,replace(attr2.name,':','::'),replace(attr2.value,':','::')) AS path_string, ";
+          sql += SQL_PRINTF + "('%s%s:%s:',tc.path_string,replace(attr2.name,':','::'),replace(attr2.value,':','::')) AS path_string, ";
           sql += "1 AS Confirmations, "; // TODO fix
           sql += "0 AS Refutations ";
-          sql += "FROM Messages AS p ";
-          sql += "JOIN TrustDistances AS td2 ON ";
+          sql += "FROM \"Messages\" AS p ";
+          sql += "JOIN \"TrustDistances\" AS td2 ON ";
           sql += "td2.start_attr_name = :viewpoint_name AND td2.start_attr_value = :viewpoint_value AND ";
           sql += "td2.end_attr_name = 'keyID' AND td2.end_attr_value = p.signer_keyid ";
-          sql += "JOIN MessageAttributes as attr1 ON p.hash = attr1.message_hash AND attr1.is_recipient = 1 ";
-          sql += "JOIN IdentifierAttributes AS ia1 ON ia1.name = attr1.name ";
-          sql += "JOIN MessageAttributes as attr2 ON p.hash = attr2.message_hash AND attr2.is_recipient = 1 AND (attr1.name != attr2.name OR attr1.value != attr2.value) ";
+          sql += "JOIN \"MessageAttributes\" as attr1 ON p.hash = attr1.message_hash AND attr1.is_recipient = :true ";
+          sql += "JOIN \"IdentifierAttributes\" AS ia1 ON ia1.name = attr1.name ";
+          sql += "JOIN \"MessageAttributes\" as attr2 ON p.hash = attr2.message_hash AND attr2.is_recipient = :true AND (attr1.name != attr2.name OR attr1.value != attr2.value) ";
           sql += "JOIN transitive_closure AS tc ON tc.confirmations > tc.refutations AND attr1.name = tc.attr2name AND attr1.value = tc.attr2val ";
-          sql += "INNER JOIN IdentifierAttributes AS ia2 ON ia2.name = tc.attr1name ";
+          sql += "INNER JOIN \"IdentifierAttributes\" AS ia2 ON ia2.name = tc.attr1name ";
 
           // AddMessageFilterSQL(sql, viewpoint, maxDistance, msgType);
 
           sql += "WHERE tc.distance < 10 "; // AND p.type IN ('verify_identity','unverify_identity')
           // AddMessageFilterSQLWhere(sql, viewpoint);
-          sql += "AND tc.path_string NOT LIKE printf('%%%s:%s:%%',replace(attr2.name,':','::'),replace(attr2.value,':','::'))";
+          sql += "AND tc.path_string NOT LIKE " + SQL_PRINTF + "('%%%s:%s:%%',replace(attr2.name,':','::'),replace(attr2.value,':','::'))";
           sql += ") ";
 
-          sql += "INSERT OR REPLACE INTO IdentityAttributes ";
+          sql += SQL_INSERT_OR_REPLACE + " INTO \"IdentityAttributes\" ";
           // The subquery for selecting identity_id could be optimized?
-          sql += "SELECT (SELECT IFNULL(MAX(identity_id), 0) + 1 FROM IdentityAttributes), attr2name, attr2val, :viewpoint_name, :viewpoint_value, 1, 0 FROM transitive_closure ";
+          sql += "SELECT (SELECT " + SQL_IFNULL + "(MAX(identity_id), 0) + 1 FROM \"IdentityAttributes\"), attr2name, attr2val, :viewpoint_name, :viewpoint_value, 1, 0 FROM transitive_closure ";
           sql += "GROUP BY attr2name, attr2val ";
-          sql += "UNION SELECT (SELECT IFNULL(MAX(identity_id), 0) + 1 FROM IdentityAttributes), :attr, :val, :viewpoint_name, :viewpoint_value, 1, 0 ";
-          sql += "FROM MessageAttributes AS mi ";
-          sql += "INNER JOIN IdentifierAttributes AS ui ON ui.name = mi.name ";
+          sql += "UNION SELECT (SELECT " + SQL_IFNULL + "(MAX(identity_id), 0) + 1 FROM \"IdentityAttributes\"), :attr, :val, :viewpoint_name, :viewpoint_value, 1, 0 ";
+          sql += "FROM \"MessageAttributes\" AS mi ";
+          sql += "INNER JOIN \"IdentifierAttributes\" AS ui ON ui.name = mi.name ";
           sql += "WHERE mi.name = :attr AND mi.value = :val  ";
 
           var sqlValues = {
             attr: options.id[0],
             val: options.id[1],
             viewpoint_name: options.viewpoint[0],
-            viewpoint_value: options.viewpoint[1]
+            viewpoint_value: options.viewpoint[1],
+            true: true
           };
 
           return knex.raw(sql, sqlValues);
@@ -333,16 +342,14 @@ module.exports = function(knex) {
           if (hasSearchedAttributes) {
             return knex('IdentityAttributes')
               .select('name', 'value', 'confirmations', 'refutations')
-              .where(knex.raw('NOT (Name = ? AND value = ?) AND identity_id = (SELECT MAX(identity_id) FROM IdentityAttributes)', [options.id[0], options.id[1]]))
+              .where(knex.raw('NOT (Name = ? AND value = ?) AND identity_id = (SELECT MAX(identity_id) FROM \"IdentityAttributes\")', [options.id[0], options.id[1]]))
               .whereIn('name', options.searchedAttributes)
-              .groupBy('name', 'value')
               .orderByRaw('confirmations - refutations DESC');
           }
 
           return knex('IdentityAttributes')
             .select('name', 'value', 'confirmations', 'refutations')
-            .where(knex.raw('NOT (Name = ? AND value = ?) AND identity_id = (SELECT MAX(identity_id) FROM IdentityAttributes)', [options.id[0], options.id[1]]))
-            .groupBy('name', 'value')
+            .where(knex.raw('NOT (Name = ? AND value = ?) AND identity_id = (SELECT MAX(identity_id) FROM \"IdentityAttributes\")', [options.id[0], options.id[1]]))
             .orderByRaw('confirmations - refutations DESC');
         });
     },
@@ -401,19 +408,19 @@ module.exports = function(knex) {
         sql += "SELECT attr1.name, attr1.value, attr2.name, attr2.value, 1 AS distance, ";
         sql += "printf('%s:%s:%s:%s:',replace(attr1.name,':','::'),replace(attr1.value,':','::'),replace(attr2.name,':','::'),replace(attr2.value,':','::')) AS path_string ";
         sql += "FROM Messages AS m ";
-        sql += "INNER JOIN MessageAttributes as attr1 ON m.hash = attr1.message_hash AND attr1.is_recipient = 0 ";
+        sql += "INNER JOIN \"MessageAttributes\" as attr1 ON m.hash = attr1.message_hash AND attr1.is_recipient = :false ";
         if (betweenKeyIDsOnly) {
           sql += "AND attr1.name = 'keyID' ";
         } else {
-          sql += "INNER JOIN IdentifierAttributes AS uidt1 ON uidt1.name = attr1.name ";
+          sql += "INNER JOIN \"IdentifierAttributes\" AS uidt1 ON uidt1.name = attr1.name ";
         }
-        sql += "INNER JOIN MessageAttributes as attr2 ON m.hash = attr2.message_hash AND (attr1.name != attr2.name OR attr1.value != attr2.value) ";
+        sql += "INNER JOIN \"MessageAttributes\" as attr2 ON m.hash = attr2.message_hash AND (attr1.name != attr2.name OR attr1.value != attr2.value) ";
         if (betweenKeyIDsOnly) {
-          sql += "AND attr2.name = 'keyID' AND attr2.is_recipient = 1 ";
+          sql += "AND attr2.name = 'keyID' AND attr2.is_recipient = :true ";
         } else {
-          sql += "INNER JOIN IdentifierAttributes AS uidt2 ON uidt2.name = attr2.name ";
+          sql += "INNER JOIN \"IdentifierAttributes\" AS uidt2 ON uidt2.name = attr2.name ";
           /* Only accept messages whose origin is verified by trusted keyID */
-          sql += "LEFT JOIN TrustDistances AS td ON ";
+          sql += "LEFT JOIN \"TrustDistances\" AS td ON ";
           sql += "td.start_attr_name = 'keyID' AND td.start_attr_value = :trustedKeyID AND ";
           sql += "td.end_attr_name = 'keyID' AND td.end_attr_value = m.signer_keyid ";
         }
@@ -426,16 +433,16 @@ module.exports = function(knex) {
 
         sql += "SELECT tc.attr1name, tc.attr1val, attr2.name, attr2.value, tc.distance + 1, ";
         sql += "printf('%s%s:%s:',tc.path_string,replace(attr2.name,':','::'),replace(attr2.value,':','::')) AS path_string ";
-        sql += "FROM Messages AS m ";
-        sql += "INNER JOIN MessageAttributes as attr1 ON m.hash = attr1.message_hash AND attr1.is_recipient = 0 ";
-        sql += "INNER JOIN IdentifierAttributes AS uidt1 ON uidt1.name = attr1.name ";
-        sql += "INNER JOIN MessageAttributes as attr2 ON m.hash = attr2.message_hash AND (attr1.name != attr2.name OR attr1.value != attr2.value) ";
+        sql += "FROM \"Messages\" AS m ";
+        sql += "INNER JOIN \"MessageAttributes\" as attr1 ON m.hash = attr1.message_hash AND attr1.is_recipient = :false ";
+        sql += "INNER JOIN \"IdentifierAttributes\" AS uidt1 ON uidt1.name = attr1.name ";
+        sql += "INNER JOIN \"MessageAttributes\" as attr2 ON m.hash = attr2.message_hash AND (attr1.name != attr2.name OR attr1.value != attr2.value) ";
         if (betweenKeyIDsOnly) {
-          sql += "AND attr2.name = 'keyID' AND attr2.is_recipient = 1 ";
+          sql += "AND attr2.name = 'keyID' AND attr2.is_recipient = :true ";
         } else {
-          sql += "INNER JOIN IdentifierAttributes AS uidt2 ON uidt2.name = attr2.name ";
+          sql += "INNER JOIN \"IdentifierAttributes\" AS uidt2 ON uidt2.name = attr2.name ";
           /* Only accept messages whose origin is verified by trusted keyID */
-          sql += "LEFT JOIN TrustDistances AS td ON ";
+          sql += "LEFT JOIN \"TrustDistances\" AS td ON ";
           sql += "td.start_attr_name = 'keyID' AND td.start_attr_value = :trustedKeyID AND ";
           sql += "td.end_attr_name = 'keyID' AND td.end_attr_value = m.signer_keyid ";
         }
@@ -445,7 +452,7 @@ module.exports = function(knex) {
           sql += "AND (td.distance IS NOT NULL OR m.signer_keyid = :trustedKeyID) ";
         }
         sql += ") ";
-        sql += "INSERT OR REPLACE INTO TrustDistances (start_attr_name, start_attr_value, end_attr_name, end_attr_value, distance) SELECT :attr1name, :attr1value, attr2name, attr2val, distance FROM transitive_closure ";
+        sql += SQL_INSERT_OR_REPLACE + " INTO \"TrustDistances\" (start_attr_name, start_attr_value, end_attr_name, end_attr_value, distance) SELECT :attr1name, :attr1value, attr2name, attr2val, distance FROM transitive_closure ";
         return sql;
       }
 
@@ -458,17 +465,17 @@ module.exports = function(knex) {
       return knex('TrustDistances')
         .where({ start_attr_name: id[0], start_attr_value: id[1] }).del()
         .then(function() {
-          return knex.raw(keyIdsSql, { attr1name: 'keyID', attr1value: trustedKeyID || id[1], maxDepth: maxDepth });
+          return knex.raw(keyIdsSql, { attr1name: 'keyID', attr1value: trustedKeyID || id[1], maxDepth: maxDepth, true: true, false: false });
         })
         .then(function() {
-          return knex.raw(allIdsSql, { attr1name: id[0], attr1value: id[1], maxDepth: maxDepth, trustedKeyID: trustedKeyID || id[1] });
+          return knex.raw(allIdsSql, { attr1name: id[0], attr1value: id[1], maxDepth: maxDepth, trustedKeyID: trustedKeyID || id[1], true: true, false: false });
         })
         .then(function() {
           return knex('TrustDistances').where({ start_attr_name: id[0], start_attr_value: id[1], end_attr_name: id[0], end_attr_value: id[1], distance: 0 })
           .count('* as count');
         })
         .then(function(res) {
-          if (!res[0].count) {
+          if (!parseInt(res[0].count)) {
             // Add trust distance to self = 0
             return knex('TrustDistances')
             .insert({ start_attr_name: id[0], start_attr_value: id[1], end_attr_name: id[0], end_attr_value: id[1], distance: 0 });
@@ -483,7 +490,7 @@ module.exports = function(knex) {
     addTrustIndexedAttribute: function(id, depth) {
       return knex('TrustIndexedAttributes').where({ name: id[0], value: id[1] }).count('* as count')
       .then(function(res) {
-        if (res[0].count) {
+        if (parseInt(res[0].count)) {
           return knex('TrustIndexedAttributes').where({ name: id[0], value: id[1] }).update({ depth: depth });
         } else {
           return knex('TrustIndexedAttributes').insert({ name: id[0], value: id[1], depth: depth });
@@ -494,7 +501,7 @@ module.exports = function(knex) {
         .count('* as c');
       })
       .then(function(res) {
-        if (res[0].c === 0) {
+        if (parseInt(res[0].c) === 0) {
           // Add trust distance to self = 0
           return knex('TrustDistances')
           .insert({ start_attr_name: id[0], start_attr_value: id[1], end_attr_name: id[0], end_attr_value: id[1], distance: 0 }).return();
@@ -570,33 +577,33 @@ module.exports = function(knex) {
       sql += "WITH RECURSIVE transitive_closure(attr1name, attr1val, attr2name, attr2val, distance, path_string) AS ";
       sql += "(";
       sql += "SELECT attr1.name, attr1.value, attr2.name, attr2.value, 1 AS distance, ";
-      sql += "printf('%s:%s:%s:%s:',replace(attr1.name,':','::'),replace(attr1.value,':','::'),replace(attr2.name,':','::'),replace(attr2.value,':','::')) AS path_string ";
-      sql += "FROM Messages AS m ";
-      sql += "INNER JOIN TrustDistances as td ON ";
+      sql += SQL_PRINTF + "('%s:%s:%s:%s:',replace(attr1.name,':','::'),replace(attr1.value,':','::'),replace(attr2.name,':','::'),replace(attr2.value,':','::')) AS path_string ";
+      sql += "FROM \"Messages\" AS m ";
+      sql += "INNER JOIN \"TrustDistances\" as td ON ";
       sql += "td.start_attr_name = :viewpoint_name AND td.start_attr_value = :viewpoint_value AND ";
       sql += "td.end_attr_name = 'keyID' AND td.end_attr_value = m.signer_keyid ";
-      sql += "INNER JOIN MessageAttributes as attr1 ON m.Hash = attr1.message_hash AND attr1.is_recipient = 0 ";
-      sql += "INNER JOIN IdentifierAttributes AS ia1 ON ia1.name = attr1.name ";
-      sql += "INNER JOIN MessageAttributes as attr2 ON m.Hash = attr2.message_hash AND (attr1.name != attr2.name OR attr1.value != attr2.value) ";
-      sql += "INNER JOIN IdentifierAttributes AS ia2 ON ia2.name = attr2.name ";
+      sql += "INNER JOIN \"MessageAttributes\" as attr1 ON m.Hash = attr1.message_hash AND attr1.is_recipient = :false ";
+      sql += "INNER JOIN \"IdentifierAttributes\" AS ia1 ON ia1.name = attr1.name ";
+      sql += "INNER JOIN \"MessageAttributes\" as attr2 ON m.Hash = attr2.message_hash AND (attr1.name != attr2.name OR attr1.value != attr2.value) ";
+      sql += "INNER JOIN \"IdentifierAttributes\" AS ia2 ON ia2.name = attr2.name ";
       sql += "WHERE m.is_latest AND m.Rating > (m.min_rating + m.max_rating) / 2 AND attr1.name = :attr1name AND attr1.value = :attr1val ";
 
       sql += "UNION ALL ";
 
       sql += "SELECT tc.attr1name, tc.attr1val, attr2.name, attr2.value, tc.distance + 1, ";
-      sql += "printf('%s%s:%s:',tc.path_string,replace(attr2.name,':','::'),replace(attr2.value,':','::')) AS path_string ";
-      sql += "FROM Messages AS m ";
-      sql += "INNER JOIN TrustDistances as td ON ";
+      sql += SQL_PRINTF + "('%s%s:%s:',tc.path_string,replace(attr2.name,':','::'),replace(attr2.value,':','::')) AS path_string ";
+      sql += "FROM \"Messages\" AS m ";
+      sql += "INNER JOIN \"TrustDistances\" as td ON ";
       sql += "td.start_attr_name = :viewpoint_name AND td.start_attr_value = :viewpoint_value AND ";
       sql += "td.end_attr_name = 'keyID' AND td.end_attr_value = m.signer_keyid ";
-      sql += "INNER JOIN MessageAttributes as attr1 ON m.Hash = attr1.message_hash AND attr1.is_recipient = 0 ";
-      sql += "INNER JOIN IdentifierAttributes AS ia1 ON ia1.name = attr1.name ";
-      sql += "INNER JOIN MessageAttributes as attr2 ON m.Hash = attr2.message_hash AND (attr1.name != attr2.name OR attr1.value != attr2.value) ";
-      sql += "INNER JOIN IdentifierAttributes AS ia2 ON ia2.name = attr2.name ";
+      sql += "INNER JOIN \"MessageAttributes\" as attr1 ON m.Hash = attr1.message_hash AND attr1.is_recipient = :false ";
+      sql += "INNER JOIN \"IdentifierAttributes\" AS ia1 ON ia1.name = attr1.name ";
+      sql += "INNER JOIN \"MessageAttributes\" as attr2 ON m.Hash = attr2.message_hash AND (attr1.name != attr2.name OR attr1.value != attr2.value) ";
+      sql += "INNER JOIN \"IdentifierAttributes\" AS ia2 ON ia2.name = attr2.name ";
       sql += "JOIN transitive_closure AS tc ON attr1.name = tc.attr2name AND attr1.value = tc.attr2val ";
-      sql += "WHERE m.is_latest AND m.Rating > (m.min_rating + m.max_rating) / 2 AND tc.distance < :max_length AND tc.path_string NOT LIKE printf('%%%s:%s:%%',replace(attr2.name,':','::'),replace(attr2.value,':','::')) ";
+      sql += "WHERE m.is_latest AND m.Rating > (m.min_rating + m.max_rating) / 2 AND tc.distance < :max_length AND tc.path_string NOT LIKE " + SQL_PRINTF + "('%%%s:%s:%%',replace(attr2.name,':','::'),replace(attr2.value,':','::')) ";
       sql += ") ";
-      sql += "SELECT DISTINCT path_string FROM transitive_closure ";
+      sql += "SELECT path_string FROM transitive_closure ";
       sql += "WHERE attr2name = :attr2name AND attr2val = :attr2val ";
       sql += "ORDER BY distance ";
 
@@ -607,30 +614,35 @@ module.exports = function(knex) {
           attr2name: end[0],
           attr2val: end[1],
           viewpoint_name: viewpoint[0],
-          viewpoint_value: viewpoint[1]
+          viewpoint_value: viewpoint[1],
+          true: true,
+          false: false
         });
     },
 
     getMessageCount: function() {
-      return knex('Messages').count('* as val');
+      return knex('Messages').count('* as val')
+      .then(function(res) {
+        return new P(function(resolve) { resolve(parseInt(res[0].val)); });
+      });
     },
 
     getStats: function(id, options) {
       var sql = "";
-      sql += "SUM(CASE WHEN attr.is_recipient = 0 AND m.rating > (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS sentPositive, ";
-      sql += "SUM(CASE WHEN attr.is_recipient = 0 AND m.rating == (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS sentNeutral, ";
-      sql += "SUM(CASE WHEN attr.is_recipient = 0 AND m.rating < (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS sentNegative, ";
+      sql += "SUM(CASE WHEN attr.is_recipient = :false AND m.rating > (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS sentPositive, ";
+      sql += "SUM(CASE WHEN attr.is_recipient = :false AND m.rating = (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS sentNeutral, ";
+      sql += "SUM(CASE WHEN attr.is_recipient = :false AND m.rating < (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS sentNegative, ";
       if (options.viewpoint) {
-        sql += "SUM(CASE WHEN attr.is_recipient = 1 AND m.rating > (m.min_rating + m.max_rating) / 2 AND ";
+        sql += "SUM(CASE WHEN attr.is_recipient = :true AND m.rating > (m.min_rating + m.max_rating) / 2 AND ";
         sql += "(td.start_attr_value IS NOT NULL) THEN 1 ELSE 0 END) AS receivedPositive, ";
-        sql += "SUM(CASE WHEN attr.is_recipient = 1 AND m.rating == (m.min_rating + m.max_rating) / 2 AND ";
+        sql += "SUM(CASE WHEN attr.is_recipient = :true AND m.rating = (m.min_rating + m.max_rating) / 2 AND ";
         sql += "(td.start_attr_value IS NOT NULL) THEN 1 ELSE 0 END) AS receivedNeutral, ";
-        sql += "SUM(CASE WHEN attr.is_recipient = 1 AND m.rating < (m.min_rating + m.max_rating) / 2 AND  ";
+        sql += "SUM(CASE WHEN attr.is_recipient = :true AND m.rating < (m.min_rating + m.max_rating) / 2 AND  ";
         sql += "(td.start_attr_value IS NOT NULL) THEN 1 ELSE 0 END) AS receivedNegative, ";
       } else {
-        sql += "SUM(CASE WHEN attr.is_recipient = 1 AND m.rating > (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS receivedPositive, ";
-        sql += "SUM(CASE WHEN attr.is_recipient = 1 AND m.rating == (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS receivedNeutral, ";
-        sql += "SUM(CASE WHEN attr.is_recipient = 1 AND m.rating < (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS receivedNegative, ";
+        sql += "SUM(CASE WHEN attr.is_recipient = :true AND m.rating > (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS receivedPositive, ";
+        sql += "SUM(CASE WHEN attr.is_recipient = :true AND m.rating = (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS receivedNeutral, ";
+        sql += "SUM(CASE WHEN attr.is_recipient = :true AND m.rating < (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS receivedNegative, ";
       }
       sql += "MIN(m.timestamp) AS firstSeen ";
 
@@ -639,7 +651,9 @@ module.exports = function(knex) {
         .innerJoin('IdentifierAttributes as ia', 'ia.name', 'attr.name')
         .select(knex.raw(sql, {
           viewpoint_name: options.viewpoint ? options.viewpoint[0] : null,
-          viewpointID: options.viewpoint ? options.viewpoint[1] : null
+          viewpointID: options.viewpoint ? options.viewpoint[1] : null,
+          true: true,
+          false: false
         }))
         .where({ 'm.is_latest': 1, 'm.type': 'rating', 'attr.name': id[0], 'attr.value': id[1] });
 
@@ -655,11 +669,13 @@ module.exports = function(knex) {
           sql += 'AND td.distance <= :maxDistance ';
         }
         // A bit messy way to pick also messages that were authored by the viewpointId
-        sql += ') OR (attr.is_recipient = 0 AND attr.name = :viewpoint_name AND attr.value = :viewpoint_value)';
+        sql += ') OR (attr.is_recipient = :false AND attr.name = :viewpoint_name AND attr.value = :viewpoint_value)';
         query.where(knex.raw(sql, {
           viewpoint_name: options.viewpoint[0],
           viewpoint_value: options.viewpoint[1],
-          maxDistance: options.maxDistance
+          maxDistance: options.maxDistance,
+          true: true,
+          false: false
         }));
 
         var subquery = knex('IdentityAttributes').where({
@@ -709,7 +725,7 @@ module.exports = function(knex) {
       var _ = this;
       return knex('Messages').count('* as count')
       .then(function(res) {
-        if (res[0].count === 0) {
+        if (parseInt(res[0].count) === 0) {
           var queries = [];
           var message = Message.createRating({
             author: [myId],
@@ -729,7 +745,7 @@ module.exports = function(knex) {
     ensureFreeSpace: function() {
       return this.getMessageCount()
         .then(function(res) {
-          if (res[0].val > config.maxMessageCount) {
+          if (res > config.maxMessageCount) {
             var nMessagesToDelete = Math.min(100, Math.ceil(config.maxMessageCount / 10));
             var messagesToDelete = knex('Messages').select('hash').limit(nMessagesToDelete).orderBy('priority', 'asc').orderBy('created', 'asc');
             return knex('Messages').whereIn('hash', messagesToDelete).del()
@@ -878,7 +894,7 @@ module.exports = function(knex) {
         .whereRaw('existing.distance IS NULL AND ((viewpoint.name = :author_name AND viewpoint.value = :author_value) ' +
           'OR (td.end_attr_name = :author_name AND td.end_attr_value = :author_value))',
           { author_name: a[0], author_value: a[1] })
-        .select('viewpoint.name as start_attr_name', 'viewpoint.value as start_attr_value', knex.raw('? as end_attr_name', r[0]), knex.raw('? as end_attr_value', r[1]), knex.raw('IFNULL(td.distance, 0) + 1 as distance'));
+        .select('viewpoint.name as start_attr_name', 'viewpoint.value as start_attr_value', knex.raw('? as end_attr_name', r[0]), knex.raw('? as end_attr_value', r[1]), knex.raw(SQL_IFNULL+'(td.distance, 0) + 1 as distance'));
       }
 
       function getSaveFunction(a, r) {
@@ -910,6 +926,11 @@ module.exports = function(knex) {
 
   pub.init = function(conf) {
     config = conf;
+    if (conf.db.client === 'pg') {
+      SQL_IFNULL = 'COALESCE';
+      SQL_INSERT_OR_REPLACE = 'INSERT';
+      SQL_PRINTF = 'format';
+    }
     return schema.init(knex, config)
       .then(function() {
         // TODO: if myId is changed, the old one should be removed from TrustIndexedAttributes

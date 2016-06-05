@@ -108,7 +108,7 @@ router.get('/', function(req, res) {
     res.json({ message: 'Identifi API',
                 version: pkg.version,
                 identifiLibVersion: identifi.VERSION,
-                msgCount: results[0][0].val,
+                msgCount: results[0],
                 publicKey: myKey.public.hex,
                 keyID: myKey.hash
               });
