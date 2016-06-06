@@ -307,10 +307,11 @@ router.get('/identities/:attr_name/:attr_value/trustpaths', function(req, res) {
     res.status(400).json('target_name and target_value must be specified');
     return;
   }
-  var maxLength = req.query.max_length || 5;
+  var maxLength = req.query.max_length || 4;
   var shortestOnly = req.query.max_length !== undefined;
   var viewpoint = ['keyID', myKey.hash];
-  db.getTrustPaths([req.params.attr_name, req.params.attr_value], [req.query.target_name, req.query.target_value], maxLength, shortestOnly, viewpoint).then(function(dbRes) {
+  var limit = req.query.limit || 50;
+  db.getTrustPaths([req.params.attr_name, req.params.attr_value], [req.query.target_name, req.query.target_value], maxLength, shortestOnly, viewpoint, limit).then(function(dbRes) {
     res.json(dbRes);
   }).catch(function(err) { handleError(err, req, res); });
 });

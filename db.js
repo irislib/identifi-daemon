@@ -296,7 +296,7 @@ module.exports = function(knex) {
 
             // AddMessageFilterSQL(sql, viewpoint, maxDistance, msgType);
 
-            sql += "WHERE attr1.name = :attr AND attr1.value = :val ";
+            sql += "WHERE attr1.name = :attr AND attr1.value = :val AND p.type IN ('verify_identity','unverify_identity')  ";
             // AddMessageFilterSQLWhere(sql, viewpoint);
 
             sql += "UNION ALL ";
@@ -317,7 +317,7 @@ module.exports = function(knex) {
 
             // AddMessageFilterSQL(sql, viewpoint, maxDistance, msgType);
 
-            sql += "WHERE tc.distance < 10 "; // AND p.type IN ('verify_identity','unverify_identity')
+            sql += "WHERE tc.distance < 5 AND p.type IN ('verify_identity','unverify_identity') ";
             // AddMessageFilterSQLWhere(sql, viewpoint);
             sql += "AND tc.path_string NOT LIKE " + SQL_PRINTF + "('%%%s:%s:%%',replace(attr2.name,':','::'),replace(attr2.value,':','::'))";
             sql += ") ";
@@ -588,7 +588,7 @@ module.exports = function(knex) {
       return knex.raw(sql, params);
     }, */
 
-    getTrustPaths: function(start, end, maxLength, shortestOnly, viewpoint) {
+    getTrustPaths: function(start, end, maxLength, shortestOnly, viewpoint, limit) {
       if (!viewpoint) {
         if (start[0] === 'keyID') {
           viewpoint = start;
@@ -630,6 +630,7 @@ module.exports = function(knex) {
       sql += "SELECT path_string FROM transitive_closure ";
       sql += "WHERE attr2name = :attr2name AND attr2val = :attr2val ";
       sql += "ORDER BY distance ";
+      sql += "LIMIT :limit ";
 
       return knex.raw(sql,
         { attr1name: start[0],
@@ -639,6 +640,7 @@ module.exports = function(knex) {
           attr2val: end[1],
           viewpoint_name: viewpoint[0],
           viewpoint_value: viewpoint[1],
+          limit: limit,
           true: true,
           false: false
         })
