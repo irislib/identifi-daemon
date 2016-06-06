@@ -1,5 +1,14 @@
 {
     "db": {
+        "client": "pg",
+        "connection": {
+            "host"     : "127.0.0.1",
+            "user"     : "martti",
+            "password" : "",
+            "database" : "identifi_test"
+        }
+    },
+    "db_sqlite": {
         "dialect": "sqlite3",
         "useNullAsDefault": true,
         "connection": {

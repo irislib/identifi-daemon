@@ -209,8 +209,7 @@ describe 'API', ->
           headers:
             'Authorization': 'Bearer ' + identifi.getJwt(privKeyPEM)
         r.then (res) ->
-          res.should.not.be.empty
-          res[0].wot_size.should.equal 4
+          res.should.equal 4
           done()
     describe 'list', ->
       it 'should list messages ordered by date', (done) ->
@@ -294,7 +293,7 @@ describe 'API', ->
               apiMethod: 'messages'
               apiId: m.hash
         r.should.be.rejected
-  describe 'attributes', ->
+  describe 'identities', ->
       it 'should return an empty set if an identity was not found', (done) ->
         r = identifi.request
               apiMethod: 'identities'
@@ -337,7 +336,6 @@ describe 'API', ->
           qs:
             search_value: 'i'
         r.then (res) ->
-          console.log res
           #res.length.should.equal 5
           #res[0].value.should.equal 'Bob the Builder'
           #res[1].value.should.equal 'alice@example.com'
@@ -383,14 +381,15 @@ describe 'API', ->
           apiId: 'bob@example.com'
           apiAction: 'stats'
         r.then (res) ->
+          console.log res
           res.length.should.equal 1
-          res[0].sentPositive.should.equal 1
-          res[0].sentNeutral.should.equal 0
-          res[0].sentNegative.should.equal 0
-          res[0].receivedPositive.should.equal 1
-          res[0].receivedNeutral.should.equal 0
-          res[0].receivedNegative.should.equal 2
-          res[0].firstSeen.should.not.be.empty
+          res[0].sent_positive.should.equal 1
+          res[0].sent_neutral.should.equal 0
+          res[0].sent_negative.should.equal 0
+          res[0].received_positive.should.equal 1
+          res[0].received_neutral.should.equal 0
+          res[0].received_negative.should.equal 2
+          res[0].first_seen.should.not.be.empty
           done()
       it 'should return the stats of an attribute, using a viewpoint & max_distance 1', (done) ->
         r = identifi.request
@@ -405,12 +404,12 @@ describe 'API', ->
         r.then (res) ->
           return done() # TODO: temporarily disabled
           res.length.should.equal 1
-          res[0].sentPositive.should.equal 1
-          res[0].sentNeutral.should.equal 0
-          res[0].sentNegative.should.equal 0
-          res[0].receivedPositive.should.equal 1
-          res[0].receivedNeutral.should.equal 0
-          res[0].receivedNegative.should.equal 0
+          res[0].sent_positive.should.equal 1
+          res[0].sent_neutral.should.equal 0
+          res[0].sent_negative.should.equal 0
+          res[0].received_positive.should.equal 1
+          res[0].received_neutral.should.equal 0
+          res[0].received_negative.should.equal 0
           res[0].firstSeen.should.not.be.empty
           done()
         .catch (e) ->
@@ -428,12 +427,12 @@ describe 'API', ->
         r.then (res) ->
           return done() # TODO: temporarily disabled
           res.length.should.equal 1
-          res[0].sentPositive.should.equal 1
-          res[0].sentNeutral.should.equal 0
-          res[0].sentNegative.should.equal 0
-          res[0].receivedPositive.should.equal 1
-          res[0].receivedNeutral.should.equal 0
-          res[0].receivedNegative.should.equal 1
+          res[0].sent_positive.should.equal 1
+          res[0].sent_neutral.should.equal 0
+          res[0].sent_negative.should.equal 0
+          res[0].received_positive.should.equal 1
+          res[0].received_neutral.should.equal 0
+          res[0].received_negative.should.equal 1
           res[0].firstSeen.should.not.be.empty
           done()
         .catch (e) ->

@@ -286,12 +286,12 @@ describe 'Database', ->
     it 'should return the stats of an attribute', (done) ->
       db.getStats(['email', 'bob@example.com'], ['email', 'alice@example.com']).then (res) ->
         res.length.should.equal 1
-        res[0].sentPositive.should.equal 1
-        res[0].sentNeutral.should.equal 0
-        res[0].sentNegative.should.equal 0
-        res[0].receivedPositive.should.equal 4
-        res[0].receivedNeutral.should.equal 0
-        res[0].receivedNegative.should.equal 1
+        res[0].sent_positive.should.equal 1
+        res[0].sent_neutral.should.equal 0
+        res[0].sent_negative.should.equal 0
+        res[0].received_positive.should.equal 4
+        res[0].received_neutral.should.equal 0
+        res[0].received_negative.should.equal 1
         res[0].firstSeen.should.not.be.empty
         done()
   describe 'delete', ->

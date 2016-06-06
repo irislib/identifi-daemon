@@ -20,7 +20,7 @@ function addDefaultIdentifierAttributes(db) {
 function addDefaultPeers(db) {
   return db.table('Peers').count('* as count')
   .then(function(res) {
-    if (res[0].count === 0) {
+    if (parseInt(res[0].count) === 0) {
       return db('Peers').insert([
         { url: 'http://seed1.identifi.org:4944/api' },
         { url: 'http://seed2.identifi.org:4944/api' },

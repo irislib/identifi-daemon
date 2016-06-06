@@ -207,12 +207,13 @@ router.route('/messages/:hash')
 
 router.get('/identities', function(req, res) {
     var options = {
-      where: {}
+      where: {},
+      having: {}
     };
     if (req.query.viewpoint_name && req.query.viewpoint_value) {
       options.viewpoint = [req.query.viewpoint_name, req.query.viewpoint_value];
     }
-    if (req.query.attr_name)        { options.where['attribute'] = req.query.attr_name; }
+    if (req.query.attr_name)        { options.having['attribute'] = req.query.attr_name; }
     if (req.query.search_value)     { options.searchValue = req.query.search_value; }
     if (req.query.order_by)         { options.orderBy = req.query.order_by; }
     if (req.query.direction && (req.query.direction === 'asc' || req.query.direction === 'desc'))
@@ -425,8 +426,8 @@ function makeConnectHandler(url, lastSeen, socket) {
     socket.on('msg', handleMsgEvent);
     getNewMessages(url, lastSeen);
     db.updatePeerLastSeen({ url: url, last_seen: new Date() }).return();
-    db.getPeerCount().then(function(res) {
-      var peersNeeded = config.maxPeerDBsize - res[0].count;
+    db.getPeerCount().then(function(count) {
+      var peersNeeded = config.maxPeerDBsize - count;
       if (peersNeeded > 0) {
         askForMorePeers(url, peersNeeded);
       }
