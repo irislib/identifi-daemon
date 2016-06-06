@@ -3,6 +3,7 @@
 'use strict'
 process.env.NODE_ENV = 'test'
 fs = require('fs')
+P = require('bluebird')
 osHomedir = require('os-homedir')
 errors = require('request-promise/errors')
 config = require('config')
@@ -24,20 +25,30 @@ cleanup = ->
   fs.unlink './identifi_test.db', (err) ->
   fs.unlink './identifi_test.log', (err) ->
 
+resetPostgres = ->
+  if config.db.client == 'pg'
+    knex = require('knex')(config.get('db'))
+    return knex.raw('drop schema public cascade')
+      .then -> knex.raw('create schema public')
+  else
+    return new P (resolve) -> resolve()
+
 describe 'API', ->
   server = undefined
   socket = undefined
   before (done) ->
     cleanup()
-    # After hook fails to execute when errors are thrown
-    server = require('../server.js')
+    resetPostgres().then ->
+      # After hook fails to execute when errors are thrown
+      server = require('../server.js')
 
-    myKey = keyutil.getDefault(datadir)
-    privKeyPEM = myKey.private.pem
-    hex = myKey.public.hex
+      myKey = keyutil.getDefault(datadir)
+      privKeyPEM = myKey.private.pem
+      hex = myKey.public.hex
 
-    identifi.apiRoot = 'http://127.0.0.1:4944/api'
-    server.ready.then ->
+      identifi.apiRoot = 'http://127.0.0.1:4944/api'
+      server.ready
+    .then ->
       socket = identifi.getSocket({ isPeer: true })
       done()
   after cleanup

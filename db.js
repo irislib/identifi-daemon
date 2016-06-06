@@ -324,12 +324,14 @@ module.exports = function(knex) {
 
             sql += SQL_INSERT_OR_REPLACE + " INTO \"IdentityAttributes\" ";
             // The subquery for selecting identity_id could be optimized?
-            sql += "(SELECT (SELECT " + SQL_IFNULL + "(MAX(identity_id), 0) + 1 FROM \"IdentityAttributes\"), attr2name, attr2val, :viewpoint_name, :viewpoint_value, 1, 0 FROM transitive_closure ";
+            if (SQL_ON_CONFLICT.length) { sql += '('; }
+            sql += "SELECT (SELECT " + SQL_IFNULL + "(MAX(identity_id), 0) + 1 FROM \"IdentityAttributes\"), attr2name, attr2val, :viewpoint_name, :viewpoint_value, 1, 0 FROM transitive_closure ";
             sql += "GROUP BY attr2name, attr2val ";
             sql += "UNION SELECT (SELECT " + SQL_IFNULL + "(MAX(identity_id), 0) + 1 FROM \"IdentityAttributes\"), :attr, :val, :viewpoint_name, :viewpoint_value, 1, 0 ";
             sql += "FROM \"MessageAttributes\" AS mi ";
             sql += "INNER JOIN \"IdentifierAttributes\" AS ui ON ui.name = mi.name ";
-            sql += "WHERE mi.name = :attr AND mi.value = :val) " + SQL_ON_CONFLICT;
+            sql += "WHERE mi.name = :attr AND mi.value = :val ";
+            if (SQL_ON_CONFLICT.length) { sql += ') ' + SQL_ON_CONFLICT; }
 
             var sqlValues = {
               attr: options.id[0],

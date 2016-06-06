@@ -4,6 +4,7 @@
 process.env.NODE_ENV = 'test'
 config = require('config')
 fs = require('fs')
+P = require('bluebird')
 chai = require('chai')
 chaiAsPromised = require('chai-as-promised')
 chai.should()
@@ -19,6 +20,13 @@ pubKey = null
 cleanup = ->
   fs.unlink '../' + config.db.connection.filename, (err) ->
 
+resetPostgres = (knex) ->
+  if config.db.client == 'pg'
+    return knex.raw('drop schema public cascade')
+      .then -> knex.raw('create schema public')
+  else
+    return new P (resolve) -> resolve()
+
 describe 'Database', ->
   db = undefined
   hash = undefined
@@ -29,8 +37,11 @@ describe 'Database', ->
     privKey = key.private.pem
     pubKey = key.public.hex
     knex = require('knex')(config.get('db'))
-    db = require('../db.js')(knex)
-    db.init(config).then -> done()
+    resetPostgres(knex)
+    .then ->
+      db = require('../db.js')(knex)
+      db.init(config)
+    .then -> done()
   after ->
     cleanup()
 
@@ -133,7 +144,7 @@ describe 'Database', ->
         done()
     it 'should generate a web of trust index', (done) ->
       db.generateWebOfTrustIndex(['email', 'alice@example.com'], 3, true, key.hash).then (res) ->
-        res[0].wot_size.should.equal 3
+        res.should.equal 3
         done()
     it 'should have 2 trust indexed attributes', (done) ->
       db.getTrustIndexedAttributes().then (res) ->
