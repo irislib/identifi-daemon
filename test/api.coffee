@@ -226,6 +226,24 @@ describe 'API', ->
         r.then (res) ->
           msg.type.should.equal 'rating' for msg in res
           done()
+      it 'should filter messages by rating type positive', (done) ->
+        r = identifi.request
+          apiMethod: 'messages'
+          qs:
+            type: 'rating:positive'
+        r.then (res) ->
+          msg.type.should.equal 'rating' for msg in res
+          msg.rating.should.be.above (msg.max_rating + msg.min_rating) / 2
+          done()
+      it 'should filter messages by rating type negative', (done) ->
+        r = identifi.request
+          apiMethod: 'messages'
+          qs:
+            type: 'rating:negative'
+        r.then (res) ->
+          msg.type.should.equal 'rating' for msg in res
+          msg.rating.should.be.below (msg.max_rating + msg.min_rating) / 2
+          done()
       it 'should filter messages by viewpoint, max_distance 1', (done) ->
         r = identifi.request
           apiMethod: 'messages'
@@ -328,7 +346,7 @@ describe 'API', ->
           qs:
             attr_name: 'email'
         r.then (res) ->
-          res.length.should.equal 3
+          res.length.should.equal 2
           done()
       it 'should filter by search query', (done) -> # TODO: fix?
         r = identifi.request

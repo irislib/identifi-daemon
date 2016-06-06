@@ -18,6 +18,7 @@ var SQL_PRINTF = 'PRINTF';
 
 module.exports = function(knex) {
   var p; // Private methods
+  var trustIndexedAttributes;
 
   var pub = {
     saveMessage: function(message, updateTrustIndexes) {
@@ -65,18 +66,10 @@ module.exports = function(knex) {
               })
               .then(function() {
                 if (updateTrustIndexes) {
-                  var t = +new Date();
-                  console.log('updateWotIndexesByMessage');
                   return p.updateWotIndexesByMessage(message)
                   .then(function() {
-                    var t2 = +new Date();
-                    console.log(t2 - t);
-                    console.log('updateIdentityIndexesByMessage');
-                    t = +new Date();
                     return p.updateIdentityIndexesByMessage(message)
                     .then(function(res) {
-                      t2 = +new Date();
-                      console.log(t2-t);
                       return res;
                     });
                   });
@@ -147,19 +140,18 @@ module.exports = function(knex) {
       if (options.where['Messages.type'] && options.where['Messages.type'].match(/^rating:(positive|neutral|negative)$/i)) {
         var ratingType = options.where['Messages.type'].match(/(positive|neutral|negative)$/i)[0];
         options.where['Messages.type'] = 'rating';
-        var ratingTypeFilter;
+        var bindings = { rating: 'Messages.rating', max_rating: 'Messages.max_rating', min_rating: 'Messages.min_rating' };
         switch(ratingType) {
           case 'positive':
-            ratingTypeFilter = ['Messages.rating', '<', '(Messages.max_rating + Messages.min_rating) / 2'];
+            query.whereRaw(':rating: > ( :max_rating: + :min_rating:) / 2', bindings);
             break;
           case 'neutral':
-            ratingTypeFilter = ['Messages.rating', '=', '(Messages.max_rating + Messages.min_rating) / 2'];
+            query.whereRaw(':rating: = ( :max_rating: + :min_rating:) / 2', bindings);
             break;
           case 'negative':
-            ratingTypeFilter = ['Messages.rating', '>', '(Messages.max_rating + Messages.min_rating) / 2'];
+            query.whereRaw(':rating: < ( :max_rating: + :min_rating:) / 2', bindings);
             break;
         }
-        query.where(ratingTypeFilter[0], ratingTypeFilter[1], ratingTypeFilter[2]);
       }
 
       query.where(options.where);
@@ -530,7 +522,13 @@ module.exports = function(knex) {
     },
 
     getTrustIndexedAttributes: function() {
-      return knex('TrustIndexedAttributes').select('*');
+      if (trustIndexedAttributes) {
+        return new P(function(resolve) { resolve(trustIndexedAttributes); });
+      }
+      return knex('TrustIndexedAttributes').select('*').then(function(res) {
+        trustIndexedAttributes = res;
+        return res;
+      });
     },
 
     /*
@@ -872,12 +870,38 @@ module.exports = function(knex) {
       });
     },
 
+    saveIdentityAttribute: function(identifier, viewpoint, identityId, confirmations, refutations) {
+      return knex('IdentityAttributes')
+        .insert({
+          viewpoint_name: viewpoint[0],
+          viewpoint_value: viewpoint[1],
+          name: identifier[0],
+          value: identifier[1],
+          identity_id: identityId,
+          confirmations: confirmations,
+          refutations: refutations
+        });
+    },
+
+    getIdentityID: function(identifier, viewpoint) {
+      return knex
+        .from('IdentityAttributes')
+        .where({
+          viewpoint_name: viewpoint[0],
+          viewpoint_value: viewpoint[1],
+          name: identifier[0],
+          value: identifier[1]
+        })
+        .innerJoin('IdentifierAttributes', 'IdentityAttributes.name', 'IdentifierAttributes.name')
+        .select('IdentityAttributes.identity_id');
+    },
+
     updateIdentityIndexesByMessage: function(message, trustedKeyID) {
-      /*
       if (message.signedData.type !== 'verify_identity' && message.signedData.type !== 'unverify_identity') {
-        return;
+        return new P(function(resolve) {
+          resolve();
+        });
       }
-      */
 
       var queries = [];
 
