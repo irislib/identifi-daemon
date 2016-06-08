@@ -30,7 +30,7 @@ module.exports = function(knex) {
             var isPublic = typeof message.signedData.public === 'undefined' ? true : message.signedData.public;
             return p.getPriority(message).then(function(priority) {
               return knex.transaction(function(trx) {
-                var messageSave = trx('Messages').insert({
+                return trx('Messages').insert({
                   hash:           message.hash,
                   jws:            message.jws,
                   timestamp:      message.signedData.timestamp,
@@ -42,27 +42,25 @@ module.exports = function(knex) {
                   priority:       priority,
                   is_latest:      p.isLatest(message),
                   signer_keyid:   message.signerKeyHash,
-                });
-
-                var i;
-                for (i = 0; i < message.signedData.author.length; i++) {
-                  queries.push(trx('MessageAttributes').insert({
-                    message_hash: message.hash,
-                    name: message.signedData.author[i][0],
-                    value: message.signedData.author[i][1],
-                    is_recipient: false
-                  }));
-                }
-                for (i = 0; i < message.signedData.recipient.length; i++) {
-                  queries.push(trx('MessageAttributes').insert({
-                    message_hash: message.hash,
-                    name: message.signedData.recipient[i][0],
-                    value: message.signedData.recipient[i][1],
-                    is_recipient: true
-                  }));
-                }
-
-                return messageSave.then(function() {
+                })
+                .then(function() {
+                  var i, queries = [];
+                  for (i = 0; i < message.signedData.author.length; i++) {
+                    queries.push(trx('MessageAttributes').insert({
+                      message_hash: message.hash,
+                      name: message.signedData.author[i][0],
+                      value: message.signedData.author[i][1],
+                      is_recipient: false
+                    }));
+                  }
+                  for (i = 0; i < message.signedData.recipient.length; i++) {
+                    queries.push(trx('MessageAttributes').insert({
+                      message_hash: message.hash,
+                      name: message.signedData.recipient[i][0],
+                      value: message.signedData.recipient[i][1],
+                      is_recipient: true
+                    }));
+                  }
                   return P.all(queries);
                 });
               })
@@ -184,12 +182,14 @@ module.exports = function(knex) {
 
     dropMessage: function(messageHash) {
       var messageDeleted = 0;
-      return knex('MessageAttributes').where({ message_hash: messageHash }).del()
-      .then(function() {
-        return knex('Messages').where({ hash: messageHash }).del();
-      })
-      .then(function(res) {
-        return !!res;
+      return knex.transaction(function(trx) {
+        return trx('MessageAttributes').where({ message_hash: messageHash }).del()
+        .then(function() {
+          return trx('Messages').where({ hash: messageHash }).del();
+        })
+        .then(function(res) {
+          return !!res;
+        });
       });
     },
 
@@ -217,34 +217,53 @@ module.exports = function(knex) {
       });
       */
 
-      var q = knex.from('IdentityAttributes AS attr')
-        .select(knex.raw(SQL_IFNULL + '(other_attributes.name, attr.name) AS attribute, ' + SQL_IFNULL + '(other_attributes.value, attr.value) AS value, attr.identity_id AS identity_id'))
-        .groupBy('other_attributes.name', 'attr.name', 'other_attributes.value', 'attr.value', 'attr.identity_id')
-        .leftJoin('IdentityAttributes AS other_attributes', function() {
-          this.on('other_attributes.identity_id', '=', 'attr.identity_id');
+      var subquery = knex.from('IdentityAttributes AS attr2')
+        .select(knex.raw('attr.identity_id'))
+        .groupBy('attr.identity_id')
+        .innerJoin('IdentityAttributes AS attr', function() {
+          this.on('attr.identity_id', '=', 'attr2.identity_id');
+        })
+        .leftJoin('TrustDistances as td', function() {
+          this.on('td.start_attr_name', '=', 'attr.viewpoint_name');
+          this.andOn('td.start_attr_value', '=', 'attr.viewpoint_value');
+          this.andOn('td.end_attr_name', '=', 'attr.name');
+          this.andOn('td.end_attr_value', '=', 'attr.value');
         })
         .where(options.where)
+        .orderBy(knex.raw('MIN(' + SQL_IFNULL + '(td.distance, 100000))'), options.direction)
         .limit(options.limit)
         .offset(options.offset);
 
       if (options.searchValue) {
-        q.where('attr.value', 'LIKE', '%' + options.searchValue + '%');
+        subquery.where('attr.value', 'LIKE', '%' + options.searchValue + '%');
       }
 
-      if (options.having.attribute) {
-        q.havingRaw(SQL_IFNULL + '(other_attributes.name, attr.name) = ?', [options.having.attribute]);
-      }
+      // subquery.then(function(res) { console.log(JSON.stringify(res, null, 2)); });
+
+      var q = knex.from('IdentityAttributes AS attr')
+        .select('*')
+        .leftJoin('TrustDistances as td', function() {
+          this.on('td.start_attr_name', '=', 'attr.viewpoint_name');
+          this.andOn('td.start_attr_value', '=', 'attr.viewpoint_value');
+          this.andOn('td.end_attr_name', '=', 'attr.name');
+          this.andOn('td.end_attr_value', '=', 'attr.value');
+        })
+        .where('attr.identity_id', 'in', subquery)
+        .orderBy('dist', options.direction);
+
+      // sql += "ORDER BY iid >= 0 DESC, IFNULL(tp.Distance,1000) ASC, CASE WHEN attrvalue LIKE :query || '%' THEN 0 ELSE 1 END, UID.name IS NOT NULL DESC, attrvalue ASC ";
 
       return q.then(function(res) {
+        // console.log(JSON.stringify(res, null, 2));
         var arr = [], identities = {};
         for (var i = 0; i < res.length; i++) {
           var attr = res[i];
           identities[attr.identity_id] = identities[attr.identity_id] || [];
-          identities[attr.identity_id].push({ attr: attr.attribute, val: attr.value });
+          identities[attr.identity_id].push({ attr: attr.name, val: attr.value, dist: attr.distance });
         }
 
         for (var key in identities) {
-            arr.push(identities[key]);
+            arr.unshift(identities[key]);
         }
 
         return new P(function(resolve) {

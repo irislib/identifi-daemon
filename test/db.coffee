@@ -303,7 +303,7 @@ describe 'Database', ->
         res[0].received_positive.should.equal 4
         res[0].received_neutral.should.equal 0
         res[0].received_negative.should.equal 1
-        res[0].firstSeen.should.not.be.empty
+        res[0].first_seen.should.not.be.empty
         done()
   describe 'delete', ->
     it 'should delete a message', (done) ->
