@@ -442,7 +442,7 @@ if (process.env.NODE_ENV !== 'test') {
   })
   .then(function(peers) {
     for (var i = 0; i < peers.length; i++) {
-      if (outgoingConnections.length >= config.maxConnectionsOut) {
+      if (Object.keys(outgoingConnections).length >= config.maxConnectionsOut) {
         break;
       }
       log('Attempting connection to saved peer ' + peers[i].url);
