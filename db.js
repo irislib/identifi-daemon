@@ -248,8 +248,7 @@ module.exports = function(knex) {
           this.andOn('td.end_attr_name', '=', 'attr.name');
           this.andOn('td.end_attr_value', '=', 'attr.value');
         })
-        .where('attr.identity_id', 'in', subquery)
-        .orderBy('dist', options.direction);
+        .where('attr.identity_id', 'in', subquery);
 
       // sql += "ORDER BY iid >= 0 DESC, IFNULL(tp.Distance,1000) ASC, CASE WHEN attrvalue LIKE :query || '%' THEN 0 ELSE 1 END, UID.name IS NOT NULL DESC, attrvalue ASC ";
 
@@ -438,7 +437,7 @@ module.exports = function(knex) {
       function buildSql(betweenKeyIDsOnly) {
         var sql = "WITH RECURSIVE transitive_closure(attr1name, attr1val, attr2name, attr2val, distance, path_string) AS ";
         sql += "(";
-        sql += "SELECT attr1.name, attr1.value, attr2.name, attr2.value, 1 AS distance, ";
+        sql += "SELECT attr1.name, attr1.value, attr2.name, attr2.value, 0 AS distance, ";
         sql += SQL_PRINTF + "('%s:%s:%s:%s:',replace(attr1.name,':','::'),replace(attr1.value,':','::'),replace(attr2.name,':','::'),replace(attr2.value,':','::')) AS path_string ";
         sql += "FROM \"Messages\" AS m ";
         sql += "INNER JOIN \"MessageAttributes\" as attr1 ON m.hash = attr1.message_hash AND attr1.is_recipient = :false ";
