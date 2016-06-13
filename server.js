@@ -23,6 +23,9 @@ var myKey = keyutil.getDefault(datadir);
 
 var jwt = require('express-jwt');
 var authRequired = jwt({ secret: new Buffer(myKey.public.pem) });
+var passport = require('passport');
+
+var loginOptions = [];
 
 process.env.NODE_CONFIG_DIR = __dirname + '/config';
 var config = require('config');
@@ -75,6 +78,7 @@ try {
 
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
+app.use(passport.initialize());
 
 var port = config.get('port');
 
@@ -82,6 +86,52 @@ var port = config.get('port');
 // =============================================================================
 var router = express.Router();
 
+function issueToken(receivedToken1, receivedToken2, profile, done) {
+  var payload = { user: { idType: 'account', idValue: profile.id + '@' + profile.provider, name: profile.displayName } };
+  var token = identifiClient.getJwt(myKey.private.pem, payload);
+  var user = { token: token };
+  done(null, user);
+}
+
+function getAuthResponse(req, res) {
+  res.redirect('/#/?token=' + req.user.token);
+}
+
+function initializePassportStrategies() {
+  if (config.passport.facebook.clientID &&
+    config.passport.facebook.clientSecret) {
+    loginOptions.push('facebook');
+    var FacebookStrategy = require('passport-facebook').Strategy;
+    passport.use(new FacebookStrategy(config.passport.facebook, issueToken));
+    router.get('/auth/facebook', passport.authenticate('facebook'));
+    router.get('/auth/facebook/callback', passport.authenticate('facebook', { session: false }), getAuthResponse);
+  }
+  if (config.passport.twitter.consumerKey &&
+    config.passport.twitter.consumerSecret) {
+    loginOptions.push('twitter');
+    var TwitterStrategy = require('passport-twitter').Strategy;
+    passport.use(new TwitterStrategy(config.passport.twitter, issueToken));
+    router.get('/auth/twitter', passport.authenticate('twitter'));
+    router.get('/auth/twitter/callback', passport.authenticate('twitter', { session: false }), getAuthResponse);
+  }
+  if (config.passport.google.consumerKey &&
+    config.passport.google.consumerSecret) {
+    loginOptions.push('google');
+    var GoogleStrategy = require('passport-google-oauth').OAuthStrategy;
+    passport.use(new GoogleStrategy(config.passport.google, issueToken));
+    router.get('/auth/google', passport.authenticate('google', { scope: 'https://www.google.com/m8/feeds' }));
+    router.get('/auth/google/callback', passport.authenticate('google', { session: false }), getAuthResponse);
+  }
+
+  if (config.passport.persona.audience) {
+    loginOptions.push('persona');
+    var PersonaStrategy = require('passport-persona').Strategy;
+    passport.use(new PersonaStrategy({ audience: config.passport.persona.audience}, issueToken));
+    router.post('/auth/browserid', passport.authenticate('persona', { session: false }), getAuthResponse);
+  }
+}
+
+initializePassportStrategies();
 
 function handleError(err, req, res) {
   log(err);
@@ -110,7 +160,8 @@ router.get('/', function(req, res) {
                 identifiLibVersion: identifi.VERSION,
                 msgCount: results[0],
                 publicKey: myKey.public.hex,
-                keyID: myKey.hash
+                keyID: myKey.hash,
+                loginOptions: loginOptions
               });
   }).catch(function(err) { handleError(err, req, res); });
 });
@@ -126,10 +177,16 @@ router.route('/peers')
   })
 
   .post(authRequired, function(req, res) {
+    if (!req.user.admin) {
+      return res.sendStatus(401);
+    }
     res.json("add peer");
   })
 
   .delete(authRequired, function(req, res) {
+    if (!req.user.admin) {
+      return res.sendStatus(401);
+    }
     res.json("remove peer");
   });
 
@@ -195,6 +252,9 @@ router.route('/messages/:hash')
   })
 
   .delete(authRequired, function(req, res) {
+    if (!req.user.admin) {
+      return res.sendStatus(401);
+    }
     db.dropMessage(req.params.hash).then(function(dbRes) {
       if (!dbRes) {
         return res.status(404).json('Message not found');
@@ -316,6 +376,9 @@ router.get('/identities/:attr_name/:attr_value/trustpaths', function(req, res) {
 });
 
 router.get('/identities/:attr_name/:attr_value/generatewotindex', authRequired, function(req, res) {
+  if (!req.user.admin) {
+    return res.sendStatus(401);
+  }
   var depth = parseInt(req.query.depth) || 3;
   var trustedKeyID = null;
   if (req.params.trusted_keyid) {

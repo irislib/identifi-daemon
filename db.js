@@ -169,7 +169,6 @@ module.exports = function(knex) {
           }
         });
       }
-      console.log(query.toString());
       return query;
     },
 

@@ -7,6 +7,27 @@
         },
         "debug": false
     },
+    "passport": {
+      "facebook": {
+        "clientID": null,
+        "clientSecret": null,
+        "callbackURL": "http://www.example.com/auth/facebook/callback"
+      },
+      "twitter": {
+        "consumerKey": null,
+        "consumerSecret": null,
+        "callbackURL": "http://www.example.com/auth/twitter/callback"
+      },
+      "google": {
+        "consumerKey": null,
+        "consumerSecret": null,
+        "callbackURL": "http://www.example.com/auth/google/callback"
+      },
+      "persona": {
+        "audience": null,
+        "audience_info": "Set your node url as audience"
+      }
+    },
     "port": 4944,
     "logfile": "identifi.log",
     "datadir": "~/.identifi",

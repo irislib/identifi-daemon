@@ -218,7 +218,7 @@ describe 'API', ->
           qs:
             depth: 3
           headers:
-            'Authorization': 'Bearer ' + identifi.getJwt(privKeyPEM)
+            'Authorization': 'Bearer ' + identifi.getJwt(privKeyPEM, { admin: true })
         r.then (res) ->
           res.should.equal 4
           done()
@@ -263,10 +263,9 @@ describe 'API', ->
             viewpoint_value: 'alice@example.com'
             max_distance: 1
         r.then (res) ->
-          res.length.should.equal 4
+          res.length.should.equal 6
           done()
       it 'should filter messages by timestamp_lte', (done) ->
-        console.log m.signedData.timestamp
         r = identifi.request
           apiMethod: 'messages'
           qs:
@@ -305,7 +304,7 @@ describe 'API', ->
           apiId: m.hash
           method: 'DELETE'
           headers:
-            'Authorization': 'Bearer ' + identifi.getJwt(privKeyPEM)
+            'Authorization': 'Bearer ' + identifi.getJwt(privKeyPEM, { admin: true })
         r.then (res) ->
           res.should.equal 'OK'
           done()
@@ -315,7 +314,7 @@ describe 'API', ->
           apiId: '1234'
           method: 'DELETE'
           headers:
-            'Authorization': 'Bearer ' + identifi.getJwt(privKeyPEM)
+            'Authorization': 'Bearer ' + identifi.getJwt(privKeyPEM, { admin: true })
         r.should.be.rejected
       it 'should have removed the message', ->
         r = identifi.request

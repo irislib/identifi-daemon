@@ -38,6 +38,11 @@
     "knex": "^0.10.0",
     "moment": "^2.10.2",
     "os-homedir": "^1.0.1",
+    "passport": "^0.3.2",
+    "passport-facebook": "^2.1.1",
+    "passport-google-oauth": "^1.0.0",
+    "passport-persona": "^0.1.7",
+    "passport-twitter": "^1.0.4",
     "socket.io": "^1.4.5",
     "sqlite3": "^3.1.2"
   },
