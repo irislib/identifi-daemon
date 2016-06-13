@@ -122,12 +122,13 @@ module.exports = function(knex) {
         }
       }
 
-      var query = knex.select('Messages.*').from('Messages')
+      var query = knex.select('Messages.*')
+        .distinct('Messages.hash')
+        .from('Messages')
         .innerJoin('MessageAttributes as attr', 'Messages.hash', 'attr.message_hash')
         .orderBy(options.orderBy, options.direction)
         .limit(options.limit)
-        .offset(options.offset)
-        .groupBy('Messages.hash');
+        .offset(options.offset);
 
       if (options.timestampGte) {
         query.andWhere('Messages.timestamp', '>=', options.timestampGte);
@@ -157,26 +158,18 @@ module.exports = function(knex) {
       query.where(options.where);
 
       if (options.viewpoint) {
-        query.leftJoin('TrustDistances as td', function() {
+        query.innerJoin('TrustDistances as td', function() {
           this.on('attr.name', '=', 'td.end_attr_name')
             .andOn('attr.value', '=', 'td.end_attr_value')
-            .andOn('attr.is_recipient', '=', knex.raw('?', false));
+            .andOn('attr.is_recipient', '=', knex.raw('?', false))
+            .andOn('td.start_attr_name', '=', knex.raw('?', options.viewpoint[0]))
+            .andOn('td.start_attr_value', '=', knex.raw('?', options.viewpoint[1]));
+          if (options.maxDistance > 0) {
+            this.andOn('td.distance', '<=', knex.raw('?', options.maxDistance));
+          }
         });
-
-        var sql = '(td.start_attr_name = :viewpoint_name AND td.start_attr_value = :viewpoint_value ';
-        if (options.maxDistance > 0) {
-          sql += 'AND td.distance <= :maxDistance ';
-        }
-        // A bit messy way to pick also messages that were authored by the viewpointId
-        sql += ') OR (attr.is_recipient = :false AND attr.name = :viewpoint_name AND attr.value = :viewpoint_value)';
-        query.where(knex.raw(sql, {
-          viewpoint_name: options.viewpoint[0],
-          viewpoint_value: options.viewpoint[1],
-          maxDistance: options.maxDistance,
-          true: true,
-          false: false
-        }));
       }
+      console.log(query.toString());
       return query;
     },
 

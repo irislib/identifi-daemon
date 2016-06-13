@@ -59,7 +59,11 @@ var init = function(db, config) {
     t.string('name').notNullable();
     t.string('value').notNullable();
     t.boolean('is_recipient');
-    t.primary(['name', 'value', 'message_hash', 'is_recipient']);
+    t.index('message_hash', 'name', 'value');
+    t.index('message_hash', 'is_recipient');
+    t.index('message_hash');
+    t.index('name', 'value');
+    t.primary(['message_hash', 'is_recipient', 'name', 'value']);
   })
 
   .createTableIfNotExists('TrustDistances', function(t) {
@@ -79,6 +83,7 @@ var init = function(db, config) {
     t.string('viewpoint_value').notNullable();
     t.integer('confirmations').unsigned();
     t.integer('refutations').unsigned();
+    t.index('viewpoint_name', 'viewpoint_value');
     t.primary(['name', 'value', 'viewpoint_name', 'viewpoint_value']);
   })
 
