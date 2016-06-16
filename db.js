@@ -18,9 +18,9 @@ var SQL_PRINTF = 'PRINTF';
 
 module.exports = function(knex) {
   var p; // Private methods
-  var trustIndexedAttributes;
 
   var pub = {
+    trustIndexedAttributes: null,
     saveMessage: function(message, updateTrustIndexes) {
       if (typeof updateTrustIndexes === 'undefined') { updateTrustIndexes = true; }
       var queries = [];
@@ -484,36 +484,41 @@ module.exports = function(knex) {
       var keyIdsSql = buildSql(true),
         allIdsSql = buildSql(false);
 
+      var q;
       if (maintain) {
-        this.addTrustIndexedAttribute(id, maxDepth).return();
+        q = this.addTrustIndexedAttribute(id, maxDepth);
+      } else {
+        q = new P(function(resolve) { resolve(); });
       }
-      return knex.transaction(function(trx) {
-        return trx('TrustDistances')
-          .where({ start_attr_name: id[0], start_attr_value: id[1] }).del()
-          .then(function() {
-            return trx.raw(keyIdsSql, { attr1name: 'keyID', attr1value: trustedKeyID || id[1], maxDepth: maxDepth, true: true, false: false });
-          })
-          .then(function() {
-            return trx.raw(allIdsSql, { attr1name: id[0], attr1value: id[1], maxDepth: maxDepth, trustedKeyID: trustedKeyID || id[1], true: true, false: false });
-          })
-          .then(function() {
-            return trx('TrustDistances').where({ start_attr_name: id[0], start_attr_value: id[1], end_attr_name: id[0], end_attr_value: id[1], distance: 0 })
-            .count('* as count');
-          })
-          .then(function(res) {
-            if (!parseInt(res[0].count)) {
-              // Add trust distance to self = 0
-              return trx('TrustDistances')
-              .insert({ start_attr_name: id[0], start_attr_value: id[1], end_attr_name: id[0], end_attr_value: id[1], distance: 0 });
-            }
-          })
-          .then(function() {
-            return trx('TrustDistances').count('* as wot_size')
-              .where({ start_attr_name: id[0], start_attr_value: id[1] });
-          })
-          .then(function(res) {
-            return parseInt(res[0].wot_size);
-          });
+      return q.then(function() {
+        return knex.transaction(function(trx) {
+          return trx('TrustDistances')
+            .where({ start_attr_name: id[0], start_attr_value: id[1] }).del()
+            .then(function() {
+              return trx.raw(keyIdsSql, { attr1name: 'keyID', attr1value: trustedKeyID || id[1], maxDepth: maxDepth, true: true, false: false });
+            })
+            .then(function() {
+              return trx.raw(allIdsSql, { attr1name: id[0], attr1value: id[1], maxDepth: maxDepth, trustedKeyID: trustedKeyID || id[1], true: true, false: false });
+            })
+            .then(function() {
+              return trx('TrustDistances').where({ start_attr_name: id[0], start_attr_value: id[1], end_attr_name: id[0], end_attr_value: id[1], distance: 0 })
+              .count('* as count');
+            })
+            .then(function(res) {
+              if (!parseInt(res[0].count)) {
+                // Add trust distance to self = 0
+                return trx('TrustDistances')
+                .insert({ start_attr_name: id[0], start_attr_value: id[1], end_attr_name: id[0], end_attr_value: id[1], distance: 0 });
+              }
+            })
+            .then(function() {
+              return trx('TrustDistances').count('* as wot_size')
+                .where({ start_attr_name: id[0], start_attr_value: id[1] });
+            })
+            .then(function(res) {
+              return parseInt(res[0].wot_size);
+            });
+        });
       });
     },
 
@@ -525,7 +530,12 @@ module.exports = function(knex) {
         } else {
           return knex('TrustIndexedAttributes').insert({ name: id[0], value: id[1], depth: depth });
         }
-      }).then(function() {
+      })
+      .then(function() {
+        return pub.getTrustIndexedAttributes(true);
+      })
+      .then(function(res) {
+        pub.trustIndexedAttributes = res;
         return knex('TrustDistances')
         .where({ start_attr_name: id[0], start_attr_value: id[1], end_attr_name: id[0], end_attr_value: id[1] })
         .count('* as c');
@@ -539,12 +549,12 @@ module.exports = function(knex) {
       });
     },
 
-    getTrustIndexedAttributes: function() {
-      if (trustIndexedAttributes) {
-        return new P(function(resolve) { resolve(trustIndexedAttributes); });
+    getTrustIndexedAttributes: function(forceRefresh) {
+      if (pub.trustIndexedAttributes && !forceRefresh) {
+        return new P(function(resolve) { resolve(pub.trustIndexedAttributes); });
       }
       return knex('TrustIndexedAttributes').select('*').then(function(res) {
-        trustIndexedAttributes = res;
+        pub.trustIndexedAttributes = res;
         return res;
       });
     },
@@ -608,6 +618,8 @@ module.exports = function(knex) {
           viewpoint = myId;
         }
       }
+
+      limit = limit || 50;
 
       var sql = '';
       sql += "WITH RECURSIVE transitive_closure(attr1name, attr1val, attr2name, attr2val, distance, path_string) AS ";

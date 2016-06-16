@@ -91,7 +91,7 @@ var init = function(db, config) {
     t.string('name');
     t.string('value');
     t.integer('depth').unsigned().notNullable();
-    t.primary(['name', 'value', 'depth']);
+    t.primary(['name', 'value']);
   })
 
   .createTableIfNotExists('Peers', function(t) {

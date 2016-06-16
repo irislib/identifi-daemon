@@ -144,7 +144,7 @@ describe 'API', ->
           apiMethod: 'messages'
           body: msg
           headers:
-            'Authorization': 'Bearer ' + identifi.getJwt(privKeyPEM, { idType: 'email', idValue: 'bob@example.com', name: 'Bob' })
+            'Authorization': 'Bearer ' + identifi.getJwt(privKeyPEM, { user: { idType: 'email', idValue: 'bob@example.com', name: 'Bob' } })
         r.then (res) ->
           m = res
           done()
@@ -422,7 +422,6 @@ describe 'API', ->
           apiId: 'bob@example.com'
           apiAction: 'stats'
         r.then (res) ->
-          console.log res
           res.length.should.equal 1
           res[0].sent_positive.should.equal 1
           res[0].sent_neutral.should.equal 0

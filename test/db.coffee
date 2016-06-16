@@ -153,7 +153,7 @@ describe 'Database', ->
         res[1].value.should.equal 'alice@example.com'
         done()
     it 'should return a trust path', (done) ->
-      db.getTrustPaths(['email', 'alice@example.com'], ['email', 'charles@example.com'], 3).then (res) ->
+      db.getTrustPaths(['email', 'alice@example.com'], ['email', 'charles@example.com'], 3, false).then (res) ->
         res.length.should.equal 1
         done()
     it 'should not extend trust with a msg from an untrusted signer', (done) ->
@@ -167,7 +167,7 @@ describe 'Database', ->
       db.saveMessage(message).then ->
         db.generateWebOfTrustIndex(['email', 'alice@example.com'], 3, true, key.hash)
       .then (res) ->
-        res[0].wot_size.should.equal 3
+        res.should.equal 3
         done()
       ###
       db.getTrustPaths(['email', 'alice@example.com'], ['email', 'charles@example.com'], 3).then (res) ->
