@@ -23,6 +23,7 @@ var myKey = keyutil.getDefault(datadir);
 
 var jwt = require('express-jwt');
 var authRequired = jwt({ secret: new Buffer(myKey.public.pem) });
+var authOptional = jwt({ secret: new Buffer(myKey.public.pem), credentialsRequired: false });
 var passport = require('passport');
 
 var loginOptions = [];
@@ -87,7 +88,23 @@ var port = config.get('port');
 var router = express.Router();
 
 function issueToken(receivedToken1, receivedToken2, profile, done) {
-  var payload = { user: { idType: 'account', idValue: profile.id + '@' + profile.provider, name: profile.displayName } };
+  var exp = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 365;
+  var idType, idValue;
+  if (profile.provider === 'facebook') {
+    idType = 'url';
+    idValue = 'https://www.facebook.com/' + profile.id;
+  } else {
+    idType = 'account';
+    idValue = profile.id + '@' + profile.provider;
+  }
+  var payload = {
+    exp: exp,
+    user: {
+      idType: idType,
+      idValue: idValue,
+      name: profile.displayName
+    }
+  };
   var token = identifiClient.getJwt(myKey.private.pem, payload);
   var user = { token: token };
   done(null, user);
@@ -222,8 +239,18 @@ router.route('/messages')
     getMessages(req, res);
   })
 
-  .post(function(req, res) {
+  .post(authOptional, function(req, res) {
     var m = req.body;
+
+    if (!m.hash) {
+      if (req.user) {
+        m.author = [[req.user.user.idType, req.user.user.idValue], ['name', req.user.user.name]];
+        m = Message.create(m);
+        Message.sign(m, myKey.private.pem, myKey.public.hex);
+      } else {
+        return res.status(400).json('Invalid identifi message or unauthorized request');
+      }
+    }
 
     db.messageExists(m.hash)
     .then(function(exists) {

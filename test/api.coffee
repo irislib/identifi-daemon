@@ -135,6 +135,19 @@ describe 'API', ->
           apiMethod: 'messages'
           body: m
         r.then -> done()
+      it 'should add an unsigned and authorless message when authorization is provided', (done) ->
+        msg =
+          recipient: [['email', 'charles@example.com'], ['url', 'http://twitter.com/charles']]
+          type: 'verify_identity'
+        r = identifi.request
+          method: 'POST'
+          apiMethod: 'messages'
+          body: msg
+          headers:
+            'Authorization': 'Bearer ' + identifi.getJwt(privKeyPEM, { idType: 'email', idValue: 'bob@example.com', name: 'Bob' })
+        r.then (res) ->
+          m = res
+          done()
     describe 'retrieve', ->
       it 'should fail if the message was not found', ->
         r = identifi.request
@@ -263,7 +276,7 @@ describe 'API', ->
             viewpoint_value: 'alice@example.com'
             max_distance: 1
         r.then (res) ->
-          res.length.should.equal 6
+          res.length.should.equal 7
           done()
       it 'should filter messages by timestamp_lte', (done) ->
         r = identifi.request
@@ -271,7 +284,7 @@ describe 'API', ->
           qs:
             timestamp_lte: m.signedData.timestamp
         r.then (res) ->
-          res.length.should.equal 7
+          res.length.should.equal 8
           done()
       it 'should filter messages by timestamp_gte', (done) ->
         r = identifi.request
@@ -289,7 +302,7 @@ describe 'API', ->
             viewpoint_value: 'alice@example.com'
             max_distance: 2
         r.then (res) ->
-          res.length.should.equal 6
+          res.length.should.equal 7
           done()
     describe 'delete', ->
       it 'should fail without auth', ->
