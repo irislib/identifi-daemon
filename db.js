@@ -112,7 +112,7 @@ module.exports = function(knex) {
 
       var select = ['Messages.*'];
       if (options.viewpoint) {
-        select.push('td.distance AS distance');
+        select.push(knex.raw('MIN("td"."distance") AS "distance"'));
       }
       var query = knex.select(select)
         .groupBy('Messages.hash')
@@ -121,6 +121,10 @@ module.exports = function(knex) {
         .orderBy(options.orderBy, options.direction)
         .limit(options.limit)
         .offset(options.offset);
+
+      if (options.distinctAuthor) {
+        // group by author
+      }
 
       if (options.author) {
         options.where['author.name'] = options.author[0];

@@ -219,12 +219,8 @@ function getMessages(req, res, options) {
     }
     if (req.query.max_distance) { options.maxDistance = parseInt(req.query.max_distance); }
     if (req.query.type)     { options.where['Messages.type'] = req.query.type; }
-    if (req.query.order_by) {
-      if (req.query.order_by === 'distance') {
-        req.query.order_by = 'td.distance';
-      }
-      options.orderBy = req.query.order_by;
-    }
+    if (req.query.order_by) { options.orderBy = req.query.order_by; }
+    if (req.query.distinct_author) { options.distinctAuthor = true; }
     if (req.query.direction && (req.query.direction === 'asc' || req.query.direction === 'desc')) {
        options.direction = req.query.order_by;
     }
@@ -408,7 +404,6 @@ router.get('/identities/:attr_name/:attr_value/trustpaths', function(req, res) {
 });
 
 router.get('/identities/:attr_name/:attr_value/generatewotindex', authRequired, function(req, res) {
-  console.log(req.user);
   if (!req.user.admin) {
     return res.sendStatus(401);
   }
