@@ -110,25 +110,31 @@ module.exports = function(knex) {
         options[key] = options[key] !== undefined ? options[key] : defaultOptions[key];
       }
 
-      if (options.author || options.recipient) {
-        if (options.author) {
-          options.where['attr.name'] = options.author[0];
-          options.where['attr.value'] = options.author[1];
-          options.where['attr.is_recipient'] = false;
-        } else {
-          options.where['attr.name'] = options.recipient[0];
-          options.where['attr.value'] = options.recipient[1];
-          options.where['attr.is_recipient'] = true;
-        }
+      var select = ['Messages.*'];
+      if (options.viewpoint) {
+        select.push('td.distance AS distance');
       }
-
-      var query = knex.select('Messages.*')
-        .distinct('Messages.hash')
+      var query = knex.select(select)
+        .groupBy('Messages.hash')
         .from('Messages')
-        .innerJoin('MessageAttributes as attr', 'Messages.hash', 'attr.message_hash')
+        .innerJoin('MessageAttributes as author', 'Messages.hash', 'author.message_hash')
         .orderBy(options.orderBy, options.direction)
         .limit(options.limit)
         .offset(options.offset);
+
+      if (options.author) {
+        options.where['author.name'] = options.author[0];
+        options.where['author.value'] = options.author[1];
+        options.where['author.is_recipient'] = knex.raw('?', false);
+      }
+      if (options.recipient) {
+        query.innerJoin('MessageAttributes as recipient', function() {
+          this.on('Messages.hash', '=', 'recipient.message_hash');
+          this.andOn('recipient.is_recipient', '=', knex.raw('?', true));
+        });
+        options.where['recipient.name'] = options.recipient[0];
+        options.where['recipient.value'] = options.recipient[1];
+      }
 
       if (options.timestampGte) {
         query.andWhere('Messages.timestamp', '>=', options.timestampGte);
@@ -159,9 +165,9 @@ module.exports = function(knex) {
 
       if (options.viewpoint) {
         query.innerJoin('TrustDistances as td', function() {
-          this.on('attr.name', '=', 'td.end_attr_name')
-            .andOn('attr.value', '=', 'td.end_attr_value')
-            .andOn('attr.is_recipient', '=', knex.raw('?', false))
+          this.on('author.name', '=', 'td.end_attr_name')
+            .andOn('author.value', '=', 'td.end_attr_value')
+            .andOn('author.is_recipient', '=', knex.raw('?', false))
             .andOn('td.start_attr_name', '=', knex.raw('?', options.viewpoint[0]))
             .andOn('td.start_attr_value', '=', knex.raw('?', options.viewpoint[1]));
           if (options.maxDistance > 0) {
@@ -611,6 +617,8 @@ module.exports = function(knex) {
     }, */
 
     getTrustPaths: function(start, end, maxLength, shortestOnly, viewpoint, limit) {
+      return new P(function(resolve) { resolve([]); }); // Disabled until the performance is improved
+      /*
       if (!viewpoint) {
         if (start[0] === 'keyID') {
           viewpoint = start;
@@ -671,6 +679,7 @@ module.exports = function(knex) {
         .then(function(res) {
           return res.rows || res;
         });
+        */
     },
 
     getMessageCount: function() {

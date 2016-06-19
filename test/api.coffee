@@ -186,33 +186,7 @@ describe 'API', ->
         .then (res) ->
           res[0].hash.should.not.equal privMsg.hash
           done()
-    describe 'trustpaths', ->
-      it 'should return a trustpath from alice to bob', (done) ->
-        r = identifi.request
-          apiMethod: 'identities'
-          apiIdType: 'email'
-          apiId: 'alice@example.com'
-          apiAction: 'trustpaths'
-          qs:
-            target_name: 'email'
-            target_value: 'bob@example.com'
-        r.then (res) ->
-          res.should.not.be.empty
-          res[0].path_string.split(':').length.should.equal 5
-          done()
-      it 'should return a trustpath from alice to david', (done) ->
-        r = identifi.request
-          apiMethod: 'identities'
-          apiIdType: 'email'
-          apiId: 'alice@example.com'
-          apiAction: 'trustpaths'
-          qs:
-            target_name: 'email'
-            target_value: 'david@example.com'
-        r.then (res) ->
-          res.should.not.be.empty
-          res[0].path_string.split(':').length.should.equal 9
-          done()
+    describe 'wot', ->
       it 'should not generate a web of trust without auth', ->
         r = identifi.request
           apiMethod: 'identities'
