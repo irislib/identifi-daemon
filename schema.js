@@ -52,6 +52,8 @@ var init = function(db, config) {
     t.integer('priority').unsigned();
     t.boolean('is_latest');
     t.string('signer_keyid');
+    t.index(['timestamp']);
+    t.index(['type']);
   })
 
   .createTableIfNotExists('MessageAttributes', function(t) {
