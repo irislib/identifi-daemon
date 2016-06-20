@@ -396,14 +396,13 @@ describe 'API', ->
           apiId: 'bob@example.com'
           apiAction: 'stats'
         r.then (res) ->
-          res.length.should.equal 1
-          res[0].sent_positive.should.equal 1
-          res[0].sent_neutral.should.equal 0
-          res[0].sent_negative.should.equal 0
-          res[0].received_positive.should.equal 1
-          res[0].received_neutral.should.equal 0
-          res[0].received_negative.should.equal 2
-          res[0].first_seen.should.not.be.empty
+          res.sent_positive.should.equal 1
+          res.sent_neutral.should.equal 0
+          res.sent_negative.should.equal 0
+          res.received_positive.should.equal 1
+          res.received_neutral.should.equal 0
+          res.received_negative.should.equal 2
+          res.first_seen.should.not.be.empty
           done()
       it 'should return the stats of an attribute, using a viewpoint & max_distance 1', (done) ->
         r = identifi.request
@@ -417,14 +416,13 @@ describe 'API', ->
             max_distance: 1
         r.then (res) ->
           return done() # TODO: temporarily disabled
-          res.length.should.equal 1
-          res[0].sent_positive.should.equal 1
-          res[0].sent_neutral.should.equal 0
-          res[0].sent_negative.should.equal 0
-          res[0].received_positive.should.equal 1
-          res[0].received_neutral.should.equal 0
-          res[0].received_negative.should.equal 0
-          res[0].first_seen.should.not.be.empty
+          res.sent_positive.should.equal 1
+          res.sent_neutral.should.equal 0
+          res.sent_negative.should.equal 0
+          res.received_positive.should.equal 1
+          res.received_neutral.should.equal 0
+          res.received_negative.should.equal 0
+          res.first_seen.should.not.be.empty
           done()
         .catch (e) ->
           done(e)
@@ -440,14 +438,13 @@ describe 'API', ->
             max_distance: 1
         r.then (res) ->
           return done() # TODO: temporarily disabled
-          res.length.should.equal 1
-          res[0].sent_positive.should.equal 1
-          res[0].sent_neutral.should.equal 0
-          res[0].sent_negative.should.equal 0
-          res[0].received_positive.should.equal 1
-          res[0].received_neutral.should.equal 0
-          res[0].received_negative.should.equal 1
-          res[0].first_seen.should.not.be.empty
+          res.sent_positive.should.equal 1
+          res.sent_neutral.should.equal 0
+          res.sent_negative.should.equal 0
+          res.received_positive.should.equal 1
+          res.received_neutral.should.equal 0
+          res.received_negative.should.equal 1
+          res.first_seen.should.not.be.empty
           done()
         .catch (e) ->
           done(e)

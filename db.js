@@ -713,78 +713,63 @@ module.exports = function(knex) {
 
     getStats: function(id, options) {
       var sql = "";
-      sql += "SUM(CASE WHEN attr.is_recipient = :false AND m.rating > (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS sent_positive, ";
-      sql += "SUM(CASE WHEN attr.is_recipient = :false AND m.rating = (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS sent_neutral, ";
-      sql += "SUM(CASE WHEN attr.is_recipient = :false AND m.rating < (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS sent_negative, ";
-      if (options.viewpoint) {
-        sql += "SUM(CASE WHEN attr.is_recipient = :true AND m.rating > (m.min_rating + m.max_rating) / 2 AND ";
-        sql += "(td.start_attr_value IS NOT NULL) THEN 1 ELSE 0 END) AS received_positive, ";
-        sql += "SUM(CASE WHEN attr.is_recipient = :true AND m.rating = (m.min_rating + m.max_rating) / 2 AND ";
-        sql += "(td.start_attr_value IS NOT NULL) THEN 1 ELSE 0 END) AS received_neutral, ";
-        sql += "SUM(CASE WHEN attr.is_recipient = :true AND m.rating < (m.min_rating + m.max_rating) / 2 AND  ";
-        sql += "(td.start_attr_value IS NOT NULL) THEN 1 ELSE 0 END) AS received_negative, ";
-      } else {
-        sql += "SUM(CASE WHEN attr.is_recipient = :true AND m.rating > (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS received_positive, ";
-        sql += "SUM(CASE WHEN attr.is_recipient = :true AND m.rating = (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS received_neutral, ";
-        sql += "SUM(CASE WHEN attr.is_recipient = :true AND m.rating < (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS received_negative, ";
-      }
+      sql += "SUM(CASE WHEN m.rating > (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS sent_positive, ";
+      sql += "SUM(CASE WHEN m.rating = (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS sent_neutral, ";
+      sql += "SUM(CASE WHEN m.rating < (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS sent_negative ";
+
+      var sent = knex('Messages as m')
+        .select(knex.raw(sql))
+        .innerJoin('MessageAttributes as author', function() {
+          this.on('author.message_hash', '=', 'm.hash');
+          this.andOn('author.is_recipient', '=', knex.raw('?', false));
+        })
+        .where({ 'author.name': id[0], 'author.value': id[1], 'm.type': 'rating' })
+        .groupBy('author.name', 'author.value');
+
+      sql = '';
+      sql += "SUM(CASE WHEN m.rating > (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS received_positive, ";
+      sql += "SUM(CASE WHEN m.rating = (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS received_neutral, ";
+      sql += "SUM(CASE WHEN m.rating < (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS received_negative, ";
       sql += "MIN(m.timestamp) AS first_seen ";
 
-      var query = knex('Messages as m')
-        .innerJoin('MessageAttributes as attr', 'attr.message_hash', 'm.hash')
-        .innerJoin('IdentifierAttributes as ia', 'ia.name', 'attr.name')
-        .select(knex.raw(sql, {
-          viewpoint_name: options.viewpoint ? options.viewpoint[0] : null,
-          viewpointID: options.viewpoint ? options.viewpoint[1] : null,
-          true: true,
-          false: false
-        }))
-        .where({ 'm.is_latest': 1, 'm.type': 'rating', 'attr.name': id[0], 'attr.value': id[1] });
-
-      if (options.viewpoint) {
-        query.leftJoin('TrustDistances as td', function() {
-          this.on('attr.name', '=', 'td.end_attr_name')
-            .andOn('attr.value', '=', 'td.end_attr_value')
-            .andOn('attr.is_recipient', '=', knex.raw('?', false));
-        });
-
-        sql = '(td.start_attr_name = :viewpoint_name AND td.start_attr_value = :viewpoint_value ';
-        if (options.maxDistance > 0) {
-          sql += 'AND td.distance <= :maxDistance ';
-        }
-        // A bit messy way to pick also messages that were authored by the viewpointId
-        sql += ') OR (attr.is_recipient = :false AND attr.name = :viewpoint_name AND attr.value = :viewpoint_value)';
-        query.where(knex.raw(sql, {
-          viewpoint_name: options.viewpoint[0],
-          viewpoint_value: options.viewpoint[1],
-          maxDistance: options.maxDistance,
-          true: true,
-          false: false
-        }));
-
-        var subquery = knex('IdentityAttributes').where({
-          viewpoint_name: options.viewpoint[0],
-          viewpoint_value: options.viewpoint[1],
-          name: id[0],
-          value: id[1]
-        }).select('identity_id');
-
-        query.leftJoin('IdentityAttributes AS i', function() {
-          this.on('attr.name', '=', 'i.name')
-            .andOn('attr.value', '=', 'i.value');
+      var received = knex('Messages as m')
+        .select(knex.raw(sql))
+        .innerJoin('MessageAttributes as recipient', function() {
+          this.on('recipient.message_hash', '=', 'm.hash');
+          this.andOn('recipient.is_recipient', '=', knex.raw('?', true));
         })
-        .whereIn('i.identity_id', subquery)
-        .groupBy('i.identity_id', 'm.hash');
+        .where({ "recipient.name": id[0], "recipient.value": id[1], 'm.type': 'rating' })
+        .groupBy('recipient.name', 'recipient.value');
+
+      if (options.viewpoint && options.maxDistance > -1) {
+        received.innerJoin('MessageAttributes as author', function() {
+          this.on('author.message_hash', '=', 'm.hash');
+          this.andOn('author.is_recipient', '=', knex.raw('?', false));
+        });
+        received.innerJoin('TrustDistances as td', function() {
+          this.on('td.start_attr_name', '=', knex.raw('?', options.viewpoint[0]));
+          this.andOn('td.start_attr_value', '=', knex.raw('?', options.viewpoint[1]));
+          this.andOn('td.end_attr_name', '=', 'author.name');
+          this.andOn('td.end_attr_value', '=', 'author.value');
+          if (options.maxDistance > 0) {
+            this.andOn('td.distance', '<=', options.maxDistance);
+          }
+        });
       }
 
-      return query.then(function(res) {
-        for (var key in res[0]) {
+      return new P.all([sent, received]).then(function(response) {
+        var res = Object.assign({}, response[0][0], response[1][0]);
+        for (var key in res) {
           if (key.indexOf('sent_') === 0 || key.indexOf('received_') === 0) {
-            res[0][key] = parseInt(res[0][key]);
+            res[key] = parseInt(res[key]);
           }
         }
-        return res;
+
+        return new P(function(resolve) {
+          return resolve(res);
+        });
       });
+
     },
 
     updatePeerLastSeen: function(peer) {
