@@ -237,7 +237,7 @@ module.exports = function(knex) {
         .offset(options.offset);
 
       if (options.searchValue) {
-        subquery.where('attr.value', 'LIKE', '%' + options.searchValue + '%');
+        subquery.where(knex.raw('lower("attr"."value")'), 'LIKE', '%' + options.searchValue.toLowerCase() + '%');
       }
 
       // subquery.then(function(res) { console.log(JSON.stringify(res, null, 2)); });

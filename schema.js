@@ -65,6 +65,7 @@ var init = function(db, config) {
     t.index(['message_hash', 'is_recipient']);
     t.index(['message_hash']);
     t.index(['name', 'value']);
+    t.index(['lower(value)'], 'lowercase_value');
     t.primary(['message_hash', 'is_recipient', 'name', 'value']);
   })
 
