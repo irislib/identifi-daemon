@@ -222,7 +222,7 @@ function getMessages(req, res, options) {
     if (req.query.order_by) { options.orderBy = req.query.order_by; }
     if (req.query.distinct_author) { options.distinctAuthor = true; }
     if (req.query.direction && (req.query.direction === 'asc' || req.query.direction === 'desc')) {
-       options.direction = req.query.order_by;
+       options.direction = req.query.direction;
     }
     if (req.query.limit)    { options.limit = parseInt(req.query.limit); }
     if (req.query.offset)   { options.offset = parseInt(req.query.offset); }
