@@ -256,16 +256,34 @@ module.exports = function(knex) {
 
       return q.then(function(res) {
         // console.log(JSON.stringify(res, null, 2));
-        var arr = [], identities = {};
-        for (var i = 0; i < res.length; i++) {
+        var identities = {};
+        var i;
+        for (i = 0; i < res.length; i++) {
           var attr = res[i];
           identities[attr.identity_id] = identities[attr.identity_id] || [];
           identities[attr.identity_id].push({ attr: attr.name, val: attr.value, dist: attr.distance });
         }
 
+        var arr = [];
         for (var key in identities) {
-            arr.unshift(identities[key]);
+          arr.push(identities[key]);
         }
+
+        // Sort by distance
+        arr = arr.sort(function(identity1, identity2) {
+          var smallestDistance1 = 1000, smallestDistance2 = 1000;
+          for (i = 0; i < identity1.length; i++) {
+            if (!isNaN(parseInt(identity1[i].dist)) && identity1[i].dist < smallestDistance1) {
+              smallestDistance1 = identity1[i].dist;
+            }
+          }
+          for (i = 0; i < identity2.length; i++) {
+            if (!isNaN(parseInt(identity2[i].dist)) && identity2[i].dist < smallestDistance2) {
+              smallestDistance2 = identity2[i].dist;
+            }
+          }
+          return smallestDistance1 - smallestDistance2;
+        });
 
         return new P(function(resolve) {
           resolve(arr);
