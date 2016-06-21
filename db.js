@@ -28,7 +28,10 @@ module.exports = function(knex) {
       var q = this.messageExists(message.hash).then(function(exists) {
           if (!exists) {
             var isPublic = typeof message.signedData.public === 'undefined' ? true : message.signedData.public;
-            return p.getPriority(message).then(function(priority) {
+            return p.deletePreviousMessage(message).then(function() {
+              return p.getPriority(message);
+            })
+            .then(function(priority) {
               return knex.transaction(function(trx) {
                 return trx('Messages').insert({
                   hash:           message.hash,
@@ -183,6 +186,7 @@ module.exports = function(knex) {
     },
 
     dropMessage: function(messageHash) {
+      console.log('deleting', messageHash);
       var messageDeleted = 0;
       return knex.transaction(function(trx) {
         return trx('MessageAttributes').where({ message_hash: messageHash }).del()
@@ -972,6 +976,59 @@ module.exports = function(knex) {
       // Find existing or new identity_id for message recipient IdentifierAttributes
       // If the attribute exists on the identity_id, increase confirmations or refutations
       // If the attribute doesn't exist, add it with 1 confirmation or refutation
+    },
+
+    deletePreviousMessage: function(message) {
+      function getHashesQuery(author, recipient) {
+        var q = knex('Messages as m')
+          .distinct('m.hash as hash')
+          .innerJoin('MessageAttributes as author', function() {
+            this.on('author.message_hash', '=', 'm.hash');
+            this.andOn('author.is_recipient', '=', knex.raw('?', false));
+          })
+          .innerJoin('MessageAttributes as recipient', function() {
+            this.on('recipient.message_hash', '=', 'm.hash');
+            this.andOn('recipient.is_recipient', '=', knex.raw('?', true));
+          })
+          .innerJoin('IdentifierAttributes as ia1', 'ia1.name', 'author.name')
+          .innerJoin('IdentifierAttributes as ia2', 'ia2.name', 'recipient.name')
+          .where({
+            'm.type': message.signedData.type,
+            'm.signer_keyid': message.signerKeyHash,
+            'author.name': author[0],
+            'author.value': author[1],
+            'recipient.name': recipient[0],
+            'recipient.value': recipient[1]
+          });
+        return q;
+      }
+
+      var hashes = [];
+
+      function getAndAddHashes(author, recipient) {
+        return getHashesQuery(author, recipient)
+        .then(function(res) {
+          for (var i = 0; i < res.length; i++) {
+            hashes.push(res[i].hash);
+          }
+        });
+      }
+
+      var queries = [];
+      // Delete possible previous msg from A->B (created less than minMessageInterval ago?)
+      for (var i = 0; i < message.signedData.author.length; i++) {
+        for (var j = 0; j < message.signedData.recipient.length; j++) {
+          queries.push(getAndAddHashes(message.signedData.author[i],  message.signedData.recipient[j]));
+        }
+      }
+
+      return P.all(queries).then(function() {
+        queries = [];
+        for (var i = 0; i < hashes.length; i++) {
+          queries.push(pub.dropMessage(hashes[i]));
+        }
+        return P.all(queries);
+      });
     },
 
     updateWotIndexesByMessage: function(message, trustedKeyID) {
