@@ -323,6 +323,7 @@ module.exports = function(knex) {
             return trx('IdentityAttributes').count('* as count');
           })
           .then(function(res) {
+            countBefore = res[0].count;
             sql = "WITH RECURSIVE transitive_closure(attr1name, attr1val, attr2name, attr2val, distance, path_string, confirmations, refutations) AS ";
             sql += "( ";
             sql += "SELECT attr1.name, attr1.value, attr2.name, attr2.value, 1 AS distance, ";
@@ -385,10 +386,10 @@ module.exports = function(knex) {
 
             return trx.raw(sql, sqlValues);
           }).then(function() {
-            return trx('IdentityAttributes').count('* as val');
+            return trx('IdentityAttributes').count('* as count');
           })
           .then(function(res) {
-            if (countBefore === res[0].val) {
+            if (countBefore === res[0].count) {
               return new P(function(resolve) { resolve([]); });
             }
 
