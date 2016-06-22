@@ -2,6 +2,7 @@ var P = require("bluebird");
 var moment = require('moment');
 
 var express    = require('express');
+var session = require('express-session');
 var app        = express();
 var server = require('http').Server(app);
 var io = require('socket.io')(server).of('/api');
@@ -77,9 +78,16 @@ try {
   process.exit(0);
 }
 
+app.use(session({
+  secret: require('crypto').randomBytes(16).toString('base64'),
+  resave: false,
+  saveUninitialized: true,
+  cookie: { secure: false }
+}));
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 app.use(passport.initialize());
+app.use(passport.session());
 
 var port = config.get('port');
 
@@ -92,7 +100,13 @@ function issueToken(receivedToken1, receivedToken2, profile, done) {
   var idType, idValue;
   if (profile.provider === 'facebook') {
     idType = 'url';
-    idValue = 'https://www.facebook.com/' + profile.id;
+    idValue = profile.profileUrl || 'https://www.facebook.com/' + profile.id;
+  } else if (profile.provider === 'twitter') {
+    idType = 'url';
+    idValue = 'https://twitter.com/' + profile._json.screen_name;
+  } else if (profile.provider === 'google') {
+    idType = 'url';
+    idValue = 'https://plus.google.com/' + profile.id;
   } else {
     idType = 'account';
     idValue = profile.id + '@' + profile.provider;
@@ -115,6 +129,14 @@ function getAuthResponse(req, res) {
 }
 
 function initializePassportStrategies() {
+  passport.serializeUser(function(user, done) {
+    done(null, user);
+  });
+
+  passport.deserializeUser(function(user, done) {
+    done(null, user);
+  });
+
   if (config.passport.facebook.clientID &&
     config.passport.facebook.clientSecret) {
     loginOptions.push('facebook');
@@ -129,14 +151,14 @@ function initializePassportStrategies() {
     var TwitterStrategy = require('passport-twitter').Strategy;
     passport.use(new TwitterStrategy(config.passport.twitter, issueToken));
     router.get('/auth/twitter', passport.authenticate('twitter'));
-    router.get('/auth/twitter/callback', passport.authenticate('twitter', { session: false }), getAuthResponse);
+    router.get('/auth/twitter/callback', passport.authenticate('twitter'), getAuthResponse);
   }
-  if (config.passport.google.consumerKey &&
-    config.passport.google.consumerSecret) {
+  if (config.passport.google.clientID &&
+    config.passport.google.clientSecret) {
     loginOptions.push('google');
-    var GoogleStrategy = require('passport-google-oauth').OAuthStrategy;
+    var GoogleStrategy = require('passport-google-oauth2').Strategy;
     passport.use(new GoogleStrategy(config.passport.google, issueToken));
-    router.get('/auth/google', passport.authenticate('google', { scope: 'https://www.google.com/m8/feeds' }));
+    router.get('/auth/google', passport.authenticate('google', { scope: 'profile' }));
     router.get('/auth/google/callback', passport.authenticate('google', { session: false }), getAuthResponse);
   }
 

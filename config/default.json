@@ -19,8 +19,8 @@
         "callbackURL": "http://www.example.com/auth/twitter/callback"
       },
       "google": {
-        "consumerKey": null,
-        "consumerSecret": null,
+        "clientID": null,
+        "clientSecret": null,
         "callbackURL": "http://www.example.com/auth/google/callback"
       },
       "persona": {
