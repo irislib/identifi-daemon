@@ -1,5 +1,6 @@
 /*jshint unused: false */
 'use strict';
+var util = require('./util.js');
 var schema = require('./schema.js');
 var P = require("bluebird");
 var moment = require('moment');
@@ -186,7 +187,6 @@ module.exports = function(knex) {
     },
 
     dropMessage: function(messageHash) {
-      console.log('deleting', messageHash);
       var messageDeleted = 0;
       return knex.transaction(function(trx) {
         return trx('MessageAttributes').where({ message_hash: messageHash }).del()
@@ -980,6 +980,10 @@ module.exports = function(knex) {
     },
 
     deletePreviousMessage: function(message) {
+      var i, j;
+      var verifyTypes = ['verify_identity', 'unverify_identity'], t = message.signedData.type;
+      var isVerifyMsg = verifyTypes.indexOf(t) > -1;
+
       function getHashesQuery(author, recipient) {
         var q = knex('Messages as m')
           .distinct('m.hash as hash', 'm.timestamp')
@@ -992,47 +996,79 @@ module.exports = function(knex) {
             this.andOn('recipient.is_recipient', '=', knex.raw('?', true));
           })
           .innerJoin('IdentifierAttributes as ia1', 'ia1.name', 'author.name')
-          .innerJoin('IdentifierAttributes as ia2', 'ia2.name', 'recipient.name')
           .where({
             'm.signer_keyid': message.signerKeyHash,
             'author.name': author[0],
-            'author.value': author[1],
-            'recipient.name': recipient[0],
-            'recipient.value': recipient[1]
+            'author.value': author[1]
           })
           .orderBy('m.timestamp', 'DESC');
 
-        var t = message.signedData.type, types = ['verify_identity', 'unverify_identity'];
-        if (types.indexOf(t) > -1) {
-          q.offset(10);
-          q.whereIn('m.type', types);
+        if (recipient) {
+          q.where({
+            'recipient.name': recipient[0],
+            'recipient.value': recipient[1]
+          });
+          q.innerJoin('IdentifierAttributes as ia2', 'ia2.name', 'recipient.name');
+        }
+
+        if (isVerifyMsg) {
+          q.whereIn('m.type', verifyTypes);
+          if (recipient) {
+            q.offset(10); // Accept up to 10 verification msgs from A -> B
+          }
         } else {
           q.where('m.type', t);
         }
+
         return q;
       }
 
       var hashes = [];
 
+      function addHashes(res) {
+        for (var i = 0; i < res.length; i++) {
+          hashes.push(res[i].hash);
+        }
+      }
+
       function getAndAddHashes(author, recipient) {
         return getHashesQuery(author, recipient)
-        .then(function(res) {
-          for (var i = 0; i < res.length; i++) {
-            hashes.push(res[i].hash);
-          }
+          .then(addHashes);
+      }
+
+      function addInnerJoinMessageRecipient(query, recipient, n) {
+        var as = 'recipient' + n;
+        query.innerJoin('MessageAttributes as ' + as, function() {
+          this.on(as + '.message_hash', '=', 'm.hash');
+          this.on(as + '.is_recipient', '=', knex.raw('?', true));
+          this.on(as + '.name', '=', knex.raw('?', recipient[0]));
+          this.on(as + '.value', '=', knex.raw('?', recipient[1]));
         });
       }
 
       var queries = [];
+
+      // Delete previous verify or unverify with the exact same recipient attributes
+      if (isVerifyMsg) {
+        for (i = 0; i < message.signedData.author.length; i++) {
+          var q = getHashesQuery(message.signedData.author[i]);
+          for (j = 0; j < message.signedData.recipient.length; j++) {
+            addInnerJoinMessageRecipient(q, message.signedData.recipient[j], j);
+          }
+          queries.push(q.then(addHashes));
+        }
+      }
+
       // Delete possible previous msg from A->B (created less than minMessageInterval ago?)
-      for (var i = 0; i < message.signedData.author.length; i++) {
-        for (var j = 0; j < message.signedData.recipient.length; j++) {
+      for (i = 0; i < message.signedData.author.length; i++) {
+        for (j = 0; j < message.signedData.recipient.length; j++) {
           queries.push(getAndAddHashes(message.signedData.author[i],  message.signedData.recipient[j]));
         }
       }
 
       return P.all(queries).then(function() {
         queries = [];
+        hashes = util.removeDuplicates(hashes);
         for (i = 0; i < hashes.length; i++) {
           queries.push(pub.dropMessage(hashes[i]));
         }

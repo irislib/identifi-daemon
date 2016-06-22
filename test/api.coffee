@@ -166,7 +166,7 @@ describe 'API', ->
       it 'should add a non-public msg', (done) ->
         privMsg = message.create
           author: [['email', 'bob@example.com']]
-          recipient: [['email', 'charles@example.com'], ['url', 'http://twitter.com/charles']]
+          recipient: [['email', 'darwin@example.com'], ['url', 'http://twitter.com/darwin']]
           type: 'verify_identity'
           public: false
         message.sign(privMsg, privKeyPEM, hex)
@@ -250,7 +250,7 @@ describe 'API', ->
             viewpoint_value: 'alice@example.com'
             max_distance: 1
         r.then (res) ->
-          res.length.should.equal 7
+          res.length.should.equal 4
           done()
       it 'should filter messages by timestamp_lte', (done) ->
         r = identifi.request
@@ -258,7 +258,7 @@ describe 'API', ->
           qs:
             timestamp_lte: m.signedData.timestamp
         r.then (res) ->
-          res.length.should.equal 8
+          res.length.should.equal 7
           done()
       it 'should filter messages by timestamp_gte', (done) ->
         r = identifi.request
@@ -276,7 +276,7 @@ describe 'API', ->
             viewpoint_value: 'alice@example.com'
             max_distance: 2
         r.then (res) ->
-          res.length.should.equal 7
+          res.length.should.equal 6
           done()
     describe 'delete', ->
       it 'should fail without auth', ->
@@ -343,7 +343,7 @@ describe 'API', ->
           qs:
             attr_name: 'email'
         r.then (res) ->
-          res.length.should.equal 2
+          res.length.should.equal 3
           done()
       it 'should filter by search query', (done) -> # TODO: fix?
         r = identifi.request
