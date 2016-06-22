@@ -16,6 +16,7 @@
     "db.js",
     "server.js",
     "schema.js",
+    "util.js",
     "config/default.json"
   ],
   "keywords": [
