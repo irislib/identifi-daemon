@@ -994,13 +994,21 @@ module.exports = function(knex) {
           .innerJoin('IdentifierAttributes as ia1', 'ia1.name', 'author.name')
           .innerJoin('IdentifierAttributes as ia2', 'ia2.name', 'recipient.name')
           .where({
-            'm.type': message.signedData.type,
             'm.signer_keyid': message.signerKeyHash,
             'author.name': author[0],
             'author.value': author[1],
             'recipient.name': recipient[0],
             'recipient.value': recipient[1]
-          });
+          })
+          .orderBy('m.timestamp', 'DESC');
+
+        var t = message.signedData.type, types = ['verify_identity', 'unverify_identity'];
+        if (types.indexOf(t) > -1) {
+          q.offset(10);
+          q.whereIn('m.type', ['verify']);
+        } else {
+          q.where('m.type', t);
+        }
         return q;
       }
 
@@ -1025,7 +1033,7 @@ module.exports = function(knex) {
 
       return P.all(queries).then(function() {
         queries = [];
-        for (var i = 0; i < hashes.length; i++) {
+        for (i = 0; i < hashes.length; i++) {
           queries.push(pub.dropMessage(hashes[i]));
         }
         return P.all(queries);
