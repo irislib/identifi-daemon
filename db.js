@@ -982,7 +982,7 @@ module.exports = function(knex) {
     deletePreviousMessage: function(message) {
       function getHashesQuery(author, recipient) {
         var q = knex('Messages as m')
-          .distinct('m.hash as hash')
+          .distinct('m.hash as hash', 'm.timestamp')
           .innerJoin('MessageAttributes as author', function() {
             this.on('author.message_hash', '=', 'm.hash');
             this.andOn('author.is_recipient', '=', knex.raw('?', false));
@@ -1005,7 +1005,7 @@ module.exports = function(knex) {
         var t = message.signedData.type, types = ['verify_identity', 'unverify_identity'];
         if (types.indexOf(t) > -1) {
           q.offset(10);
-          q.whereIn('m.type', ['verify']);
+          q.whereIn('m.type', types);
         } else {
           q.where('m.type', t);
         }
