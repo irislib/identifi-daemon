@@ -182,6 +182,13 @@ module.exports = function(knex) {
             this.andOn('td.distance', '<=', knex.raw('?', options.maxDistance));
           }
         });
+        query.leftJoin('IdentityAttributes as ia', function() {
+          this.on('ia.name', '=', 'author.name');
+          this.on('ia.value', '=', 'author.value');
+          this.on('ia.viewpoint_name', '=', knex.raw('?', options.viewpoint[0]));
+          this.on('ia.viewpoint_value', '=', knex.raw('?', options.viewpoint[1]));
+        });
+        query.leftJoin('IdentityStats as st', 'st.identity_id', 'ia.identity_id');
       }
       return query;
     },
@@ -245,14 +252,24 @@ module.exports = function(knex) {
       }
 
       // subquery.then(function(res) { console.log(JSON.stringify(res, null, 2)); });
-
       var q = knex.from('IdentityAttributes AS attr')
-        .select('*')
+        .select([
+          'attr.identity_id',
+          'attr.name',
+          'attr.value',
+          'attr.confirmations',
+          'td.distance',
+          'st.positive_score',
+          'st.negative_score'
+        ])
         .leftJoin('TrustDistances as td', function() {
           this.on('td.start_attr_name', '=', 'attr.viewpoint_name');
           this.andOn('td.start_attr_value', '=', 'attr.viewpoint_value');
           this.andOn('td.end_attr_name', '=', 'attr.name');
           this.andOn('td.end_attr_value', '=', 'attr.value');
+        })
+        .leftJoin('IdentityStats as st', function() {
+          this.on('attr.identity_id', '=', 'st.identity_id');
         })
         .where('attr.identity_id', 'in', subquery);
 
@@ -265,7 +282,13 @@ module.exports = function(knex) {
         for (i = 0; i < res.length; i++) {
           var attr = res[i];
           identities[attr.identity_id] = identities[attr.identity_id] || [];
-          identities[attr.identity_id].push({ attr: attr.name, val: attr.value, dist: attr.distance });
+          identities[attr.identity_id].push({
+            attr: attr.name,
+            val: attr.value,
+            dist: attr.distance,
+            pos: attr.positive_score,
+            neg: attr.negative_score
+          });
         }
 
         var arr = [];
@@ -311,19 +334,34 @@ module.exports = function(knex) {
     },
 
     mapIdentityAttributes: function(options) {
-      var sql = 'identity_id IN (SELECT identity_id FROM "IdentityAttributes" WHERE "name" = ? AND "value" = ? AND "viewpoint_name" = ? AND "viewpoint_value" = ?)';
-      var countBefore;
-
+      var countBefore, identityId, sql;
       options.viewpoint = options.viewpoint || myId;
+      var getExistingId = knex('IdentityAttributes')
+        .select('identity_id')
+        .where({
+          name: options.id[0],
+          value: options.id[1],
+          viewpoint_name: options.viewpoint[0],
+          viewpoint_value: options.viewpoint[1]
+        });
+      getExistingId.then();
 
       return knex.transaction(function(trx) {
         return trx('IdentityAttributes')
-          .whereRaw(sql, [options.id[0], options.id[1], options.viewpoint[0], options.viewpoint[1]]).del()
+          .where('identity_id', 'in', getExistingId).del()
           .then(function() {
-            return trx('IdentityAttributes').count('* as count');
+            return getExistingId;
           })
           .then(function(res) {
-            countBefore = res[0].count;
+            if (res.length) {
+              return new P(function(resolve) { resolve(res); });
+            } else {
+              return trx('IdentityAttributes')
+                .select(knex.raw(SQL_IFNULL + "(MAX(identity_id), 0) + 1 AS identity_id"));
+            }
+          })
+          .then(function(res) {
+            identityId = res[0].identity_id;
             sql = "WITH RECURSIVE transitive_closure(attr1name, attr1val, attr2name, attr2val, distance, path_string, confirmations, refutations) AS ";
             sql += "( ";
             sql += "SELECT attr1.name, attr1.value, attr2.name, attr2.value, 1 AS distance, ";
@@ -368,7 +406,7 @@ module.exports = function(knex) {
             sql += SQL_INSERT_OR_REPLACE + " INTO \"IdentityAttributes\" ";
             // The subquery for selecting identity_id could be optimized?
             if (SQL_ON_CONFLICT.length) { sql += '('; }
-            sql += "SELECT (SELECT " + SQL_IFNULL + "(MAX(identity_id), 0) + 1 FROM \"IdentityAttributes\"), attr2name, attr2val, :viewpoint_name, :viewpoint_value, 1, 0 FROM transitive_closure ";
+            sql += "SELECT :identity_id, attr2name, attr2val, :viewpoint_name, :viewpoint_value, 1, 0 FROM transitive_closure ";
             sql += "GROUP BY attr2name, attr2val ";
             sql += "UNION SELECT (SELECT " + SQL_IFNULL + "(MAX(identity_id), 0) + 1 FROM \"IdentityAttributes\"), :attr, :val, :viewpoint_name, :viewpoint_value, 1, 0 ";
             sql += "FROM \"MessageAttributes\" AS mi ";
@@ -381,31 +419,26 @@ module.exports = function(knex) {
               val: options.id[1],
               viewpoint_name: options.viewpoint[0],
               viewpoint_value: options.viewpoint[1],
-              true: true
+              true: true,
+              identity_id: identityId
             };
 
             return trx.raw(sql, sqlValues);
-          }).then(function() {
-            return trx('IdentityAttributes').count('* as count');
           })
           .then(function(res) {
-            if (countBefore === res[0].count) {
-              return new P(function(resolve) { resolve([]); });
-            }
-
             var hasSearchedAttributes = options.searchedAttributes && options.searchedAttributes.length > 0;
 
             if (hasSearchedAttributes) {
               return trx('IdentityAttributes')
                 .select('name', 'value', 'confirmations', 'refutations')
-                .where(knex.raw('NOT (Name = ? AND value = ?) AND identity_id = (SELECT MAX(identity_id) FROM \"IdentityAttributes\")', [options.id[0], options.id[1]]))
+                .where(knex.raw('NOT (Name = ? AND value = ?) AND identity_id = ?', [options.id[0], options.id[1], identityId]))
                 .whereIn('name', options.searchedAttributes)
                 .orderByRaw('confirmations - refutations DESC');
             }
 
             return trx('IdentityAttributes')
               .select('name', 'value', 'confirmations', 'refutations')
-              .where(knex.raw('NOT (Name = ? AND value = ?) AND identity_id = (SELECT MAX(identity_id) FROM \"IdentityAttributes\")', [options.id[0], options.id[1]]))
+              .where(knex.raw('NOT (Name = ? AND value = ?) AND identity_id = ?', [options.id[0], options.id[1], identityId]))
               .orderByRaw('confirmations - refutations DESC');
           });
       });
@@ -768,6 +801,35 @@ module.exports = function(knex) {
           if (key.indexOf('sent_') === 0 || key.indexOf('received_') === 0) {
             res[key] = parseInt(res[key]);
           }
+        }
+
+        if (options.viewpoint && !options.maxDistance) {
+          var identityId = knex('IdentityAttributes')
+            .select('identity_id')
+            .where({
+              name: id[0],
+              value: id[1],
+              viewpoint_name: options.viewpoint[0],
+              viewpoint_value: options.viewpoint[1]
+            });
+          knex('IdentityStats')
+          .where('identity_id', 'in', identityId)
+          .delete()
+          .then(function() {
+            return identityId;
+          })
+          .then(function(identityIdRes) {
+            if (identityIdRes.length) {
+              knex('IdentityStats as st')
+                .insert({
+                  identity_id: identityIdRes[0].identity_id,
+                  viewpoint_name: options.viewpoint[0],
+                  viewpoint_value: options.viewpoint[1],
+                  positive_score: res.received_positive || 0,
+                  negative_score: res.received_negative || 0
+                }).return();
+            }
+          });
         }
 
         return new P(function(resolve) {
