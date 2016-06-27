@@ -117,6 +117,8 @@ module.exports = function(knex) {
       var select = ['Messages.*'];
       if (options.viewpoint) {
         select.push(knex.raw('MIN("td"."distance") AS "distance"'));
+        select.push(knex.raw('MAX(st.positive_score) AS author_pos'));
+        select.push(knex.raw('MAX(st.negative_score) AS author_neg'));
       }
       var query = knex.select(select)
         .groupBy('Messages.hash')
