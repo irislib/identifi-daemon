@@ -363,7 +363,7 @@ module.exports = function(knex) {
             }
           })
           .then(function(res) {
-            identityId = res[0].identity_id;
+            identityId = parseInt(res[0].identity_id);
             sql = "WITH RECURSIVE transitive_closure(attr1name, attr1val, attr2name, attr2val, distance, path_string, confirmations, refutations) AS ";
             sql += "( ";
             sql += "SELECT attr1.name, attr1.value, attr2.name, attr2.value, 1 AS distance, ";
@@ -408,9 +408,9 @@ module.exports = function(knex) {
             sql += SQL_INSERT_OR_REPLACE + " INTO \"IdentityAttributes\" ";
             // The subquery for selecting identity_id could be optimized?
             if (SQL_ON_CONFLICT.length) { sql += '('; }
-            sql += "SELECT :identity_id, attr2name, attr2val, :viewpoint_name, :viewpoint_value, 1, 0 FROM transitive_closure ";
+            sql += "SELECT " + identityId + ", attr2name, attr2val, :viewpoint_name, :viewpoint_value, 1, 0 FROM transitive_closure ";
             sql += "GROUP BY attr2name, attr2val ";
-            sql += "UNION SELECT (SELECT " + SQL_IFNULL + "(MAX(identity_id), 0) + 1 FROM \"IdentityAttributes\"), :attr, :val, :viewpoint_name, :viewpoint_value, 1, 0 ";
+            sql += "UNION SELECT " + identityId + ", :attr, :val, :viewpoint_name, :viewpoint_value, 1, 0 ";
             sql += "FROM \"MessageAttributes\" AS mi ";
             sql += "INNER JOIN \"IdentifierAttributes\" AS ui ON ui.name = mi.name ";
             sql += "WHERE mi.name = :attr AND mi.value = :val ";
