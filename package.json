@@ -17,7 +17,8 @@
     "server.js",
     "schema.js",
     "util.js",
-    "config/default.json"
+    "config/default.json",
+    "apidoc"
   ],
   "keywords": [
     "identifi",
@@ -49,10 +50,12 @@
     "sqlite3": "^3.1.2"
   },
   "devDependencies": {
+    "apidoc": "^0.16.1",
     "chai": "3.5.0",
     "chai-as-promised": "5.3.0",
     "coffee-script": "^1.10.0",
     "grunt": "^0.4.1",
+    "grunt-apidoc": "^0.11.0",
     "grunt-cli": "^1.2.0",
     "grunt-coffeelint": "0.0.15",
     "grunt-concurrent": "^2.2.1",
@@ -74,5 +77,25 @@
   },
   "bin": {
     "identifid": "identifid"
+  },
+  "apidoc": {
+    "name": "Identifi API",
+    "title": "Identifi API",
+    "description": "Identifi API documentation",
+    "url": "/api",
+    "sampleUrl": "/api",
+    "order": [
+      "Api",
+      "Messages",
+      "Identities",
+      "ListIdentities",
+      "GetIdentityAttributes",
+      "GetIdentityVerifications",
+      "GetIdentityStats",
+      "ListMessages",
+      "GetMessage",
+      "PostMessage",
+      "DeleteMessage"
+    ]
   }
 }

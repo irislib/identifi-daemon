@@ -190,7 +190,18 @@ function emitMsg(msg) {
 }
 
 
-
+/**
+ * @api {get} / Identifi node information
+ * @apiName Api
+ * @apiGroup Api
+ *
+ * @apiSuccess {String} version Identifi daemon version
+ * @apiSuccess {String} identifiLibVersion  Identifi library version
+ * @apiSuccess {Number} msgCount  Number of Identifi messages stored on the node
+ * @apiSuccess {String} publicKey DER-encoded public key of the node in hex
+ * @apiSuccess {String} keyID Base 64 encoded hash of the public key
+ * @apiSuccess {Array} loginOptions Array of browser login options provided by the node
+ */
 router.get('/', function(req, res) {
   var queries = [db.getMessageCount()];
   P.all(queries).then(function(results) {
@@ -206,7 +217,11 @@ router.get('/', function(req, res) {
 });
 
 
-
+/**
+ * @api {get} /peers List peers
+ * @apiName ListPeers
+ * @apiGroup Peers
+ */
 router.route('/peers')
   .get(function(req, res) {
     db.getPeers()
@@ -256,12 +271,40 @@ function getMessages(req, res, options) {
 }
 
 
-
 router.route('/messages')
+/**
+ * @api {get} /messages List messages
+ * @apiName ListMessages
+ * @apiGroup Messages
+ *
+ * @apiParam {String} [type] Message type. In case of rating; :positive, :neutral or :negative can be appended
+ * @apiParam {Number} [offset=0] Offset
+ * @apiParam {Number} [limit=100] Limit the number of results
+ * @apiParam {String} [viewpoint_name] Trust viewpoint identity pointer type
+ * @apiParam {String} [viewpoint_value] Trust viewpoint identity pointer value
+ * @apiParam {Number} [max_distance] Maximum trust distance of the message author from viewpoint
+ * @apiParam {String} [order_by=timestamp] Order by field
+ * @apiParam {String="asc","desc"} [direction=desc] Order_by direction
+ * @apiParam {Number} [timestamp_gte] Limit by timestamp greater than or equal
+ * @apiParam {Number} [timestamp_lte] Limit by timestamp less than or equal
+ *
+ *
+ */
   .get(function(req, res) {
     getMessages(req, res);
   })
 
+/**
+ * @api {post} /messages Post message
+ * @apiName PostMessage
+ * @apiGroup Messages
+ *
+ * @apiParam {String} jws Identifi message as JSON web signature
+ *
+ * @apiDescription
+ * Successfully posted messages are broadcast to other nodes via /api websocket.
+ *
+ */
   .post(authOptional, function(req, res) {
     var m = req.body;
 
@@ -290,7 +333,14 @@ router.route('/messages')
   });
 
 
-
+  /**
+   * @api {get} /messages/:hash Get message
+   * @apiName GetMessage
+   * @apiGroup Messages
+   *
+   * @apiDescription Get message by hash
+   *
+   */
 router.route('/messages/:hash')
   .get(function(req, res) {
     db.getMessages({ where: { public: true, hash: req.params.hash } }).then(function(dbRes) {
@@ -301,6 +351,16 @@ router.route('/messages/:hash')
     }).catch(function(err) { handleError(err, req, res); });
   })
 
+  /**
+   * @api {delete} /messages/:hash Delete message
+   * @apiName DeleteMessage
+   * @apiGroup Messages
+   *
+   * @apiPermission admin
+   * @apiSampleRequest off
+   * @apiDescription Get message by hash
+   *
+   */
   .delete(authRequired, function(req, res) {
     if (!req.user.admin) {
       return res.sendStatus(401);
@@ -314,7 +374,23 @@ router.route('/messages/:hash')
   });
 
 
-
+  /**
+   * @api {get} /identities List identities
+   * @apiName ListIdentities
+   * @apiGroup Identities
+   *
+   * @apiParam {String} [viewpoint_name="node viewpoint type"] Trust viewpoint identity pointer type
+   * @apiParam {String} [viewpoint_value="node viewpoint value"] Trust viewpoint identity pointer value
+   * @apiParam {Number} [limit=100] Limit the number of results
+   * @apiParam {Number} [offset=0] Offset
+   * @apiParam {String} [search_value] Search identities by attribute value
+   * @apiParam {String} [order_by] Order by field
+   * @apiParam {String="asc","desc"} [direction] Order by direction
+   *
+   * @apiDescription
+   * Returns an array of attribute-arrays that form identities.
+   *
+   */
 router.get('/identities', function(req, res) {
     var options = {
       where: {},
@@ -335,7 +411,18 @@ router.get('/identities', function(req, res) {
 });
 
 
-
+/**
+ * @api {get} /identities/:pointer_type/:pointer_value Identity attributes
+ * @apiName GetIdentityAttributes
+ * @apiGroup Identities
+ *
+ * @apiDescription
+ * Identifi identities are refered to by pointers of unique type, such as "email",
+ * "url", "bitcoin" or "keyID".
+ *
+ * This method returns other identifiers and attributes that are connected to the pointer.
+ *
+ */
 router.get('/identities/:attr_name/:attr_value', function(req, res) {
   db.getIdentityAttributes({ where: { 'attr.name': req.params.attr_name, 'attr.value': req.params.attr_value } }).then(function(dbRes) {
     res.json(dbRes);
@@ -343,7 +430,11 @@ router.get('/identities/:attr_name/:attr_value', function(req, res) {
 });
 
 
-
+/**
+ * @api {get} /identities/:pointer_type/:pointer_value/stats Identity stats
+ * @apiName GetIdentityStats
+ * @apiGroup Identities
+ */
 router.get('/identities/:attr_name/:attr_value/stats', function(req, res) {
   var options = {};
 
@@ -358,6 +449,11 @@ router.get('/identities/:attr_name/:attr_value/stats', function(req, res) {
 });
 
 
+/**
+ * @api {get} /identities/:pointer_type/:pointer_value/sent Messages sent by
+ * @apiGroup Identities
+ *
+ */
 router.get('/identities/:attr_name/:attr_value/sent', function(req, res) {
   var options = {
     author: [req.params.attr_name, req.params.attr_value],
@@ -366,6 +462,10 @@ router.get('/identities/:attr_name/:attr_value/sent', function(req, res) {
 });
 
 
+/**
+ * @api {get} /identities/:pointer_type/:pointer_value/received Messages received by
+ * @apiGroup Identities
+ */
 router.get('/identities/:attr_name/:attr_value/received', function(req, res) {
   var options = {
     recipient: [req.params.attr_name, req.params.attr_value],
@@ -375,6 +475,11 @@ router.get('/identities/:attr_name/:attr_value/received', function(req, res) {
 
 
 
+/**
+ * @api {get} /identities/:pointer_type/:pointer_value/verifications Identity verifications
+ * @apiName GetIdentityVerifications
+ * @apiGroup Identities
+ */
 router.get('/identities/:attr_name/:attr_value/verifications', function(req, res) {
   var options = {
     id: [req.params.attr_name, req.params.attr_value],
@@ -395,6 +500,10 @@ router.get('/identities/:attr_name/:attr_value/verifications', function(req, res
 
 
 
+/**
+ * @api {get} /identities/:pointer_type/:pointer_value/connecting_msgs Connecting messages
+ * @apiGroup Identities
+ */
 router.get('/identities/:attr_name/:attr_value/connecting_msgs', function(req, res) {
   if (!(req.query.target_name && req.query.target_value)) {
     res.status(400).json('target_name and target_value must be specified');
@@ -408,7 +517,6 @@ router.get('/identities/:attr_name/:attr_value/connecting_msgs', function(req, r
     res.json(dbRes);
   }).catch(function(err) { handleError(err, req, res); });
 });
-
 
 
 router.get('/identities/:attr_name/:attr_value/trustpaths', function(req, res) {
@@ -425,6 +533,12 @@ router.get('/identities/:attr_name/:attr_value/trustpaths', function(req, res) {
   }).catch(function(err) { handleError(err, req, res); });
 });
 
+
+/**
+ * @apiIgnore
+ * @api {get} /identities/:pointer_type/:pointer_value/stats Generatewotindex
+ * @apiGroup Identities
+ */
 router.get('/identities/:attr_name/:attr_value/generatewotindex', authRequired, function(req, res) {
   if (!req.user.admin) {
     return res.sendStatus(401);
@@ -445,6 +559,7 @@ router.get('/identities/:attr_name/:attr_value/generatewotindex', authRequired, 
 // Register the routes
 app.use('/api', router);
 
+app.use('/apidoc', express.static('./apidoc'));
 // Serve identifi-angular if the node module is available
 try {
   var angular = path.dirname(require.resolve('identifi-angular'));

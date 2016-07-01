@@ -32,6 +32,10 @@ module.exports = (grunt) ->
           bail: true
           require: 'coffee-script/register'
         src: watchFiles.tests
+    apidoc:
+      all:
+        src: "apidoc_src"
+        dest: "apidoc"
     concurrent:
       dev:
         tasks: ['nodemon', 'watch']
@@ -51,6 +55,12 @@ module.exports = (grunt) ->
           "jshint"
           "mochaTest"
         ]
+      apidoc:
+        files: ['server.js', 'package.json']
+        tasks: [
+          "jshint"
+          "apidoc"
+        ]
       tests:
         files: watchFiles.tests
         tasks: ["mochaTest"]
@@ -59,4 +69,4 @@ module.exports = (grunt) ->
         tasks: ["coffeelint", "mochaTest"]
 
   grunt.registerTask "test", ["coffeelint", "jshint", "mochaTest"]
-  grunt.registerTask "default", ["coffeelint", "jshint", "mochaTest", "concurrent"]
+  grunt.registerTask "default", ["coffeelint", "jshint", "apidoc", "mochaTest", "concurrent"]
