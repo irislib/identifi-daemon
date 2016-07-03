@@ -434,6 +434,15 @@ router.get('/identities/:attr_name/:attr_value', function(req, res) {
  * @api {get} /identities/:pointer_type/:pointer_value/stats Identity stats
  * @apiName GetIdentityStats
  * @apiGroup Identities
+ *
+ * @apiSuccess {Number} received_positive Number of received positive ratings
+ * @apiSuccess {Number} received_neutral Number of received neutral ratings
+ * @apiSuccess {Number} received_negative Number of received negative ratings
+ * @apiSuccess {Number} sent_positive Number of sent positive ratings
+ * @apiSuccess {Number} sent_neutral Number of sent neutral ratings
+ * @apiSuccess {Number} sent_negative Number of sent negative ratings
+ * @apiSuccess {String} last_seen ISO timestamp of the earliest message the identity was seen in
+ *
  */
 router.get('/identities/:attr_name/:attr_value/stats', function(req, res) {
   var options = {};
@@ -581,14 +590,15 @@ function handleMsgEvent(data) {
       }
       db.saveMessage(m).then(function() {
         emitMsg(m);
-      });
+      }).catch(function() {});
     }
   });
 }
 
 function handleIncomingWebsocket(socket) {
   log('connection from ' + socket.client.conn.remoteAddress);
-  if (socket.request.headers['x-accept-incoming-connections']) {
+  var isLocalhost = (socket.client.conn.remoteAddress === '::ffff:127.0.0.1');
+  if (!isLocalhost && socket.request.headers['x-accept-incoming-connections']) {
     var peer = { url: 'http://[' + socket.client.conn.remoteAddress + ']:4944/api', last_seen: new Date() };
     db.addPeer(peer).then(function() { log('saved peer ' + peer.url); });
   }
