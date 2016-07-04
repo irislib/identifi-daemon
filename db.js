@@ -820,7 +820,7 @@ module.exports = function(knex) {
           })
           .then(function(identityIdRes) {
             if (identityIdRes.length) {
-              knex('IdentityStats as st')
+              knex('IdentityStats')
                 .insert({
                   identity_id: identityIdRes[0].identity_id,
                   viewpoint_name: options.viewpoint[0],
