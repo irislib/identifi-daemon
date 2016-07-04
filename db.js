@@ -120,6 +120,7 @@ module.exports = function(knex) {
         select.push(knex.raw('MAX(st.positive_score) AS author_pos'));
         select.push(knex.raw('MAX(st.negative_score) AS author_neg'));
         select.push(knex.raw('MIN(author_email.value) AS author_email'));
+        select.push(knex.raw('MIN(recipient_name.value) AS recipient_name'));
       }
       var query = knex.select(select)
         .groupBy('Messages.hash')
@@ -127,6 +128,10 @@ module.exports = function(knex) {
         .innerJoin('MessageAttributes as author', function() {
           this.on('Messages.hash', '=', 'author.message_hash');
           this.on('author.is_recipient', '=', knex.raw('?', false));
+        })
+        .innerJoin('MessageAttributes as recipient', function() {
+          this.on('Messages.hash', '=', 'recipient.message_hash');
+          this.andOn('recipient.is_recipient', '=', knex.raw('?', true));
         })
         .orderBy(options.orderBy, options.direction)
         .limit(options.limit)
@@ -141,10 +146,6 @@ module.exports = function(knex) {
         options.where['author.value'] = options.author[1];
       }
       if (options.recipient) {
-        query.innerJoin('MessageAttributes as recipient', function() {
-          this.on('Messages.hash', '=', 'recipient.message_hash');
-          this.andOn('recipient.is_recipient', '=', knex.raw('?', true));
-        });
         options.where['recipient.name'] = options.recipient[0];
         options.where['recipient.value'] = options.recipient[1];
       }
@@ -197,6 +198,16 @@ module.exports = function(knex) {
         query.leftJoin('IdentityAttributes as author_email', function() {
           this.on('author_attribute.identity_id', '=', 'author_email.identity_id');
           this.on('author_email.name', '=', knex.raw('?', 'email'));
+        });
+        query.leftJoin('IdentityAttributes as recipient_attribute', function() {
+          this.on('recipient_attribute.name', '=', 'recipient.name');
+          this.on('recipient_attribute.value', '=', 'recipient.value');
+          this.on('recipient_attribute.viewpoint_name', '=', knex.raw('?', options.viewpoint[0]));
+          this.on('recipient_attribute.viewpoint_value', '=', knex.raw('?', options.viewpoint[1]));
+        });
+        query.leftJoin('IdentityAttributes as recipient_name', function() {
+          this.on('recipient_attribute.identity_id', '=', 'recipient_name.identity_id');
+          this.on('recipient_name.name', '=', knex.raw('?', 'name'));
         });
       }
       return query;
@@ -354,16 +365,16 @@ module.exports = function(knex) {
           viewpoint_value: options.viewpoint[1]
         });
       var existingId;
-      getExistingId.then(function(res) { existingId = res; });
 
-      return knex.transaction(function(trx) {
-        return trx('IdentityAttributes')
+      return getExistingId.then(function(res) {
+        existingId = res;
+        return knex('IdentityAttributes')
           .where('identity_id', 'in', getExistingId).del()
           .then(function() {
             if (existingId.length) {
               return new P(function(resolve) { resolve(existingId); });
             } else {
-              return trx('IdentityAttributes')
+              return knex('IdentityAttributes')
                 .select(knex.raw(SQL_IFNULL + "(MAX(identity_id), 0) + 1 AS identity_id"));
             }
           })
@@ -430,20 +441,20 @@ module.exports = function(knex) {
               identity_id: identityId
             };
 
-            return trx.raw(sql, sqlValues);
+            return knex.raw(sql, sqlValues);
           })
           .then(function(res) {
             var hasSearchedAttributes = options.searchedAttributes && options.searchedAttributes.length > 0;
 
             if (hasSearchedAttributes) {
-              return trx('IdentityAttributes')
+              return knex('IdentityAttributes')
                 .select('name', 'value', 'confirmations', 'refutations')
                 .where(knex.raw('NOT (Name = ? AND value = ?) AND identity_id = ?', [options.id[0], options.id[1], identityId]))
                 .whereIn('name', options.searchedAttributes)
                 .orderByRaw('confirmations - refutations DESC');
             }
 
-            return trx('IdentityAttributes')
+            return knex('IdentityAttributes')
               .select('name', 'value', 'confirmations', 'refutations')
               .where(knex.raw('NOT (Name = ? AND value = ?) AND identity_id = ?', [options.id[0], options.id[1], identityId]))
               .orderByRaw('confirmations - refutations DESC');

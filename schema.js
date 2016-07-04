@@ -44,7 +44,7 @@ var init = function(db, config) {
   }).catch(catcher));
 
   queries.push(db.schema.createTableIfNotExists('Messages', function(t) {
-    t.string('hash').primary();
+    t.string('hash').unique().primary();
     t.string('jws', 10000).notNullable();
     t.timestamp('saved_at');
     t.datetime('timestamp');
@@ -58,20 +58,22 @@ var init = function(db, config) {
     t.string('signer_keyid');
     t.index(['timestamp']);
     t.index(['type']);
-  }).catch(catcher));
-
-  queries.push(db.schema.createTableIfNotExists('MessageAttributes', function(t) {
-    t.string('message_hash').references('Messages.hash');
-    t.string('name').notNullable();
-    t.string('value').notNullable();
-    t.boolean('is_recipient');
-    t.index(['message_hash', 'name', 'value']);
-    t.index(['message_hash', 'is_recipient']);
-    t.index(['message_hash']);
-    t.index(['name', 'value']);
-    t.index(['lower(value)'], 'lowercase_value');
-    t.primary(['message_hash', 'is_recipient', 'name', 'value']);
-  }).catch(catcher));
+  }).catch(catcher)
+  .then(function() {
+    db.schema.createTableIfNotExists('MessageAttributes', function(t) {
+      t.string('message_hash').references('Messages.hash');
+      t.string('name').notNullable();
+      t.string('value').notNullable();
+      t.boolean('is_recipient');
+      t.index(['message_hash', 'name', 'value']);
+      t.index(['message_hash', 'is_recipient']);
+      t.index(['message_hash']);
+      t.index(['name', 'value']);
+      t.index(['value']);
+      //t.index(['lower("value")'], 'lowercase_value');
+      t.primary(['message_hash', 'is_recipient', 'name', 'value']);
+    }).catch(catcher);
+  }));
 
   queries.push(db.schema.createTableIfNotExists('TrustDistances', function(t) {
     t.string('start_attr_name').notNullable();
@@ -90,7 +92,10 @@ var init = function(db, config) {
     t.string('viewpoint_value').notNullable();
     t.integer('confirmations').unsigned();
     t.integer('refutations').unsigned();
+    t.index(['identity_id']);
+    t.index(['identity_id', 'name']);
     t.index(['viewpoint_name', 'viewpoint_value']);
+    t.index(['name', 'viewpoint_name', 'viewpoint_value']);
     t.primary(['name', 'value', 'viewpoint_name', 'viewpoint_value']);
   }).catch(catcher));
 
