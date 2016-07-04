@@ -517,5 +517,5 @@ describe 'API', ->
       r = identifi.request
         apiMethod: 'peers'
       r.then (res) ->
-        res.length.should.equal 4
+        res.length.should.equal 3
         done()

@@ -346,17 +346,15 @@ module.exports = function(knex) {
           viewpoint_name: options.viewpoint[0],
           viewpoint_value: options.viewpoint[1]
         });
-      getExistingId.then();
+      var existingId;
+      getExistingId.then(function(res) { existingId = res; });
 
       return knex.transaction(function(trx) {
         return trx('IdentityAttributes')
           .where('identity_id', 'in', getExistingId).del()
           .then(function() {
-            return getExistingId;
-          })
-          .then(function(res) {
-            if (res.length) {
-              return new P(function(resolve) { resolve(res); });
+            if (existingId.length) {
+              return new P(function(resolve) { resolve(existingId); });
             } else {
               return trx('IdentityAttributes')
                 .select(knex.raw(SQL_IFNULL + "(MAX(identity_id), 0) + 1 AS identity_id"));
