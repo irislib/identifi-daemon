@@ -119,8 +119,8 @@ module.exports = function(knex) {
         select.push(knex.raw('MIN("td"."distance") AS "distance"'));
         select.push(knex.raw('MAX(st.positive_score) AS author_pos'));
         select.push(knex.raw('MAX(st.negative_score) AS author_neg'));
-        select.push(knex.raw('MIN(author_email.value) AS author_email'));
-        select.push(knex.raw('MIN(recipient_name.value) AS recipient_name'));
+        select.push(knex.raw('MAX(author_email.value) AS author_email'));
+        select.push(knex.raw('MAX(recipient_name.value) AS recipient_name'));
       }
       var query = knex.select(select)
         .groupBy('Messages.hash')
@@ -205,10 +205,10 @@ module.exports = function(knex) {
           this.on('recipient_attribute.viewpoint_name', '=', knex.raw('?', options.viewpoint[0]));
           this.on('recipient_attribute.viewpoint_value', '=', knex.raw('?', options.viewpoint[1]));
         });
-        query.leftJoin('IdentityAttributes as recipient_name', function() {
-          this.on('recipient_attribute.identity_id', '=', 'recipient_name.identity_id');
-          this.on('recipient_name.name', '=', knex.raw('?', 'name'));
-        });
+        query.joinRaw('left join "IdentityAttributes" AS recipient_name ON ' +
+          'recipient_attribute.identity_id = recipient_name.identity_id ' +
+          'AND (recipient_name.name = ? OR recipient_name.name = ?)', ['name', 'nickname']
+        );
       }
       return query;
     },
