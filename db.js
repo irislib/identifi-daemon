@@ -510,6 +510,122 @@ module.exports = function(knex) {
       if (id[0] !== 'keyID' && !trustedKeyID) {
         throw new Error('Please specify a trusted keyID');
       }
+
+      /*
+        Can create TrustDistances based on messages authored by startId, or transitively, from messages
+        authored by identities that have a TrustDistance from startId (when depth > 1)
+      */
+      function buildQuery(betweenKeyIDsOnly, trx, depth) {
+        var subQuery = trx.select(
+          trx.raw('?', id[0]),
+          trx.raw('?', id[1]),
+          'attr2.name',
+          'attr2.value',
+          trx.raw('?', depth)
+        )
+          .from('Messages as m')
+          .innerJoin('MessageAttributes as attr1', function() {
+            this.on('m.hash', '=', 'attr1.message_hash');
+            if (depth === 1) {
+              this.on('attr1.name', '=', trx.raw('?', id[0]));
+              this.on('attr1.value', '=', trx.raw('?', id[1]));
+            } else {
+              this.on('attr1.name', '=', 'td_author.end_attr_name');
+              this.on('attr1.value', '=', 'td_author.end_attr_value');
+            }
+            this.on('attr1.is_recipient', '=', trx.raw('?', false));
+          })
+          .innerJoin('MessageAttributes as attr2', function() {
+            this.on('m.hash', '=', 'attr2.message_hash');
+            if (betweenKeyIDsOnly) {
+              this.on('attr2.name', '=', trx.raw('?', 'keyID'));
+            }
+            this.on('attr2.is_recipient', '=', trx.raw('?', true));
+          });
+
+        if (depth > 1) {
+          subQuery.innerJoin('TrustDistances as td_author', function() {
+            this.on('td_author.start_attr_name', '=', trx.raw('?', id[0]));
+            this.on('td_author.start_attr_value', '=', trx.raw('?', id[1]));
+            this.on('td_author.end_attr_name', '=', 'attr1.name');
+            this.on('td_author.end_attr_value', '=', 'attr1.value');
+            this.on('td_author.distance', '=', trx.raw('?', depth - 1));
+          });
+        }
+
+        if (!betweenKeyIDsOnly) {
+          subQuery.innerJoin('IdentifierAttributes as uidt1', 'uidt1.name', 'attr1.name');
+          subQuery.innerJoin('IdentifierAttributes as uidt2', 'uidt2.name', 'attr2.name');
+          subQuery.leftJoin('TrustDistances as td_signer', function() {
+            this.on('td_signer.start_attr_name', '=', trx.raw('?', 'keyID'));
+            this.on('td_signer.start_attr_value', '=', trx.raw('?', trustedKeyID));
+            this.on('td_signer.end_attr_name', '=', trx.raw('?', 'keyID'));
+            this.on('td_signer.end_attr_value', '=', 'm.signer_keyid');
+          });
+          subQuery.where(function() {
+            this.whereNotNull('td_signer.distance').orWhere('m.signer_keyid', trustedKeyID);
+          });
+        }
+        subQuery.where('m.is_latest', true)
+          .andWhere('m.rating', '>', trx.raw('(m.min_rating + m.max_rating) / 2'));
+
+        var res = trx('TrustDistances').insert(subQuery);
+        return subQuery.then(function() {
+          return res;
+        });
+      }
+
+      var q, q2;
+      if (maintain) {
+        q = this.addTrustIndexedAttribute(id, maxDepth);
+      } else {
+        q = new P(function(resolve) { resolve(); });
+      }
+      var i;
+      return q.then(function() {
+        return knex.transaction(function(trx) {
+          return trx('TrustDistances')
+            .where({ start_attr_name: id[0], start_attr_value: id[1] }).del()
+            .then(function() {
+              q2 = new P(function(resolve) { resolve(); });
+              for (i = 1; i <= maxDepth; i++) {
+                q2.then(buildQuery(true, trx, i));
+              }
+              return q2;
+            })
+            .then(function() {
+              q2 = new P(function(resolve) { resolve(); });
+              for (i = 1; i <= maxDepth; i++) {
+                q2.then(buildQuery(false, trx, i));
+              }
+              return q2;
+            })
+            .then(function() {
+              return trx('TrustDistances').where({ start_attr_name: id[0], start_attr_value: id[1], end_attr_name: id[0], end_attr_value: id[1], distance: 0 })
+              .count('* as count');
+            })
+            .then(function(res) {
+              if (!parseInt(res[0].count)) {
+                // Add trust distance to self = 0
+                return trx('TrustDistances')
+                .insert({ start_attr_name: id[0], start_attr_value: id[1], end_attr_name: id[0], end_attr_value: id[1], distance: 0 });
+              }
+            })
+            .then(function() {
+              return trx('TrustDistances').count('* as wot_size')
+                .where({ start_attr_name: id[0], start_attr_value: id[1] });
+            })
+            .then(function(res) {
+              return parseInt(res[0].wot_size);
+            });
+        });
+      });
+    },
+
+    generateWebOfTrustIndex_old: function(id, maxDepth, maintain, trustedKeyID) {
+      if (id[0] !== 'keyID' && !trustedKeyID) {
+        throw new Error('Please specify a trusted keyID');
+      }
       function buildSql(betweenKeyIDsOnly) {
         var sql = "WITH RECURSIVE transitive_closure(attr1name, attr1val, attr2name, attr2val, distance, path_string) AS ";
         sql += "(";
