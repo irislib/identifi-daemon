@@ -30,7 +30,7 @@ resetPostgres = (knex) ->
 describe 'Database', ->
   db = undefined
   hash = undefined
-  before (done) ->
+  before ->
     cleanup()
     # After hook fails to execute when errors are thrown
     key = keyutil.getDefault()
@@ -41,32 +41,30 @@ describe 'Database', ->
     .then ->
       db = require('../db.js')(knex)
       db.init(config)
-    .then -> done()
   after ->
     cleanup()
 
   describe 'save and retrieve messages', ->
-    it 'should initially have 1 message', (done) ->
+    it 'should initially have 1 message', ->
       db.getMessageCount().then (res) ->
         res.should.equal 1
-        done()
-    it 'should save a rating', (done) ->
+    it 'should save a rating', ->
       message = Message.createRating
         author: [['email', 'alice@example.com']]
         recipient: [['email', 'bob@example.com']]
         rating: 1
         context: 'identifi'
       Message.sign message, privKey, pubKey
-      db.saveMessage(message).should.eventually.notify done
-    it 'should save another rating', (done) ->
+      db.saveMessage(message)
+    it 'should save another rating', ->
       message = Message.createRating
         author: [['email', 'charles@example.com']]
         recipient: [['email','bob@example.com']]
         rating: -1
         context: 'identifi'
       Message.sign message, privKey, pubKey
-      db.saveMessage(message).should.eventually.notify done
-    it 'should save yet another rating', (done) ->
+      db.saveMessage(message)
+    it 'should save yet another rating', ->
       message = Message.createRating
         author: [['email', 'bob@example.com']]
         recipient: [['email', 'charles@example.com']]
@@ -74,24 +72,20 @@ describe 'Database', ->
         context: 'identifi'
       Message.sign message, privKey, pubKey
       hash = message.hash
-      db.saveMessage(message).should.eventually.notify done
-    it 'should have 4 messages', (done) ->
+      db.saveMessage(message)
+    it 'should have 4 messages', ->
       db.getMessageCount().then (res) ->
         res.should.equal 4
-        done()
-    it 'should return message by hash', (done) ->
+    it 'should return message by hash', ->
       db.getMessages({ where: { hash: hash } }).then (res) ->
         res.length.should.equal 1
-        done()
-    it 'should return sent messages', (done) ->
+    it 'should return sent messages', ->
       db.getMessages({ author: ['email', 'alice@example.com'] }).then (res) ->
         res.length.should.equal 1
-        done()
-    it 'should return received messages', (done) ->
+    it 'should return received messages', ->
       db.getMessages({ recipient: ['email', 'bob@example.com'] }).then (res) ->
         res.length.should.equal 2
-        done()
-    ### it 'should find a saved attribute', (done) ->
+    ### it 'should find a saved attribute', ->
       db.getIdentityAttributes({ searchValue: 'bob' }).then (res) ->
         console.log(res)
         res.length.should.equal 1
@@ -99,60 +93,55 @@ describe 'Database', ->
         res[0].value.should.equal 'bob@example.com'
         done() ###
   describe 'verifications', ->
-    it 'should save a connection', (done) ->
+    it 'should save a connection', ->
       message = Message.create
         author: [['email', 'alice@example.com']]
         recipient: [['email', 'bob@example.com'], ['url', 'http://www.example.com/bob']]
         type: 'verify_identity'
       Message.sign message, privKey, pubKey
-      db.saveMessage(message).should.eventually.notify done
-    it 'should save another connection', (done) ->
+      db.saveMessage(message)
+    it 'should save another connection', ->
       message = Message.create
         author: [['email', 'alice@example.com']]
         recipient: [['email', 'bob@example.com'], ['tel', '+3581234567']]
         type: 'verify_identity'
       Message.sign message, privKey, pubKey
-      db.saveMessage(message).should.eventually.notify done
-    it 'should return connecting messages', (done) ->
+      db.saveMessage(message)
+    it 'should return connecting messages', ->
       db.getConnectingMessages({
         attr1: ['email', 'bob@example.com']
         attr2: ['url', 'http://www.example.com/bob']
       }).then (res) ->
         res.length.should.equal 1
-        done()
-    ### it 'should return connections', (done) ->
+    ### it 'should return connections', ->
       db.mapIdentityAttributes({
         id: ['email','bob@example.com']
         viewpoint: ['email', 'alice@example.com']
       }).then (res) ->
         res.length.should.equal 2
-        done()
-    it 'should return connections of attribute url', (done) ->
+    it 'should return connections of attribute url', ->
       db.mapIdentityAttributes({
         id: ['email','bob@example.com']
         viewpoint: ['email', 'alice@example.com']
         searchedAttributes: ['url']
       }).then (res) ->
         res.length.should.equal 1
-        done() ###
+        ###
   describe 'trust functions', ->
-    it 'should have 1 trust indexed attribute', (done) ->
+    it 'should have 1 trust indexed attribute', ->
       db.getTrustIndexedAttributes().then (res) ->
         res.length.should.equal 1
         res[0].name.should.equal 'keyID'
         res[0].value.should.equal key.hash
-        done()
-    it 'should generate a web of trust index', (done) ->
+    it 'should generate a web of trust index', ->
       db.generateWebOfTrustIndex(['email', 'alice@example.com'], 3, true, key.hash).then (res) ->
         res.should.equal 3
-        done()
-    it 'should have 2 trust indexed attributes', (done) ->
+    it 'should have 2 trust indexed attributes', ->
       db.getTrustIndexedAttributes().then (res) ->
         res.length.should.equal 2
         res[1].name.should.equal 'email'
         res[1].value.should.equal 'alice@example.com'
-        done()
-    it 'should not extend trust with a msg from an untrusted signer', (done) ->
+    it 'should not extend trust with a msg from an untrusted signer', ->
       untrustedKey = keyutil.generate()
       message = Message.createRating
         author: [['email', 'alice@example.com']]
@@ -164,22 +153,20 @@ describe 'Database', ->
         db.generateWebOfTrustIndex(['email', 'alice@example.com'], 3, true, key.hash)
       .then (res) ->
         res.should.equal 3
-        done()
       ###
       db.getTrustPaths(['email', 'alice@example.com'], ['email', 'charles@example.com'], 3).then (res) ->
         res.length.should.equal 1
-        done() ###
+        ###
   describe 'identity search', ->
-    ### it 'should find 7 attributes matching "a"', (done) ->
+    ### it 'should find 7 attributes matching "a"', ->
       db.getIdentityAttributes({ searchValue: 'a' }).then (res) ->
         res.length.should.equal 7
-        done()
-    it 'should find 1 attribute matching "alice"', (done) ->
+    it 'should find 1 attribute matching "alice"', ->
       db.getIdentityAttributes({ searchValue: 'alice' }).then (res) ->
         res.length.should.equal 1
-        done() ###
+        ###
   describe 'Priority', ->
-    it 'should be 100 for a message signed & authored by own key, recipient attribute keyID', (done) ->
+    it 'should be 100 for a message signed & authored by own key, recipient attribute keyID', ->
       anotherKey = keyutil.generate()
       message = Message.createRating
         author: [['keyID', key.hash]]
@@ -191,8 +178,7 @@ describe 'Database', ->
         db.getMessages({ where: { hash: message.hash } })
       .then (res) ->
         res[0].priority.should.equal 100
-        done()
-    it 'should be 99 for a message signed & authored by own key, recipient attribute email', (done) ->
+    it 'should be 99 for a message signed & authored by own key, recipient attribute email', ->
       message = Message.createRating
         author: [['keyID', key.hash]]
         recipient: [['email', 'alice@example.com']]
@@ -203,8 +189,7 @@ describe 'Database', ->
         db.getMessages({ where: { hash: message.hash } })
       .then (res) ->
         res[0].priority.should.equal 99
-        done()
-    it 'should be 81 for a message signed by own key, authored by known', (done) ->
+    it 'should be 81 for a message signed by own key, authored by known', ->
       message = Message.createRating
         author: [['email', 'alice@example.com']]
         recipient: [['email', 'bob@example.com']]
@@ -215,8 +200,7 @@ describe 'Database', ->
         db.getMessages({ where: { hash: message.hash } })
       .then (res) ->
         res[0].priority.should.equal 81
-        done()
-    it 'should be 48 for a message signed by own key, authored by unknown', (done) ->
+    it 'should be 48 for a message signed by own key, authored by unknown', ->
       message = Message.createRating
         author: [['email', 'user@example.com']]
         recipient: [['email', 'bob@example.com']]
@@ -227,8 +211,7 @@ describe 'Database', ->
         db.getMessages({ where: { hash: message.hash } })
       .then (res) ->
         res[0].priority.should.equal 48
-        done()
-    it 'should be 0 for a message from an unknown signer', (done) ->
+    it 'should be 0 for a message from an unknown signer', ->
       message = Message.createRating
         author: [['email', 'alice@example.com']]
         recipient: [['email', 'bob@example.com']]
@@ -240,8 +223,7 @@ describe 'Database', ->
         db.getMessages({ where: { hash: message.hash } })
       .then (res) ->
         res[0].priority.should.equal 0
-        done()
-    it 'should be 23 for a message from a 1st degree trusted signer, unknown author', (done) ->
+    it 'should be 23 for a message from a 1st degree trusted signer, unknown author', ->
       message = Message.createRating
         author: [['email', 'user1@example.com']]
         recipient: [['email', 'user2@example.com']]
@@ -253,8 +235,7 @@ describe 'Database', ->
         db.getMessages({ where: { hash: message.hash } })
         .then (res) ->
           res[0].priority.should.equal 23
-          done()
-    it 'should be 40 for a message from a 1st degree trusted signer, known author', (done) ->
+    it 'should be 40 for a message from a 1st degree trusted signer, known author', ->
       message = Message.createRating
         author: [['email', 'alice@example.com']]
         recipient: [['email', 'user2@example.com']]
@@ -266,8 +247,7 @@ describe 'Database', ->
         db.getMessages({ where: { hash: message.hash } })
         .then (res) ->
           res[0].priority.should.equal 40
-          done()
-    it 'should be 15 for a message from a 2nd degree trusted signer, unknown author', (done) ->
+    it 'should be 15 for a message from a 2nd degree trusted signer, unknown author', ->
       yetAnotherKey = keyutil.generate()
       message = Message.createRating
         author: [['keyID', anotherKey.hash]]
@@ -288,20 +268,18 @@ describe 'Database', ->
         db.getMessages({ where: { hash: message.hash } })
         .then (res) ->
           res[0].priority.should.equal 15
-          done()
   describe 'stats', ->
-    it 'should return the stats of an attribute', (done) ->
-      db.getStats(['email', 'bob@example.com'], ['email', 'alice@example.com']).then (res) ->
+    it 'should return the stats of an attribute', ->
+      db.getStats(['email', 'bob@example.com'], { viewpoint: ['email', 'alice@example.com']}).then (res) ->
         res.sent_positive.should.equal 1
         res.sent_neutral.should.equal 0
         res.sent_negative.should.equal 0
-        res.received_positive.should.equal 4
+        res.received_positive.should.equal 3
         res.received_neutral.should.equal 0
         res.received_negative.should.equal 1
         res.first_seen.should.not.be.empty
-        done()
   describe 'delete', ->
-    it 'should delete a message', (done) ->
+    it 'should delete a message', ->
       originalCount = null
       db.getMessageCount().then (res) ->
         originalCount = res
@@ -311,10 +289,9 @@ describe 'Database', ->
         db.getMessageCount()
       .then (res) ->
         (originalCount - res).should.equal 1
-        done()
   describe 'maxMessageCount', ->
     lowPrioMsg = null
-    before (done) ->
+    before ->
       # Save a 0-priority message
       k = keyutil.generate()
       lowPrioMsg = Message.createRating
@@ -323,14 +300,14 @@ describe 'Database', ->
         rating: 1
         context: 'identifi'
       Message.sign lowPrioMsg, k.private.pem, k.public.hex
-      db.saveMessage(lowPrioMsg).then -> done()
+      db.saveMessage(lowPrioMsg)
 
-    it 'should not be exceeded', (done) ->
+    it 'should not be exceeded', ->
       @timeout 10000
       saveMessages = (counter, max) ->
         message = Message.createRating
           author: [['email', 'user1@example.com']]
-          recipient: [['email', 'user2@example.com']]
+          recipient: [['email', counter + 'user2@example.com']]
           rating: 1
           context: 'identifi'
         Message.sign message, privKey, pubKey
@@ -344,9 +321,7 @@ describe 'Database', ->
         db.getMessageCount()
       .then (res) ->
         res.should.be.below config.maxMessageCount
-        done()
 
-    it 'should have deleted the 0-priority message', (done) ->
+    it 'should have deleted the 0-priority message', ->
       db.getMessages({ where: { hash: lowPrioMsg.hash } }).then (res) ->
         res.length.should.equal 0
-        done()

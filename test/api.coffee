@@ -36,7 +36,7 @@ resetPostgres = ->
 describe 'API', ->
   server = undefined
   socket = undefined
-  before (done) ->
+  before ->
     cleanup()
     resetPostgres().then ->
       # After hook fails to execute when errors are thrown
@@ -50,7 +50,6 @@ describe 'API', ->
       server.ready
     .then ->
       socket = identifi.getSocket({ isPeer: true })
-      done()
   after cleanup
   after ->
     console.log 'Test server at ' + config.get('port') + ' shutting down'
@@ -124,7 +123,7 @@ describe 'API', ->
           method: 'POST'
           apiMethod: 'messages'
           body: m
-      it 'add another verification msg', (done) ->
+      it 'add another verification msg', ->
         m = message.create
           author: [['email', 'bob@example.com']]
           recipient: [['email', 'charles@example.com'], ['url', 'http://twitter.com/charles']]
@@ -134,8 +133,7 @@ describe 'API', ->
           method: 'POST'
           apiMethod: 'messages'
           body: m
-        r.then -> done()
-      it 'should add an unsigned and authorless message when authorization is provided', (done) ->
+      it 'should add an unsigned and authorless message when authorization is provided', ->
         msg =
           recipient: [['email', 'charles@example.com'], ['url', 'http://twitter.com/charles']]
           type: 'verify_identity'
@@ -147,23 +145,21 @@ describe 'API', ->
             'Authorization': 'Bearer ' + identifi.getJwt(privKeyPEM, { user: { idType: 'email', idValue: 'bob@example.com', name: 'Bob' } })
         r.then (res) ->
           m = res
-          done()
     describe 'retrieve', ->
       it 'should fail if the message was not found', ->
         r = identifi.request
               apiMethod: 'messages'
               apiId: '1234'
         r.should.be.rejected
-      it 'should return the previously saved message', (done) ->
+      it 'should return the previously saved message', ->
         r = identifi.request
           apiMethod: 'messages'
           apiId: m.hash
         r.then (res) ->
           res.hash.should.equal m.hash
-          done()
     describe 'non-public messages', ->
       privMsg = null
-      it 'should add a non-public msg', (done) ->
+      it 'should add a non-public msg', ->
         privMsg = message.create
           author: [['email', 'bob@example.com']]
           recipient: [['email', 'darwin@example.com'], ['url', 'http://twitter.com/darwin']]
@@ -174,18 +170,16 @@ describe 'API', ->
           method: 'POST'
           apiMethod: 'messages'
           body: privMsg
-        .then -> done()
       it 'should not be visible in message listing', ->
         r = identifi.request
           apiMethod: 'messages'
           apiId: privMsg.hash
         r.should.be.rejected
-      it 'should not be returned by hash', (done) ->
+      it 'should not be returned by hash', ->
         identifi.request
           apiMethod: 'messages'
         .then (res) ->
           res[0].hash.should.not.equal privMsg.hash
-          done()
     describe 'wot', ->
       it 'should not generate a web of trust without auth', ->
         r = identifi.request
@@ -196,35 +190,55 @@ describe 'API', ->
           qs:
             depth: 3
         r.should.be.rejected
-      it 'should generate a web of trust index', (done) ->
+      it 'should generate a web of trust index', ->
         r = identifi.request
           apiMethod: 'identities'
           apiIdType: 'email'
           apiId: 'alice@example.com'
           apiAction: 'generatewotindex'
           qs:
-            depth: 3
+            depth: 4
           headers:
             'Authorization': 'Bearer ' + identifi.getJwt(privKeyPEM, { admin: true })
         r.then (res) ->
           res.should.equal 4
-          done()
+      it 'should generate a web of trust index for a keyID', ->
+        m = message.createRating
+          author: [['keyID', myKey.hash]]
+          recipient: [['email', 'alice@example.com']]
+          rating: 10
+          context: 'identifi'
+        message.sign(m, privKeyPEM, hex)
+        r = identifi.request
+          method: 'POST'
+          apiMethod: 'messages'
+          body: m
+        r.then ->
+          r = identifi.request
+            apiMethod: 'identities'
+            apiIdType: 'keyID'
+            apiId: myKey.hash
+            apiAction: 'generatewotindex'
+            qs:
+              depth: 4
+            headers:
+              'Authorization': 'Bearer ' + identifi.getJwt(privKeyPEM, { admin: true })
+          r.then (res) ->
+            res.should.equal 6
     describe 'list', ->
-      it 'should list messages ordered by date', (done) ->
+      it 'should list messages ordered by date', ->
         r = identifi.request
           apiMethod: 'messages'
         r.then (res) ->
           res[0].hash.should.equal m.hash
-          done()
-      it 'should filter messages by type', (done) ->
+      it 'should filter messages by type', ->
         r = identifi.request
           apiMethod: 'messages'
           qs:
             type: 'rating'
         r.then (res) ->
           msg.type.should.equal 'rating' for msg in res
-          done()
-      it 'should filter messages by rating type positive', (done) ->
+      it 'should filter messages by rating type positive', ->
         r = identifi.request
           apiMethod: 'messages'
           qs:
@@ -232,8 +246,7 @@ describe 'API', ->
         r.then (res) ->
           msg.type.should.equal 'rating' for msg in res
           msg.rating.should.be.above (msg.max_rating + msg.min_rating) / 2
-          done()
-      it 'should filter messages by rating type negative', (done) ->
+      it 'should filter messages by rating type negative', ->
         r = identifi.request
           apiMethod: 'messages'
           qs:
@@ -241,8 +254,7 @@ describe 'API', ->
         r.then (res) ->
           msg.type.should.equal 'rating' for msg in res
           msg.rating.should.be.below (msg.max_rating + msg.min_rating) / 2
-          done()
-      it 'should filter messages by viewpoint, max_distance 1', (done) ->
+      it 'should filter messages by viewpoint, max_distance 1', ->
         r = identifi.request
           apiMethod: 'messages'
           qs:
@@ -251,24 +263,21 @@ describe 'API', ->
             max_distance: 1
         r.then (res) ->
           res.length.should.equal 4
-          done()
-      it 'should filter messages by timestamp_lte', (done) ->
+      it 'should filter messages by timestamp_lte', ->
         r = identifi.request
           apiMethod: 'messages'
           qs:
             timestamp_lte: m.signedData.timestamp
         r.then (res) ->
-          res.length.should.equal 7
-          done()
-      it 'should filter messages by timestamp_gte', (done) ->
+          res.length.should.equal 8
+      it 'should filter messages by timestamp_gte', ->
         r = identifi.request
           apiMethod: 'messages'
           qs:
             timestamp_gte: m.signedData.timestamp
         r.then (res) ->
           res.length.should.equal 1
-          done()
-      it 'should filter messages by viewpoint, max_distance 2', (done) ->
+      it 'should filter messages by viewpoint, max_distance 2', ->
         r = identifi.request
           apiMethod: 'messages'
           qs:
@@ -277,7 +286,6 @@ describe 'API', ->
             max_distance: 2
         r.then (res) ->
           res.length.should.equal 6
-          done()
     describe 'delete', ->
       it 'should fail without auth', ->
         r = identifi.request
@@ -285,7 +293,7 @@ describe 'API', ->
           apiId: m.hash
           method: 'DELETE'
         r.should.be.rejected
-      it 'should delete the previously saved message', (done) ->
+      it 'should delete the previously saved message', ->
         r = identifi.request
           apiMethod: 'messages'
           apiId: m.hash
@@ -294,7 +302,6 @@ describe 'API', ->
             'Authorization': 'Bearer ' + identifi.getJwt(privKeyPEM, { admin: true })
         r.then (res) ->
           res.should.equal 'OK'
-          done()
       it 'should fail if the message was not found', ->
         r = identifi.request
           apiMethod: 'messages'
@@ -309,25 +316,23 @@ describe 'API', ->
               apiId: m.hash
         r.should.be.rejected
   describe 'identities', ->
-      it 'should return an empty set if an identity was not found', (done) ->
+      it 'should return an empty set if an identity was not found', ->
         r = identifi.request
               apiMethod: 'identities'
               apiId: 'bob@example.com'
               apiIdType: 'nope'
         r.then (res) ->
           res.should.be.empty
-          done()
     describe 'retrieve', ->
-      it 'should return an identity', (done) ->
+      it 'should return an identity', ->
         r = identifi.request
           apiMethod: 'identities'
           apiId: 'bob@example.com'
           apiIdType: 'email'
         r.then (res) ->
           res.should.not.be.empty
-          done()
     describe 'list', ->
-      ### it 'should return identities', (done) ->
+      ### it 'should return identities', ->
         r = identifi.request
           apiMethod: 'identities'
           qs:
@@ -336,16 +341,15 @@ describe 'API', ->
         r.then (res) ->
           console.log(res)
           res.length.should.equal 5
-          done() ###
-      it 'should filter identities by attribute name', (done) ->
+          ###
+      it 'should filter identities by attribute name', ->
         r = identifi.request
           apiMethod: 'identities'
           qs:
             attr_name: 'email'
         r.then (res) ->
           res.length.should.equal 3
-          done()
-      it 'should filter by search query', (done) -> # TODO: fix?
+      it 'should filter by search query', -> # TODO: fix?
         r = identifi.request
           apiMethod: 'identities'
           qs:
@@ -356,17 +360,15 @@ describe 'API', ->
           #res[1].value.should.equal 'alice@example.com'
           #res[2].value.should.equal 'david@example.com'
           #res[3].value.should.equal 'http://twitter.com/charles'
-          done()
-      it 'should return a list of peers as identifi identities', (done) ->
+      it 'should return a list of peers as identifi identities', ->
         r = identifi.request
           apiMethod: 'identities'
           qs:
             attr_name: 'identifi_node'
         r.then (res) ->
           res.length.should.equal 0
-          done()
     describe 'verifications', ->
-      it 'should return an identity, i.e. set of attributes connected to the query param', (done) ->
+      it 'should return an identity, i.e. set of attributes connected to the query param', ->
         r = identifi.request
           apiMethod: 'identities'
           apiIdType: 'email'
@@ -374,9 +376,8 @@ describe 'API', ->
           apiAction: 'verifications'
         r.then (res) ->
           res.should.not.be.empty
-          done()
     describe 'connecting_msgs', ->
-        it 'should return messages that connect id1 and id2 to the same identity', (done) ->
+        it 'should return messages that connect id1 and id2 to the same identity', ->
           r = identifi.request
             apiMethod: 'identities'
             apiIdType: 'email'
@@ -387,9 +388,8 @@ describe 'API', ->
               target_value: 'Bob the Builder'
           r.then (res) ->
             res.should.not.be.empty
-            done()
     describe 'stats', ->
-      it 'should return the stats of an attribute, no viewpoint', (done) ->
+      it 'should return the stats of an attribute, no viewpoint', ->
         r = identifi.request
           apiMethod: 'identities'
           apiIdType: 'email'
@@ -403,8 +403,7 @@ describe 'API', ->
           res.received_neutral.should.equal 0
           res.received_negative.should.equal 2
           res.first_seen.should.not.be.empty
-          done()
-      it 'should return the stats of an attribute, using a viewpoint & max_distance 1', (done) ->
+      it 'should return the stats of an attribute, using a viewpoint & max_distance 1', ->
         r = identifi.request
           apiMethod: 'identities'
           apiIdType: 'email'
@@ -415,7 +414,7 @@ describe 'API', ->
             viewpoint_value: 'alice@example.com'
             max_distance: 1
         r.then (res) ->
-          return done() # TODO: temporarily disabled
+          return # TODO: temporarily disabled
           res.sent_positive.should.equal 1
           res.sent_neutral.should.equal 0
           res.sent_negative.should.equal 0
@@ -423,10 +422,7 @@ describe 'API', ->
           res.received_neutral.should.equal 0
           res.received_negative.should.equal 0
           res.first_seen.should.not.be.empty
-          done()
-        .catch (e) ->
-          done(e)
-      it 'should return the stats of an attribute, using a viewpoint & max_distance 2', (done) ->
+      it 'should return the stats of an attribute, using a viewpoint & max_distance 2', ->
         r = identifi.request
           apiMethod: 'identities'
           apiIdType: 'email'
@@ -437,7 +433,7 @@ describe 'API', ->
             viewpoint_value: 'alice@example.com'
             max_distance: 1
         r.then (res) ->
-          return done() # TODO: temporarily disabled
+          return # TODO: temporarily disabled
           res.sent_positive.should.equal 1
           res.sent_neutral.should.equal 0
           res.sent_negative.should.equal 0
@@ -445,11 +441,8 @@ describe 'API', ->
           res.received_neutral.should.equal 0
           res.received_negative.should.equal 1
           res.first_seen.should.not.be.empty
-          done()
-        .catch (e) ->
-          done(e)
     describe 'sent', ->
-      it 'should return messages sent by an attribute / identity', (done) ->
+      it 'should return messages sent by an attribute / identity', ->
         r = identifi.request
           apiMethod: 'identities'
           apiIdType: 'email'
@@ -457,9 +450,8 @@ describe 'API', ->
           apiAction: 'sent'
         r.then (res) ->
           res.should.not.be.empty
-          done()
     describe 'received', ->
-      it 'should return messages received by an attribute / identity', (done) ->
+      it 'should return messages received by an attribute / identity', ->
         r = identifi.request
           apiMethod: 'identities'
           apiIdType: 'email'
@@ -467,7 +459,6 @@ describe 'API', ->
           apiAction: 'received'
         r.then (res) ->
           res.should.not.be.empty
-          done()
     describe 'getname', ->
       it 'should return a cached common name for the attribute'
   describe 'websocket', ->
@@ -487,6 +478,7 @@ describe 'API', ->
         method: 'POST'
         apiMethod: 'messages'
         body: m
+      return
     it 'should accept and save a message', (done) ->
       socket.emit('msg', { jws: 'eyJhbGciOiJFUzI1NiIsImtpZCI6IjMwNTYzMDEwMDYwNzJhODY0OGNlM2QwMjAxMDYwNTJiODEwNDAwMGEwMzQyMDAwNDllM2JjYjQ5OGRlY2FkYzIwYzRhMDkzMDI2ZGQ4NzgxZWUxMTNhM2VkNjBmZTU4ZGRmNzQ0MWJmZjYyZTA3ZjZmZmQ4ZDE2MjNmZWZiMWUwZDU3NDlhZTg5NjdkNDU2NGQzZDY2NjE3YWQ3Zjk5OTJlMjNiMDVlMjU3ZjQwODUwIn0.eyJhdXRob3IiOltbImVtYWlsIiwibWFydHRpQG1vbmkuY29tIl0sWyJuYW1lIiwiU2F0b3NoaSBOYWthbW90byJdLFsia2V5SUQiLCIvcGJ4alhqd0Vzb2piU2ZkTTN3R1dmRTI0RjRmWDNHYXNtb0hYWTN5WVBNPSJdXSwicmVjaXBpZW50IjpbWyJlbWFpbCIsInNpcml1c0Bpa2kuZmkiXSxbImVtYWlsIiwibWFydHRpQG1vbmkuY29tIl1dLCJ0eXBlIjoidmVyaWZ5X2lkZW50aXR5IiwidGltZXN0YW1wIjoiMjAxNi0wNS0xMFQwOTowNjo1MS4yMzRaIn0.fwQ22hyVeWbBMLdYqnwFT--jfF7l6xPUuCKO-YKMCoqzKvxPOBCRPdLa5qDj2suXPngDzTKp9CmHmRCC3XcbWw', hash: '7A2i/11lDUNH2/srjjiz5X7Dz9Sq7r2QrvLcS76/HDc=' })
       setTimeout ->
@@ -496,8 +488,8 @@ describe 'API', ->
           apiId: '7A2i/11lDUNH2/srjjiz5X7Dz9Sq7r2QrvLcS76/HDc='
         r.then ->
           done()
-        return
       , 1000
+      return
     it 'should not rebroadcast an already saved message', (done) ->
       socket.on 'msg', (e) ->
         done('Fail!')
@@ -512,6 +504,7 @@ describe 'API', ->
           done()
         return
       , 1000
+      return
   describe 'peers', ->
     it 'should have 4 peer addresses', (done) ->
       r = identifi.request
@@ -519,3 +512,4 @@ describe 'API', ->
       r.then (res) ->
         res.length.should.equal 3
         done()
+      return
