@@ -410,15 +410,15 @@ module.exports = function(knex) {
                 this.on('td_signer.end_attr_name', '=', knex.raw('?', 'keyID'));
                 this.on('td_signer.end_attr_value', '=', 'm.signer_keyid');
               })
-              .distinct(
+              .select(
                 identityId,
                 'attr2.name',
                 'attr2.value',
                 knex.raw('?', options.viewpoint[0]),
                 knex.raw('?', options.viewpoint[1]),
-                1,
-                0
-              ).select();
+                knex.raw('SUM(CASE WHEN m.type = \'verify_identity\' THEN 1 ELSE 0 END)'),
+                knex.raw('SUM(CASE WHEN m.type = \'unverify_identity\' THEN 1 ELSE 0 END)')
+              ).groupBy('attr2.name', 'attr2.value');
 
             function iterateSearch() {
               return knex('IdentityAttributes').insert(subQuery).then(function(res) {
