@@ -383,68 +383,53 @@ module.exports = function(knex) {
           })
           .then(function(res) {
             identityId = parseInt(res[0].identity_id);
-            sql = "WITH RECURSIVE transitive_closure(attr1name, attr1val, attr2name, attr2val, distance, path_string, confirmations, refutations) AS ";
-            sql += "( ";
-            sql += "SELECT attr1.name, attr1.value, attr2.name, attr2.value, 1 AS distance, ";
-            sql += SQL_PRINTF + "('%s:%s:%s:%s:',replace(attr1.name,':','::'),replace(attr1.value,':','::'),replace(attr2.name,':','::'),replace(attr2.value,':','::')) AS path_string, ";
-            sql += "1 AS Confirmations, "; // TODO fix
-            sql += "0 AS Refutations ";
-            sql += "FROM \"Messages\" AS p ";
-            sql += "INNER JOIN \"TrustDistances\" AS td1 ON ";
-            sql += "td1.start_attr_name = :viewpoint_name AND td1.start_attr_value = :viewpoint_value AND ";
-            sql += "td1.end_attr_name = 'keyID' AND td1.end_attr_value = p.signer_keyid ";
-            sql += "INNER JOIN \"MessageAttributes\" as attr1 ON p.hash = attr1.message_hash ";
-            sql += "INNER JOIN \"MessageAttributes\" as attr2 ON p.hash = attr2.message_hash AND attr2.is_recipient = attr1.is_recipient AND (attr1.name != attr2.name OR attr1.value != attr2.value) ";
 
-            // AddMessageFilterSQL(sql, viewpoint, maxDistance, msgType);
+            var p, last;
+            var subQuery = knex
+              .from('Messages as m')
+              .innerJoin('MessageAttributes as attr1', function() {
+                this.on('m.hash', '=', 'attr1.message_hash');
+                this.on('attr1.name', '=', knex.raw('?', options.id[0]));
+                this.on('attr1.value', '=', knex.raw('?', options.id[1]));
+              })
+              .innerJoin('MessageAttributes as attr2', function() {
+                this.on('m.hash', '=', 'attr2.message_hash');
+                this.on('attr2.is_recipient', '=', 'attr1.is_recipient');
+              })
+              .innerJoin('IdentifierAttributes as uidt', 'uidt.name', 'attr1.name')
+              .leftJoin('IdentityAttributes as existing', function() {
+                this.on('existing.name', '=', 'attr2.name');
+                this.on('existing.value', '=', 'attr2.value');
+                this.on('existing.viewpoint_name', '=', knex.raw('?', options.viewpoint[0]));
+                this.on('existing.viewpoint_value', '=', knex.raw('?', options.viewpoint[1]));
+              })
+              .whereNull('existing.identity_id')
+              .innerJoin('TrustDistances as td_signer', function() {
+                this.on('td_signer.start_attr_name', '=', knex.raw('?', options.viewpoint[0]));
+                this.on('td_signer.start_attr_value', '=', knex.raw('?', options.viewpoint[1]));
+                this.on('td_signer.end_attr_name', '=', knex.raw('?', 'keyID'));
+                this.on('td_signer.end_attr_value', '=', 'm.signer_keyid');
+              })
+              .distinct(
+                identityId,
+                'attr2.name',
+                'attr2.value',
+                knex.raw('?', options.viewpoint[0]),
+                knex.raw('?', options.viewpoint[1]),
+                1,
+                0
+              ).select();
 
-            sql += "WHERE attr1.name = :attr AND attr1.value = :val AND p.type IN ('verify_identity','unverify_identity')  ";
-            // AddMessageFilterSQLWhere(sql, viewpoint);
+            function iterateSearch() {
+              return knex('IdentityAttributes').insert(subQuery).then(function(res) {
+                if (JSON.stringify(last) !== JSON.stringify(res)) {
+                  last = res;
+                  return iterateSearch();
+                }
+              });
+            }
 
-            sql += "UNION ALL ";
-
-            sql += "SELECT tc.attr1name, tc.attr1val, attr2.name, attr2.value, tc.distance + 1, ";
-            sql += SQL_PRINTF + "('%s%s:%s:',tc.path_string,replace(attr2.name,':','::'),replace(attr2.value,':','::')) AS path_string, ";
-            sql += "1 AS Confirmations, "; // TODO fix
-            sql += "0 AS Refutations ";
-            sql += "FROM \"Messages\" AS p ";
-            sql += "JOIN \"TrustDistances\" AS td2 ON ";
-            sql += "td2.start_attr_name = :viewpoint_name AND td2.start_attr_value = :viewpoint_value AND ";
-            sql += "td2.end_attr_name = 'keyID' AND td2.end_attr_value = p.signer_keyid ";
-            sql += "JOIN \"MessageAttributes\" as attr1 ON p.hash = attr1.message_hash AND attr1.is_recipient = :true ";
-            sql += "JOIN \"IdentifierAttributes\" AS ia1 ON ia1.name = attr1.name ";
-            sql += "JOIN \"MessageAttributes\" as attr2 ON p.hash = attr2.message_hash AND attr2.is_recipient = :true AND (attr1.name != attr2.name OR attr1.value != attr2.value) ";
-            sql += "JOIN transitive_closure AS tc ON tc.confirmations > tc.refutations AND attr1.name = tc.attr2name AND attr1.value = tc.attr2val ";
-            sql += "INNER JOIN \"IdentifierAttributes\" AS ia2 ON ia2.name = tc.attr1name ";
-
-            // AddMessageFilterSQL(sql, viewpoint, maxDistance, msgType);
-
-            sql += "WHERE tc.distance < 5 AND p.type IN ('verify_identity','unverify_identity') ";
-            // AddMessageFilterSQLWhere(sql, viewpoint);
-            sql += "AND tc.path_string NOT LIKE " + SQL_PRINTF + "('%%%s:%s:%%',replace(attr2.name,':','::'),replace(attr2.value,':','::'))";
-            sql += ") ";
-
-            sql += SQL_INSERT_OR_REPLACE + " INTO \"IdentityAttributes\" ";
-            // The subquery for selecting identity_id could be optimized?
-            if (SQL_ON_CONFLICT.length) { sql += '('; }
-            sql += "SELECT " + identityId + ", attr2name, attr2val, :viewpoint_name, :viewpoint_value, 1, 0 FROM transitive_closure ";
-            sql += "GROUP BY attr2name, attr2val ";
-            sql += "UNION SELECT " + identityId + ", :attr, :val, :viewpoint_name, :viewpoint_value, 1, 0 ";
-            sql += "FROM \"MessageAttributes\" AS mi ";
-            sql += "INNER JOIN \"IdentifierAttributes\" AS ui ON ui.name = mi.name ";
-            sql += "WHERE mi.name = :attr AND mi.value = :val ";
-            if (SQL_ON_CONFLICT.length) { sql += ') ' + SQL_ON_CONFLICT; }
-
-            var sqlValues = {
-              attr: options.id[0],
-              val: options.id[1],
-              viewpoint_name: options.viewpoint[0],
-              viewpoint_value: options.viewpoint[1],
-              true: true,
-              identity_id: identityId
-            };
-
-            return knex.raw(sql, sqlValues);
+            return iterateSearch();
           })
           .then(function(res) {
             var hasSearchedAttributes = options.searchedAttributes && options.searchedAttributes.length > 0;
