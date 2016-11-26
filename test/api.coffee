@@ -125,6 +125,26 @@ describe 'API', ->
           body: m
       it 'add another verification msg', ->
         m = message.create
+          author: [['email', 'alice@example.com']]
+          recipient: [['email', 'bob@example.com'], ['email', 'bob@example.net']]
+          type: 'verify_identity'
+        message.sign(m, privKeyPEM, hex)
+        r = identifi.request
+          method: 'POST'
+          apiMethod: 'messages'
+          body: m
+      it 'add another verification msg', ->
+        m = message.create
+          author: [['email', 'alice@example.com']]
+          recipient: [['email', 'bob@example.net'], ['email', 'bob@example.org']]
+          type: 'verify_identity'
+        message.sign(m, privKeyPEM, hex)
+        r = identifi.request
+          method: 'POST'
+          apiMethod: 'messages'
+          body: m
+      it 'add another verification msg', ->
+        m = message.create
           author: [['email', 'bob@example.com']]
           recipient: [['email', 'charles@example.com'], ['url', 'http://twitter.com/charles']]
           type: 'verify_identity'
@@ -262,14 +282,14 @@ describe 'API', ->
             viewpoint_value: 'alice@example.com'
             max_distance: 1
         r.then (res) ->
-          res.length.should.equal 4
+          res.length.should.equal 6
       it 'should filter messages by timestamp_lte', ->
         r = identifi.request
           apiMethod: 'messages'
           qs:
             timestamp_lte: m.signedData.timestamp
         r.then (res) ->
-          res.length.should.equal 8
+          res.length.should.equal 10
       it 'should filter messages by timestamp_gte', ->
         r = identifi.request
           apiMethod: 'messages'
@@ -285,7 +305,7 @@ describe 'API', ->
             viewpoint_value: 'alice@example.com'
             max_distance: 2
         r.then (res) ->
-          res.length.should.equal 6
+          res.length.should.equal 8
     describe 'delete', ->
       it 'should fail without auth', ->
         r = identifi.request
@@ -330,7 +350,20 @@ describe 'API', ->
           apiId: 'bob@example.com'
           apiIdType: 'email'
         r.then (res) ->
-          res.should.not.be.empty
+          json_res = JSON.stringify(res)
+          json_res.should.contain 'bob@example.com'
+          json_res.should.contain 'bob@example.net'
+          json_res.should.contain 'bob@example.org'
+      it 'should return the same identity', ->
+        r = identifi.request
+          apiMethod: 'identities'
+          apiId: 'bob@example.org'
+          apiIdType: 'email'
+        r.then (res) ->
+          json_res = JSON.stringify(res)
+          json_res.should.contain 'bob@example.com'
+          json_res.should.contain 'bob@example.net'
+          json_res.should.contain 'bob@example.org'
     describe 'list', ->
       ### it 'should return identities', ->
         r = identifi.request
