@@ -623,6 +623,9 @@ function askForMorePeers(url, peersNeeded) {
         db.addPeer({ url: res[i].url }).return();
       }
     }
+  })
+  .catch(function(e) {
+    log('caught error requesting peers: ' + e);
   });
 }
 
@@ -644,6 +647,9 @@ function requestMessages(url, qs) {
       qs.offset += qs.limit;
       return requestMessages(url, qs);
     }
+  })
+  .catch(function(e) {
+    log('caught error requesting messages from ' + url + ' : ' + e);
   });
 }
 
