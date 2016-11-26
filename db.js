@@ -583,6 +583,18 @@ module.exports = function(knex) {
             .then(function() {
               return trx('TrustDistances').where({ start_attr_name: trustedKey[0], start_attr_value: trustedKey[1] }).del();
             })
+            .then(function(res) {
+              // Add trust distance to self = 0
+              return trx('TrustDistances')
+                .insert({ start_attr_name: id[0], start_attr_value: id[1], end_attr_name: id[0], end_attr_value: id[1], distance: 0 })
+                .then(function() {
+                  if (trustedKey[0] !== id[0] && trustedKey[1] !== id[1]) {
+                    return trx('TrustDistances')
+                      .insert({ start_attr_name: trustedKey[0], start_attr_value: trustedKey[1], end_attr_name: trustedKey[0], end_attr_value: trustedKey[1], distance: 0 })
+                      .return();
+                  }
+                });
+            })
             .then(function() {
               q2 = new P(function(resolve) { resolve(); });
               for (i = 1; i <= maxDepth; i++) {
@@ -596,17 +608,6 @@ module.exports = function(knex) {
                 q2.then(buildQuery(false, trx, i));
               }
               return q2;
-            })
-            .then(function() {
-              return trx('TrustDistances').where({ start_attr_name: id[0], start_attr_value: id[1], end_attr_name: id[0], end_attr_value: id[1], distance: 0 })
-              .count('* as count');
-            })
-            .then(function(res) {
-              if (!parseInt(res[0].count)) {
-                // Add trust distance to self = 0
-                return trx('TrustDistances')
-                .insert({ start_attr_name: id[0], start_attr_value: id[1], end_attr_name: id[0], end_attr_value: id[1], distance: 0 });
-              }
             })
             .then(function() {
               return trx('TrustDistances')
