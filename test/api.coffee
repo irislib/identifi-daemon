@@ -223,6 +223,7 @@ describe 'API', ->
         r.then (res) ->
           res.should.equal 4
       it 'should generate a web of trust index for a keyID', ->
+        # This message is deleted in a test later
         m = message.createRating
           author: [['keyID', myKey.hash]]
           recipient: [['email', 'alice@example.com']]
@@ -344,7 +345,7 @@ describe 'API', ->
         r.then (res) ->
           res.should.be.empty
     describe 'retrieve', ->
-      it 'should return an identity', ->
+      it 'should return a cached identity', ->
         r = identifi.request
           apiMethod: 'identities'
           apiId: 'bob@example.com'
@@ -381,6 +382,7 @@ describe 'API', ->
           qs:
             attr_name: 'email'
         r.then (res) ->
+          console.log res
           res.length.should.equal 3
       it 'should filter by search query', -> # TODO: fix?
         r = identifi.request
@@ -408,7 +410,23 @@ describe 'API', ->
           apiId: 'bob@example.com'
           apiAction: 'verifications'
         r.then (res) ->
-          res.should.not.be.empty
+          json_res = JSON.stringify(res)
+          # json_res.should.contain 'bob@example.com'
+          json_res.should.contain 'bob@example.net'
+          json_res.should.contain 'bob@example.org'
+          json_res.should.contain 'Bob the Builder'
+      it 'should return the same identity', ->
+        r = identifi.request
+          apiMethod: 'identities'
+          apiIdType: 'email'
+          apiId: 'bob@example.org'
+          apiAction: 'verifications'
+        r.then (res) ->
+          json_res = JSON.stringify(res)
+          json_res.should.contain 'bob@example.com'
+          json_res.should.contain 'bob@example.net'
+          # json_res.should.contain 'bob@example.org'
+          json_res.should.contain 'Bob the Builder'
     describe 'connecting_msgs', ->
         it 'should return messages that connect id1 and id2 to the same identity', ->
           r = identifi.request

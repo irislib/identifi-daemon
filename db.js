@@ -359,14 +359,15 @@ module.exports = function(knex) {
     mapIdentityAttributes: function(options) {
       var countBefore, identityId, sql;
       options.viewpoint = options.viewpoint || myId;
-      var getExistingId = knex('IdentityAttributes')
+      var getExistingId = knex.from('IdentityAttributes as ia')
         .select('identity_id')
         .where({
-          name: options.id[0],
-          value: options.id[1],
+          'ia.name': options.id[0],
+          'ia.value': options.id[1],
           viewpoint_name: options.viewpoint[0],
           viewpoint_value: options.viewpoint[1]
-        });
+        })
+        .innerJoin('IdentifierAttributes as uidt', 'uidt.name', 'ia.name');
       var existingId;
 
       return getExistingId.then(function(res) {
@@ -383,53 +384,89 @@ module.exports = function(knex) {
           })
           .then(function(res) {
             identityId = parseInt(res[0].identity_id);
-
+            return knex('IdentityAttributes').insert({
+              identity_id: identityId,
+              name: options.id[0],
+              value: options.id[1],
+              viewpoint_name: options.viewpoint[0],
+              viewpoint_value: options.viewpoint[1],
+              confirmations: 1,
+              refutations: 0
+            });
+          })
+          .then(function() {
             var p, last;
-            var subQuery = knex
-              .from('Messages as m')
-              .innerJoin('MessageAttributes as attr1', function() {
-                this.on('m.hash', '=', 'attr1.message_hash');
-                this.on('attr1.name', '=', knex.raw('?', options.id[0]));
-                this.on('attr1.value', '=', knex.raw('?', options.id[1]));
-              })
-              .innerJoin('MessageAttributes as attr2', function() {
-                this.on('m.hash', '=', 'attr2.message_hash');
-                this.on('attr2.is_recipient', '=', 'attr1.is_recipient');
-              })
-              .innerJoin('IdentifierAttributes as uidt', 'uidt.name', 'attr1.name')
-              .leftJoin('IdentityAttributes as existing', function() {
-                this.on('existing.name', '=', 'attr2.name');
-                this.on('existing.value', '=', 'attr2.value');
-                this.on('existing.viewpoint_name', '=', knex.raw('?', options.viewpoint[0]));
-                this.on('existing.viewpoint_value', '=', knex.raw('?', options.viewpoint[1]));
-              })
-              .whereNull('existing.identity_id')
-              .innerJoin('TrustDistances as td_signer', function() {
-                this.on('td_signer.start_attr_name', '=', knex.raw('?', options.viewpoint[0]));
-                this.on('td_signer.start_attr_value', '=', knex.raw('?', options.viewpoint[1]));
-                this.on('td_signer.end_attr_name', '=', knex.raw('?', 'keyID'));
-                this.on('td_signer.end_attr_value', '=', 'm.signer_keyid');
-              })
-              .select(
-                identityId,
-                'attr2.name',
-                'attr2.value',
-                knex.raw('?', options.viewpoint[0]),
-                knex.raw('?', options.viewpoint[1]),
-                knex.raw('SUM(CASE WHEN m.type = \'verify_identity\' THEN 1 ELSE 0 END)'),
-                knex.raw('SUM(CASE WHEN m.type = \'unverify_identity\' THEN 1 ELSE 0 END)')
-              ).groupBy('attr2.name', 'attr2.value');
-
-            function iterateSearch() {
-              return knex('IdentityAttributes').insert(subQuery).then(function(res) {
-                if (JSON.stringify(last) !== JSON.stringify(res)) {
-                  last = res;
-                  return iterateSearch();
-                }
-              });
+            function generateSubQuery() {
+              return knex
+                .from('Messages as m')
+                .innerJoin('MessageAttributes as attr1', function() {
+                  this.on('m.hash', '=', 'attr1.message_hash');
+                })
+                .innerJoin('IdentityAttributes as ia', function() {
+                  this.on('ia.name', '=', 'attr1.name');
+                  this.on('ia.value', '=', 'attr1.value');
+                  this.on('ia.identity_id', '=', identityId);
+                })
+                .innerJoin('MessageAttributes as attr2', function() {
+                  this.on('m.hash', '=', 'attr2.message_hash');
+                  this.on('attr2.is_recipient', '=', 'attr1.is_recipient');
+                })
+                .innerJoin('IdentifierAttributes as uidt', 'uidt.name', 'attr1.name')
+                .innerJoin('TrustDistances as td_signer', function() {
+                  this.on('td_signer.start_attr_name', '=', knex.raw('?', options.viewpoint[0]));
+                  this.on('td_signer.start_attr_value', '=', knex.raw('?', options.viewpoint[1]));
+                  this.on('td_signer.end_attr_name', '=', knex.raw('?', 'keyID'));
+                  this.on('td_signer.end_attr_value', '=', 'm.signer_keyid');
+                });
             }
 
-            return iterateSearch();
+            function generateDeleteSubQuery() {
+              return generateSubQuery()
+                .innerJoin('IdentityAttributes as existing', function() {
+                  this.on('existing.identity_id', '!=', identityId);
+                  this.on('existing.name', '=', 'attr2.name');
+                  this.on('existing.value', '=', 'attr2.value');
+                  this.on('existing.viewpoint_name', '=', knex.raw('?', options.viewpoint[0]));
+                  this.on('existing.viewpoint_value', '=', knex.raw('?', options.viewpoint[1]));
+                })
+                .innerJoin('IdentifierAttributes as uidt2', 'uidt2.name', 'existing.name')
+                .select('existing.identity_id');
+            }
+
+            function generateInsertSubQuery() {
+              return generateSubQuery()
+                .leftJoin('IdentityAttributes as existing', function() {
+                  this.on('existing.identity_id', '=', identityId);
+                  this.on('existing.name', '=', 'attr2.name');
+                  this.on('existing.value', '=', 'attr2.value');
+                  this.on('existing.viewpoint_name', '=', knex.raw('?', options.viewpoint[0]));
+                  this.on('existing.viewpoint_value', '=', knex.raw('?', options.viewpoint[1]));
+                })
+                .whereNull('existing.identity_id')
+                .select(
+                  identityId,
+                  'attr2.name',
+                  'attr2.value',
+                  knex.raw('?', options.viewpoint[0]),
+                  knex.raw('?', options.viewpoint[1]),
+                  knex.raw('SUM(CASE WHEN m.type = \'verify_identity\' THEN 1 ELSE 0 END)'),
+                  knex.raw('SUM(CASE WHEN m.type = \'unverify_identity\' THEN 1 ELSE 0 END)')
+                ).groupBy('attr2.name', 'attr2.value');
+            }
+
+            function iterateSearch() {
+              return knex('IdentityAttributes').whereIn('identity_id', generateDeleteSubQuery()).del()
+              .then(
+                knex('IdentityAttributes').insert(generateInsertSubQuery()).then(function(res) {
+                  if (JSON.stringify(last) !== JSON.stringify(res)) {
+                    last = res;
+                    return iterateSearch().return();
+                  }
+                })
+              );
+            }
+
+            return iterateSearch().return();
           })
           .then(function(res) {
             var hasSearchedAttributes = options.searchedAttributes && options.searchedAttributes.length > 0;
