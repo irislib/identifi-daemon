@@ -180,6 +180,7 @@ module.exports = function(knex) {
             this.andOn('td.distance', '<=', knex.raw('?', options.maxDistance));
           }
         });
+        // Replace left joins with subquery for performance?
         query.leftJoin('IdentityAttributes as author_attribute', function() {
           this.on('author_attribute.name', '=', 'author.name');
           this.on('author_attribute.value', '=', 'author.value');
@@ -202,6 +203,7 @@ module.exports = function(knex) {
           'AND (recipient_name.name = ? OR recipient_name.name = ?)', ['name', 'nickname']
         );
         if (options.author) {
+          // Extend message search to other attributes connected to the author. Slows down the query a bit.
           query.leftJoin('IdentityAttributes as other_author_attribute', function() {
             this.on('author_attribute.identity_id', '=', 'other_author_attribute.identity_id');
           });
@@ -217,6 +219,7 @@ module.exports = function(knex) {
           });
         }
         if (options.recipient) {
+          // Extend message search to other attributes connected to the recipient. Slows down the query a bit.
           query.leftJoin('IdentityAttributes as other_recipient_attribute', function() {
             this.on('recipient_attribute.identity_id', '=', 'other_recipient_attribute.identity_id');
           });
