@@ -14,7 +14,7 @@
         "connection": {
             "filename": "identifi_test.db"
         },
-        "debug": false
+        "debug": true
     },
     "logfile": "identifi_test.log",
     "port": 4944,

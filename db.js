@@ -1211,32 +1211,30 @@ module.exports = function(knex) {
     updateWotIndexesByMessage: function(message, trustedKeyID) {
       var queries = [];
 
-      function makeSubquery(a, r) {
+      function makeSubquery(author, recipient) {
         return knex
         .from('TrustIndexedAttributes AS viewpoint')
-        .innerJoin('IdentifierAttributes as ia', 'ia.name', knex.raw('?', r[0]))
-        .leftJoin('TrustDistances AS td', function() {
+        .innerJoin('IdentifierAttributes as ia', 'ia.name', knex.raw('?', recipient[0]))
+        .innerJoin('TrustDistances AS td', function() {
           this.on('td.start_attr_name', '=', 'viewpoint.name')
           .andOn('td.start_attr_value', '=', 'viewpoint.value')
-          .andOn('td.end_attr_name', '=', knex.raw('?', a[0]))
-          .andOn('td.end_attr_value', '=', knex.raw('?', a[1]));
+          .andOn('td.end_attr_name', '=', knex.raw('?', author[0]))
+          .andOn('td.end_attr_value', '=', knex.raw('?', author[1]));
         })
         .leftJoin('TrustDistances AS existing', function() { // TODO: fix with REPLACE or sth. Should update if new distance is shorter.
           this.on('existing.start_attr_name', '=', 'viewpoint.name')
           .andOn('existing.start_attr_value', '=', 'viewpoint.value')
-          .andOn('existing.end_attr_name', '=', knex.raw('?', r[0]))
-          .andOn('existing.end_attr_value', '=', knex.raw('?', r[1]));
+          .andOn('existing.end_attr_name', '=', knex.raw('?', recipient[0]))
+          .andOn('existing.end_attr_value', '=', knex.raw('?', recipient[1]));
         })
-        .whereRaw('existing.distance IS NULL AND ((viewpoint.name = :author_name AND viewpoint.value = :author_value) ' +
-          'OR (td.end_attr_name = :author_name AND td.end_attr_value = :author_value))',
-          { author_name: a[0], author_value: a[1] })
-        .select('viewpoint.name as start_attr_name', 'viewpoint.value as start_attr_value', knex.raw('? as end_attr_name', r[0]), knex.raw('? as end_attr_value', r[1]), knex.raw(SQL_IFNULL+'(td.distance, 0) + 1 as distance'));
+        .whereNull('existing.distance')
+        .select('viewpoint.name as start_attr_name', 'viewpoint.value as start_attr_value', knex.raw('? as end_attr_name', recipient[0]), knex.raw('? as end_attr_value', recipient[1]), knex.raw(SQL_IFNULL+'(td.distance, 0) + 1 as distance'));
       }
 
-      function getSaveFunction(a, r) {
+      function getSaveFunction(author, recipient) {
         return function(distance) {
           if (distance > -1) {
-            return knex('TrustDistances').insert(makeSubquery(a, r));
+            return knex('TrustDistances').insert(makeSubquery(author, recipient));
           }
         };
       }
@@ -1244,13 +1242,13 @@ module.exports = function(knex) {
       if (Message.isPositive(message)) {
         var i, j;
         for (i = 0; i < message.signedData.author.length; i++) {
-          var a = message.signedData.author[i];
+          var author = message.signedData.author[i];
           for (j = 0; j < message.signedData.recipient.length; j++) {
-            var t = a[0] === 'keyID' ? a[1] : trustedKeyID;
+            var t = author[0] === 'keyID' ? author[1] : trustedKeyID;
             if (!t) { continue; }
-            var r = message.signedData.recipient[j];
+            var recipient = message.signedData.recipient[j];
             var q = pub.getTrustDistance(['keyID', t], ['keyID', message.signerKeyHash])
-            .then(getSaveFunction(a, r));
+            .then(getSaveFunction(author, recipient));
             queries.push(q);
           }
         }

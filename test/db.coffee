@@ -157,6 +157,19 @@ describe 'Database', ->
       db.getTrustPaths(['email', 'alice@example.com'], ['email', 'charles@example.com'], 3).then (res) ->
         res.length.should.equal 1
         ###
+    it 'should extend trust on rating message save', ->
+      message = Message.create
+        author: [['email', 'alice@example.com']]
+        recipient: [['email', 'fennie@example.com']]
+        rating: 1
+        maxRating: 10
+        minRating: -10
+        context: 'identifi'
+        type: 'rating'
+      Message.sign message, privKey, pubKey
+      db.saveMessage(message).then ->
+        db.getTrustDistance(['email', 'alice@example.com'], ['email', 'fennie@example.com']).then (res) ->
+          res.should.equal 1
   describe 'identity search', ->
     ### it 'should find 7 attributes matching "a"', ->
       db.getIdentityAttributes({ searchValue: 'a' }).then (res) ->
