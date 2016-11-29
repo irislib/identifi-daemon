@@ -1208,7 +1208,7 @@ module.exports = function(knex) {
       });
     },
 
-    updateWotIndexesByMessage: function(message, trustedKeyID) {
+    updateWotIndexesByMessage: function(message) {
       var queries = [];
 
       function makeSubquery(author, recipient) {
@@ -1228,7 +1228,13 @@ module.exports = function(knex) {
           .andOn('existing.end_attr_value', '=', knex.raw('?', recipient[1]));
         })
         .whereNull('existing.distance')
-        .select('viewpoint.name as start_attr_name', 'viewpoint.value as start_attr_value', knex.raw('? as end_attr_name', recipient[0]), knex.raw('? as end_attr_value', recipient[1]), knex.raw(SQL_IFNULL+'(td.distance, 0) + 1 as distance'));
+        .select(
+          'viewpoint.name as start_attr_name',
+          'viewpoint.value as start_attr_value',
+          knex.raw('? as end_attr_name', recipient[0]),
+          knex.raw('? as end_attr_value', recipient[1]),
+          knex.raw(SQL_IFNULL+'(td.distance, 0) + 1 as distance')
+        );
       }
 
       function getSaveFunction(author, recipient) {
@@ -1243,9 +1249,8 @@ module.exports = function(knex) {
         var i, j;
         for (i = 0; i < message.signedData.author.length; i++) {
           var author = message.signedData.author[i];
+          var t = author[0] === 'keyID' ? author[1] : myKey.hash; // trusted key
           for (j = 0; j < message.signedData.recipient.length; j++) {
-            var t = author[0] === 'keyID' ? author[1] : trustedKeyID;
-            if (!t) { continue; }
             var recipient = message.signedData.recipient[j];
             var q = pub.getTrustDistance(['keyID', t], ['keyID', message.signerKeyHash])
             .then(getSaveFunction(author, recipient));

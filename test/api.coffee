@@ -415,7 +415,6 @@ describe 'API', ->
           json_res.should.contain 'bob@example.org'
           json_res.should.contain 'Bob the Builder'
       it 'should return the same identity', ->
-        return
         r = identifi.request
           apiMethod: 'identities'
           apiIdType: 'email'
