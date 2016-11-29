@@ -144,15 +144,6 @@ module.exports = function(knex) {
         // group by author
       }
 
-      if (options.author) {
-        options.where['author.name'] = options.author[0];
-        options.where['author.value'] = options.author[1];
-      }
-      if (options.recipient) {
-        options.where['recipient.name'] = options.recipient[0];
-        options.where['recipient.value'] = options.recipient[1];
-      }
-
       if (options.timestampGte) {
         query.andWhere('Messages.timestamp', '>=', options.timestampGte);
       }
@@ -177,8 +168,6 @@ module.exports = function(knex) {
             break;
         }
       }
-
-      query.where(options.where);
 
       if (options.viewpoint) {
         query.innerJoin('TrustDistances as td', function() {
@@ -212,7 +201,48 @@ module.exports = function(knex) {
           'recipient_attribute.identity_id = recipient_name.identity_id ' +
           'AND (recipient_name.name = ? OR recipient_name.name = ?)', ['name', 'nickname']
         );
+        if (options.author) {
+          query.leftJoin('IdentityAttributes as other_author_attribute', function() {
+            this.on('author_attribute.identity_id', '=', 'other_author_attribute.identity_id');
+          });
+          query.where(function() {
+            this.where(function() {
+              this.where('other_author_attribute.name', options.author[0]);
+              this.where('other_author_attribute.value', options.author[1]);
+            });
+            this.orWhere(function() {
+              this.where('author.name', options.author[0]);
+              this.where('author.value', options.author[1]);
+            });
+          });
+        }
+        if (options.recipient) {
+          query.leftJoin('IdentityAttributes as other_recipient_attribute', function() {
+            this.on('recipient_attribute.identity_id', '=', 'other_recipient_attribute.identity_id');
+          });
+          query.where(function() {
+            this.where(function() {
+              this.where('other_recipient_attribute.name', options.recipient[0]);
+              this.where('other_recipient_attribute.value', options.recipient[1]);
+            });
+            this.orWhere(function() {
+              this.where('recipient.name', options.recipient[0]);
+              this.where('recipient.value', options.recipient[1]);
+            });
+          });
+        }
+      } else {
+        if (options.author) {
+          options.where['author.name'] = options.author[0];
+          options.where['author.value'] = options.author[1];
+        }
+        if (options.recipient) {
+          options.where['recipient.name'] = options.recipient[0];
+          options.where['recipient.value'] = options.recipient[1];
+        }
       }
+      query.where(options.where);
+
       return query;
     },
 
@@ -1211,6 +1241,8 @@ module.exports = function(knex) {
     updateWotIndexesByMessage: function(message) {
       var queries = [];
 
+      // TODO: remove trust distance if a previous positive rating is replaced
+
       function makeSubquery(author, recipient) {
         return knex
         .from('TrustIndexedAttributes AS viewpoint')
@@ -1221,7 +1253,7 @@ module.exports = function(knex) {
           .andOn('td.end_attr_name', '=', knex.raw('?', author[0]))
           .andOn('td.end_attr_value', '=', knex.raw('?', author[1]));
         })
-        .leftJoin('TrustDistances AS existing', function() { // TODO: fix with REPLACE or sth. Should update if new distance is shorter.
+        .leftJoin('TrustDistances AS existing', function() { // TODO: update existing if new distance is shorter
           this.on('existing.start_attr_name', '=', 'viewpoint.name')
           .andOn('existing.start_attr_value', '=', 'viewpoint.value')
           .andOn('existing.end_attr_name', '=', knex.raw('?', recipient[0]))
