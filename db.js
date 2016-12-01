@@ -864,8 +864,7 @@ module.exports = function(knex) {
           this.on('author.message_hash', '=', 'm.hash');
           this.andOn('author.is_recipient', '=', knex.raw('?', false));
         })
-        .where({ 'author.name': id[0], 'author.value': id[1], 'm.type': 'rating' })
-        .groupBy('author.name', 'author.value');
+        .where({ 'm.type': 'rating', 'm.public': true });
 
       sql = '';
       sql += "SUM(CASE WHEN m.rating > (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS received_positive, ";
@@ -879,67 +878,98 @@ module.exports = function(knex) {
           this.on('recipient.message_hash', '=', 'm.hash');
           this.andOn('recipient.is_recipient', '=', knex.raw('?', true));
         })
-        .where({ "recipient.name": id[0], "recipient.value": id[1], 'm.type': 'rating' })
-        .groupBy('recipient.name', 'recipient.value');
+        .where({ 'm.type': 'rating', 'm.public': true });
 
+      var identityId, identityIdQuery = new P(function(resolve) { resolve(); });
       if (options.viewpoint && options.maxDistance > -1) {
-        received.innerJoin('MessageAttributes as author', function() {
-          this.on('author.message_hash', '=', 'm.hash');
-          this.andOn('author.is_recipient', '=', knex.raw('?', false));
-        });
-        received.innerJoin('TrustDistances as td', function() {
-          this.on('td.start_attr_name', '=', knex.raw('?', options.viewpoint[0]));
-          this.andOn('td.start_attr_value', '=', knex.raw('?', options.viewpoint[1]));
-          this.andOn('td.end_attr_name', '=', 'author.name');
-          this.andOn('td.end_attr_value', '=', 'author.value');
-          if (options.maxDistance > 0) {
-            this.andOn('td.distance', '<=', options.maxDistance);
+        identityIdQuery = knex('IdentityAttributes')
+          .where({
+            name: id[0],
+            value: id[1],
+            viewpoint_name: options.viewpoint[0],
+            viewpoint_value: options.viewpoint[1]
+          })
+          .select('identity_id');
+
+        identityIdQuery.then(function(res) {
+          if (res.length) {
+            identityId = res[0].identity_id;
+
+            sent.innerJoin('IdentityAttributes as ia', function() {
+              this.on('author.name', '=', 'ia.name');
+              this.on('author.value', '=', 'ia.value');
+            });
+            sent.where('ia.identity_id', identityId);
+            sent.groupBy('author.name', 'author.value');
+
+            received.innerJoin('IdentityAttributes as ia', function() {
+              this.on('recipient.name', '=', 'ia.name');
+              this.on('recipient.value', '=', 'ia.value');
+            });
+            received.where('ia.identity_id', identityId);
+            received.groupBy('recipient.name', 'recipient.value');
           }
         });
       }
-
-      return new P.all([sent, received]).then(function(response) {
-        var res = Object.assign({}, response[0][0], response[1][0]);
-        for (var key in res) {
-          if (key.indexOf('sent_') === 0 || key.indexOf('received_') === 0) {
-            res[key] = parseInt(res[key]);
-          }
+      return identityIdQuery.then(function() {
+        if (!identityId) {
+          sent.where({ 'author.name': id[0], 'author.value': id[1] });
+          received.where({ 'recipient.name': id[0], 'recipient.value': id[1] });
+          sent.groupBy('author.name', 'author.value');
+          received.groupBy('recipient.name', 'recipient.value');
         }
 
-        if (options.viewpoint && !options.maxDistance) {
-          var identityId = knex('IdentityAttributes')
-            .select('identity_id')
-            .where({
-              name: id[0],
-              value: id[1],
-              viewpoint_name: options.viewpoint[0],
-              viewpoint_value: options.viewpoint[1]
-            });
-          knex('IdentityStats')
-          .where('identity_id', 'in', identityId)
-          .delete()
-          .then(function() {
-            return identityId;
-          })
-          .then(function(identityIdRes) {
-            if (identityIdRes.length) {
-              knex('IdentityStats')
-                .insert({
-                  identity_id: identityIdRes[0].identity_id,
-                  viewpoint_name: options.viewpoint[0],
-                  viewpoint_value: options.viewpoint[1],
-                  positive_score: res.received_positive || 0,
-                  negative_score: res.received_negative || 0
-                }).return();
+        if (options.viewpoint && options.maxDistance > -1) {
+          received.innerJoin('MessageAttributes as author', function() {
+            this.on('author.message_hash', '=', 'm.hash');
+            this.andOn('author.is_recipient', '=', knex.raw('?', false));
+          });
+          received.innerJoin('TrustDistances as td', function() {
+            this.on('td.start_attr_name', '=', knex.raw('?', options.viewpoint[0]));
+            this.andOn('td.start_attr_value', '=', knex.raw('?', options.viewpoint[1]));
+            this.andOn('td.end_attr_name', '=', 'author.name');
+            this.andOn('td.end_attr_value', '=', 'author.value');
+            if (options.maxDistance > 0) {
+              this.andOn('td.distance', '<=', options.maxDistance);
             }
           });
         }
 
-        return new P(function(resolve) {
-          return resolve(res);
+        return new P.all([sent, received]).then(function(response) {
+          var res = Object.assign({}, response[0][0], response[1][0]);
+          for (var key in res) {
+            if (key.indexOf('sent_') === 0 || key.indexOf('received_') === 0) {
+              res[key] = parseInt(res[key]);
+            }
+          }
+
+          if (options.viewpoint && !options.maxDistance) {
+            var identityIds = [];
+            if (identityId) {
+              identityIds.push(identityId);
+            }
+            knex('IdentityStats')
+            .where('identity_id', 'in', identityIds)
+            .delete()
+            .then(function() {
+              if (identityId) {
+                knex('IdentityStats')
+                  .insert({
+                    identity_id: identityId,
+                    viewpoint_name: options.viewpoint[0],
+                    viewpoint_value: options.viewpoint[1],
+                    positive_score: res.received_positive || 0,
+                    negative_score: res.received_negative || 0
+                  }).return();
+              }
+            });
+          }
+
+          return new P(function(resolve) {
+            return resolve(res);
+          });
         });
       });
-
     },
 
     updatePeerLastSeen: function(peer) {
