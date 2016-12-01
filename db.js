@@ -901,13 +901,13 @@ module.exports = function(knex) {
               this.on('author.value', '=', 'ia.value');
             });
             sent.where('ia.identity_id', identityId);
-            sent.groupBy('m.hash');
+            sent.groupBy('m.hash', 'ia.identity_id');
 
             var sentSubquery = knex.raw(sent).wrap('(', ') s');
             sent = knex('Messages as m')
               .select(knex.raw(sentSql))
               .innerJoin(sentSubquery, 'm.hash', 's.hash')
-              .groupBy('identity_id');
+              .groupBy('s.identity_id');
 
             received.select('ia.identity_id as identity_id', 'm.hash as hash');
             received.innerJoin('IdentityAttributes as ia', function() {
@@ -915,7 +915,7 @@ module.exports = function(knex) {
               this.on('recipient.value', '=', 'ia.value');
             });
             received.where('ia.identity_id', identityId);
-            received.groupBy('m.hash');
+            received.groupBy('m.hash', 'ia.identity_id');
 
             received.innerJoin('TrustDistances as td', function() {
               this.on('td.start_attr_name', '=', knex.raw('?', options.viewpoint[0]));
@@ -931,7 +931,7 @@ module.exports = function(knex) {
             received = knex('Messages as m')
               .select(knex.raw(receivedSql))
               .innerJoin(receivedSubquery, 'm.hash', 's.hash')
-              .groupBy('identity_id');
+              .groupBy('s.identity_id');
           }
         });
       }
