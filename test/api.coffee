@@ -102,6 +102,17 @@ describe 'API', ->
           method: 'POST'
           apiMethod: 'messages'
           body: m
+      it 'should add rating 1 from david@example.com to bob@example.org', ->
+        m = message.createRating
+          author: [['email', 'david@example.com']]
+          recipient: [['email', 'bob@example.org']]
+          rating: 1
+          context: 'identifi'
+        message.sign(m, privKeyPEM, hex)
+        r = identifi.request
+          method: 'POST'
+          apiMethod: 'messages'
+          body: m
       it 'should add rating -10 from nobody@example.com to bob@example.com', ->
         m = message.createRating
           author: [['email', 'nobody@example.com']]
@@ -284,20 +295,6 @@ describe 'API', ->
             max_distance: 1
         r.then (res) ->
           res.length.should.equal 6
-      it 'should filter messages by timestamp_lte', ->
-        r = identifi.request
-          apiMethod: 'messages'
-          qs:
-            timestamp_lte: m.signedData.timestamp
-        r.then (res) ->
-          res.length.should.equal 10
-      it 'should filter messages by timestamp_gte', ->
-        r = identifi.request
-          apiMethod: 'messages'
-          qs:
-            timestamp_gte: m.signedData.timestamp
-        r.then (res) ->
-          res.length.should.equal 1
       it 'should filter messages by viewpoint, max_distance 2', ->
         r = identifi.request
           apiMethod: 'messages'
@@ -307,6 +304,20 @@ describe 'API', ->
             max_distance: 2
         r.then (res) ->
           res.length.should.equal 8
+      it 'should filter messages by timestamp_lte', ->
+        r = identifi.request
+          apiMethod: 'messages'
+          qs:
+            timestamp_lte: m.signedData.timestamp
+        r.then (res) ->
+          res.length.should.equal 11
+      it 'should filter messages by timestamp_gte', ->
+        r = identifi.request
+          apiMethod: 'messages'
+          qs:
+            timestamp_gte: m.signedData.timestamp
+        r.then (res) ->
+          res.length.should.equal 1
     describe 'delete', ->
       it 'should fail without auth', ->
         r = identifi.request
@@ -509,6 +520,18 @@ describe 'API', ->
           apiAction: 'received'
         r.then (res) ->
           res.should.not.be.empty
+      it 'should list all messages received by the identity that bob@example.org points to, as perceived by alice@example.com', ->
+        r = identifi.request
+          apiMethod: 'identities'
+          apiIdType: 'email'
+          apiId: 'bob@example.org'
+          apiAction: 'received'
+          qs:
+            viewpoint_name: 'email'
+            viewpoint_value: 'alice@example.com'
+            max_distance: 5
+        r.then (res) ->
+          res.length.should.equal 'potato'
     describe 'getname', ->
       it 'should return a cached common name for the attribute'
   describe 'websocket', ->
