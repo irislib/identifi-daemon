@@ -853,32 +853,32 @@ module.exports = function(knex) {
     },
 
     getStats: function(id, options) {
-      var sql = "";
-      sql += "SUM(CASE WHEN m.rating > (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS sent_positive, ";
-      sql += "SUM(CASE WHEN m.rating = (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS sent_neutral, ";
-      sql += "SUM(CASE WHEN m.rating < (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS sent_negative ";
+      var sentSql = "";
+      sentSql += "SUM(CASE WHEN m.rating > (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS sent_positive, ";
+      sentSql += "SUM(CASE WHEN m.rating = (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS sent_neutral, ";
+      sentSql += "SUM(CASE WHEN m.rating < (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS sent_negative ";
 
       var sent = knex('Messages as m')
-        .select(knex.raw(sql))
         .innerJoin('MessageAttributes as author', function() {
           this.on('author.message_hash', '=', 'm.hash');
-          this.andOn('author.is_recipient', '=', knex.raw('?', false));
+          this.andOn('author.is_recipient', '=', knex.raw('?', 0));
         })
-        .where({ 'm.type': 'rating', 'm.public': true });
+        .where('m.type', 'rating')
+        .where('m.public', 1);
 
-      sql = '';
-      sql += "SUM(CASE WHEN m.rating > (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS received_positive, ";
-      sql += "SUM(CASE WHEN m.rating = (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS received_neutral, ";
-      sql += "SUM(CASE WHEN m.rating < (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS received_negative, ";
-      sql += "MIN(m.timestamp) AS first_seen ";
+      var receivedSql = '';
+      receivedSql += "SUM(CASE WHEN m.rating > (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS received_positive, ";
+      receivedSql += "SUM(CASE WHEN m.rating = (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS received_neutral, ";
+      receivedSql += "SUM(CASE WHEN m.rating < (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS received_negative, ";
+      receivedSql += "MIN(m.timestamp) AS first_seen ";
 
       var received = knex('Messages as m')
-        .select(knex.raw(sql))
         .innerJoin('MessageAttributes as recipient', function() {
           this.on('recipient.message_hash', '=', 'm.hash');
-          this.andOn('recipient.is_recipient', '=', knex.raw('?', true));
+          this.andOn('recipient.is_recipient', '=', knex.raw('?', 1));
         })
-        .where({ 'm.type': 'rating', 'm.public': true });
+        .where('m.type', 'rating')
+        .where('m.public', 1);
 
       var identityId, identityIdQuery = new P(function(resolve) { resolve(); });
       if (options.viewpoint && options.maxDistance > -1) {
@@ -895,44 +895,54 @@ module.exports = function(knex) {
           if (res.length) {
             identityId = res[0].identity_id;
 
+            sent.select('ia.identity_id as identity_id', 'm.hash');
             sent.innerJoin('IdentityAttributes as ia', function() {
               this.on('author.name', '=', 'ia.name');
               this.on('author.value', '=', 'ia.value');
             });
             sent.where('ia.identity_id', identityId);
-            sent.groupBy('author.name', 'author.value');
+            sent.groupBy('m.hash');
 
+            var sentSubquery = knex.raw(sent).wrap('(', ') s');
+            sent = knex('Messages as m')
+              .select(knex.raw(sentSql))
+              .innerJoin(sentSubquery, 'm.hash', 's.hash')
+              .groupBy('identity_id');
+
+            received.select('ia.identity_id as identity_id', 'm.hash as hash');
             received.innerJoin('IdentityAttributes as ia', function() {
               this.on('recipient.name', '=', 'ia.name');
               this.on('recipient.value', '=', 'ia.value');
             });
             received.where('ia.identity_id', identityId);
-            received.groupBy('recipient.name', 'recipient.value');
+            received.groupBy('m.hash');
+
+            received.innerJoin('TrustDistances as td', function() {
+              this.on('td.start_attr_name', '=', knex.raw('?', options.viewpoint[0]));
+              this.andOn('td.start_attr_value', '=', knex.raw('?', options.viewpoint[1]));
+              this.andOn('td.end_attr_name', '=', 'ia.name');
+              this.andOn('td.end_attr_value', '=', 'ia.value');
+              if (options.maxDistance > 0) {
+                this.andOn('td.distance', '<=', options.maxDistance);
+              }
+            });
+
+            var receivedSubquery = knex.raw(received).wrap('(', ') s');
+            received = knex('Messages as m')
+              .select(knex.raw(receivedSql))
+              .innerJoin(receivedSubquery, 'm.hash', 's.hash')
+              .groupBy('identity_id');
           }
         });
       }
       return identityIdQuery.then(function() {
         if (!identityId) {
           sent.where({ 'author.name': id[0], 'author.value': id[1] });
-          received.where({ 'recipient.name': id[0], 'recipient.value': id[1] });
           sent.groupBy('author.name', 'author.value');
+          sent.select(knex.raw(sentSql));
+          received.where({ 'recipient.name': id[0], 'recipient.value': id[1] });
           received.groupBy('recipient.name', 'recipient.value');
-        }
-
-        if (options.viewpoint && options.maxDistance > -1) {
-          received.innerJoin('MessageAttributes as author', function() {
-            this.on('author.message_hash', '=', 'm.hash');
-            this.andOn('author.is_recipient', '=', knex.raw('?', false));
-          });
-          received.innerJoin('TrustDistances as td', function() {
-            this.on('td.start_attr_name', '=', knex.raw('?', options.viewpoint[0]));
-            this.andOn('td.start_attr_value', '=', knex.raw('?', options.viewpoint[1]));
-            this.andOn('td.end_attr_name', '=', 'author.name');
-            this.andOn('td.end_attr_value', '=', 'author.value');
-            if (options.maxDistance > 0) {
-              this.andOn('td.distance', '<=', options.maxDistance);
-            }
-          });
+          received.select(knex.raw(receivedSql));
         }
 
         return new P.all([sent, received]).then(function(response) {
