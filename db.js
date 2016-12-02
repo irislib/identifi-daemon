@@ -170,6 +170,12 @@ module.exports = function(knex) {
       }
 
       if (options.viewpoint) {
+        query.innerJoin('TrustDistances as td_signer', function() {
+          this.on('td_signer.start_attr_name', '=', knex.raw('?', options.viewpoint[0]));
+          this.on('td_signer.start_attr_value', '=', knex.raw('?', options.viewpoint[1]));
+          this.on('td_signer.end_attr_name', '=', knex.raw('?', 'keyID'));
+          this.on('td_signer.end_attr_value', '=', 'Messages.signer_keyid');
+        });
         query.innerJoin('TrustDistances as td', function() {
           this.on('author.name', '=', 'td.end_attr_name')
             .andOn('author.value', '=', 'td.end_attr_value')
@@ -904,6 +910,12 @@ module.exports = function(knex) {
             });
             sent.where('ia.identity_id', identityId);
             sent.groupBy('m.hash', 'ia.identity_id');
+            sent.innerJoin('TrustDistances as td_signer', function() {
+              this.on('td_signer.start_attr_name', '=', knex.raw('?', options.viewpoint[0]));
+              this.on('td_signer.start_attr_value', '=', knex.raw('?', options.viewpoint[1]));
+              this.on('td_signer.end_attr_name', '=', knex.raw('?', 'keyID'));
+              this.on('td_signer.end_attr_value', '=', 'm.signer_keyid');
+            });
 
             var sentSubquery = knex.raw(sent).wrap('(', ') s');
             sent = knex('Messages as m')
@@ -927,6 +939,12 @@ module.exports = function(knex) {
               if (options.maxDistance > 0) {
                 this.andOn('td.distance', '<=', options.maxDistance);
               }
+            });
+            received.innerJoin('TrustDistances as td_signer', function() {
+              this.on('td_signer.start_attr_name', '=', knex.raw('?', options.viewpoint[0]));
+              this.on('td_signer.start_attr_value', '=', knex.raw('?', options.viewpoint[1]));
+              this.on('td_signer.end_attr_name', '=', knex.raw('?', 'keyID'));
+              this.on('td_signer.end_attr_value', '=', 'm.signer_keyid');
             });
 
             var receivedSubquery = knex.raw(received).wrap('(', ') s');
