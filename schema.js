@@ -2,8 +2,8 @@
 'use strict';
 var P = require("bluebird");
 
-function addDefaultIdentifierAttributes(db) {
-  return db.table('IdentifierAttributes').insert(
+function addDefaultUniqueIdentifierTypes(db) {
+  return db.table('UniqueIdentifierTypes').insert(
     [
       { name: 'email' },
       { name: 'account' },
@@ -37,10 +37,10 @@ function catcher(e) {
 
 var init = function(db, config) {
   var queries = [];
-  queries.push(db.schema.createTableIfNotExists('IdentifierAttributes', function(t) {
+  queries.push(db.schema.createTableIfNotExists('UniqueIdentifierTypes', function(t) {
     t.string('name').primary();
   }).then(function() {
-    return addDefaultIdentifierAttributes(db).catch(catcher);
+    return addDefaultUniqueIdentifierTypes(db).catch(catcher);
   }).catch(catcher));
 
   queries.push(db.schema.createTableIfNotExists('Messages', function(t) {

@@ -400,7 +400,7 @@ module.exports = function(knex) {
           viewpoint_name: options.viewpoint[0],
           viewpoint_value: options.viewpoint[1]
         })
-        .innerJoin('IdentifierAttributes as uidt', 'uidt.name', 'ia.name');
+        .innerJoin('UniqueIdentifierTypes as uidt', 'uidt.name', 'ia.name');
       var existingId;
 
       return getExistingId.then(function(res) {
@@ -444,7 +444,7 @@ module.exports = function(knex) {
                   this.on('m.hash', '=', 'attr2.message_hash');
                   this.on('attr2.is_recipient', '=', 'attr1.is_recipient');
                 })
-                .innerJoin('IdentifierAttributes as uidt', 'uidt.name', 'attr1.name')
+                .innerJoin('UniqueIdentifierTypes as uidt', 'uidt.name', 'attr1.name')
                 .innerJoin('TrustDistances as td_signer', function() {
                   this.on('td_signer.start_attr_name', '=', knex.raw('?', options.viewpoint[0]));
                   this.on('td_signer.start_attr_value', '=', knex.raw('?', options.viewpoint[1]));
@@ -462,7 +462,7 @@ module.exports = function(knex) {
                   this.on('existing.viewpoint_name', '=', knex.raw('?', options.viewpoint[0]));
                   this.on('existing.viewpoint_value', '=', knex.raw('?', options.viewpoint[1]));
                 })
-                .innerJoin('IdentifierAttributes as uidt2', 'uidt2.name', 'existing.name')
+                .innerJoin('UniqueIdentifierTypes as uidt2', 'uidt2.name', 'existing.name')
                 .select('existing.identity_id');
             }
 
@@ -621,8 +621,8 @@ module.exports = function(knex) {
         subQuery.whereNull('td_recipient.distance');
 
         if (!betweenKeyIDsOnly) {
-          subQuery.innerJoin('IdentifierAttributes as uidt1', 'uidt1.name', 'attr1.name');
-          subQuery.innerJoin('IdentifierAttributes as uidt2', 'uidt2.name', 'attr2.name');
+          subQuery.innerJoin('UniqueIdentifierTypes as uidt1', 'uidt1.name', 'attr1.name');
+          subQuery.innerJoin('UniqueIdentifierTypes as uidt2', 'uidt2.name', 'attr2.name');
           subQuery.leftJoin('TrustDistances as td_signer', function() {
             this.on('td_signer.start_attr_name', '=', trx.raw('?', trustedKey[0]));
             this.on('td_signer.start_attr_value', '=', trx.raw('?', trustedKey[1]));
@@ -759,7 +759,7 @@ module.exports = function(knex) {
         sql += "AND tp.start_name = :viewType AND tp.start_value = :viewID ";
       }
 
-      sql += "LEFT JOIN IdentifierAttributes AS UID ON UID.name = attrname ";
+      sql += "LEFT JOIN UniqueIdentifierTypes AS UID ON UID.name = attrname ";
       sql += "LEFT JOIN IdentityAttributes AS OtherAttributes ON OtherAttributes.identity_id = iid AND OtherAttributes.confirmations >= OtherAttributes.refutations ";
 
       if (useViewpoint) {
@@ -802,9 +802,9 @@ module.exports = function(knex) {
       sql += "td.start_attr_name = :viewpoint_name AND td.start_attr_value = :viewpoint_value AND ";
       sql += "td.end_attr_name = 'keyID' AND td.end_attr_value = m.signer_keyid ";
       sql += "INNER JOIN \"MessageAttributes\" as attr1 ON m.Hash = attr1.message_hash AND attr1.is_recipient = :false ";
-      sql += "INNER JOIN \"IdentifierAttributes\" AS ia1 ON ia1.name = attr1.name ";
+      sql += "INNER JOIN \"UniqueIdentifierTypes\" AS ia1 ON ia1.name = attr1.name ";
       sql += "INNER JOIN \"MessageAttributes\" as attr2 ON m.Hash = attr2.message_hash AND (attr1.name != attr2.name OR attr1.value != attr2.value) ";
-      sql += "INNER JOIN \"IdentifierAttributes\" AS ia2 ON ia2.name = attr2.name ";
+      sql += "INNER JOIN \"UniqueIdentifierTypes\" AS ia2 ON ia2.name = attr2.name ";
       sql += "WHERE m.is_latest AND m.Rating > (m.min_rating + m.max_rating) / 2 AND attr1.name = :attr1name AND attr1.value = :attr1val ";
 
       sql += "UNION ALL ";
@@ -816,9 +816,9 @@ module.exports = function(knex) {
       sql += "td.start_attr_name = :viewpoint_name AND td.start_attr_value = :viewpoint_value AND ";
       sql += "td.end_attr_name = 'keyID' AND td.end_attr_value = m.signer_keyid ";
       sql += "INNER JOIN \"MessageAttributes\" as attr1 ON m.Hash = attr1.message_hash AND attr1.is_recipient = :false ";
-      sql += "INNER JOIN \"IdentifierAttributes\" AS ia1 ON ia1.name = attr1.name ";
+      sql += "INNER JOIN \"UniqueIdentifierTypes\" AS ia1 ON ia1.name = attr1.name ";
       sql += "INNER JOIN \"MessageAttributes\" as attr2 ON m.Hash = attr2.message_hash AND (attr1.name != attr2.name OR attr1.value != attr2.value) ";
-      sql += "INNER JOIN \"IdentifierAttributes\" AS ia2 ON ia2.name = attr2.name ";
+      sql += "INNER JOIN \"UniqueIdentifierTypes\" AS ia2 ON ia2.name = attr2.name ";
       sql += "JOIN transitive_closure AS tc ON attr1.name = tc.attr2name AND attr1.value = tc.attr2val ";
       sql += "WHERE m.is_latest AND m.Rating > (m.min_rating + m.max_rating) / 2 AND tc.distance < :max_length AND tc.path_string NOT LIKE " + SQL_PRINTF + "('%%%s:%s:%%',replace(attr2.name,':','::'),replace(attr2.value,':','::')) ";
       sql += ") ";
@@ -858,13 +858,15 @@ module.exports = function(knex) {
       sentSql += "SUM(CASE WHEN m.rating = (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS sent_neutral, ";
       sentSql += "SUM(CASE WHEN m.rating < (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS sent_negative ";
 
+      var dbTrue = knex.raw('?', true), dbFalse = knex.raw('?', false);
+
       var sent = knex('Messages as m')
         .innerJoin('MessageAttributes as author', function() {
           this.on('author.message_hash', '=', 'm.hash');
-          this.andOn('author.is_recipient', '=', knex.raw('?', 0));
+          this.andOn('author.is_recipient', '=', dbFalse);
         })
         .where('m.type', 'rating')
-        .where('m.public', 1);
+        .where('m.public', dbTrue);
 
       var receivedSql = '';
       receivedSql += "SUM(CASE WHEN m.rating > (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS received_positive, ";
@@ -875,10 +877,10 @@ module.exports = function(knex) {
       var received = knex('Messages as m')
         .innerJoin('MessageAttributes as recipient', function() {
           this.on('recipient.message_hash', '=', 'm.hash');
-          this.andOn('recipient.is_recipient', '=', knex.raw('?', 1));
+          this.andOn('recipient.is_recipient', '=', dbTrue);
         })
         .where('m.type', 'rating')
-        .where('m.public', 1);
+        .where('m.public', dbTrue);
 
       var identityId, identityIdQuery = new P(function(resolve) { resolve(); });
       if (options.viewpoint && options.maxDistance > -1) {
@@ -1150,7 +1152,7 @@ module.exports = function(knex) {
           name: identifier[0],
           value: identifier[1]
         })
-        .innerJoin('IdentifierAttributes', 'IdentityAttributes.name', 'IdentifierAttributes.name')
+        .innerJoin('UniqueIdentifierTypes', 'IdentityAttributes.name', 'UniqueIdentifierTypes.name')
         .select('IdentityAttributes.identity_id');
     },
 
@@ -1179,7 +1181,7 @@ module.exports = function(knex) {
       // TODO:
       // Get TrustIndexedAttributes as t
       // Return unless message signer and author are trusted by t
-      // Find existing or new identity_id for message recipient IdentifierAttributes
+      // Find existing or new identity_id for message recipient UniqueIdentifierTypes
       // If the attribute exists on the identity_id, increase confirmations or refutations
       // If the attribute doesn't exist, add it with 1 confirmation or refutation
     },
@@ -1200,7 +1202,7 @@ module.exports = function(knex) {
             this.on('recipient.message_hash', '=', 'm.hash');
             this.andOn('recipient.is_recipient', '=', knex.raw('?', true));
           })
-          .innerJoin('IdentifierAttributes as ia1', 'ia1.name', 'author.name')
+          .innerJoin('UniqueIdentifierTypes as ia1', 'ia1.name', 'author.name')
           .where({
             'm.signer_keyid': message.signerKeyHash,
             'author.name': author[0],
@@ -1213,7 +1215,7 @@ module.exports = function(knex) {
             'recipient.name': recipient[0],
             'recipient.value': recipient[1]
           });
-          q.innerJoin('IdentifierAttributes as ia2', 'ia2.name', 'recipient.name');
+          q.innerJoin('UniqueIdentifierTypes as ia2', 'ia2.name', 'recipient.name');
         }
 
         if (isVerifyMsg) {
@@ -1289,7 +1291,7 @@ module.exports = function(knex) {
       function makeSubquery(author, recipient) {
         return knex
         .from('TrustIndexedAttributes AS viewpoint')
-        .innerJoin('IdentifierAttributes as ia', 'ia.name', knex.raw('?', recipient[0]))
+        .innerJoin('UniqueIdentifierTypes as ia', 'ia.name', knex.raw('?', recipient[0]))
         .innerJoin('TrustDistances AS td', function() {
           this.on('td.start_attr_name', '=', 'viewpoint.name')
           .andOn('td.start_attr_value', '=', 'viewpoint.value')
