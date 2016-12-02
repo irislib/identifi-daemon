@@ -117,46 +117,35 @@ module.exports = function(knex) {
         options[key] = options[key] !== undefined ? options[key] : defaultOptions[key];
       }
 
-      var authorIdentityId, recipientIdentityId, identityIdQuery = new P(function(resolve) { resolve(); });
-      if (options.viewpoint && options.maxDistance > -1) {
+      var authorIdentityIdQuery = new P(function(resolve) { resolve([]); }),
+        recipientIdentityIdQuery = new P(function(resolve) { resolve([]); });
+      if (options.viewpoint) {
         if (options.author) {
-          identityIdQuery.then(function() {
-            return knex('IdentityAttributes')
-              .where({
-                name: options.author[0],
-                value: options.author[1],
-                viewpoint_name: options.viewpoint[0],
-                viewpoint_value: options.viewpoint[1]
-              })
-              .select('identity_id');
-          })
-          .then(function(res) {
-            if (res.length) {
-              authorIdentityId = res[0].identity_id;
-            }
-          });
+          authorIdentityIdQuery = knex('IdentityAttributes')
+            .where({
+              name: options.author[0],
+              value: options.author[1],
+              viewpoint_name: options.viewpoint[0],
+              viewpoint_value: options.viewpoint[1]
+            })
+            .select('identity_id');
         }
 
         if (options.recipient) {
-          identityIdQuery.then(function() {
-            return knex('IdentityAttributes')
-              .where({
-                name: options.recipient[0],
-                value: options.recipient[1],
-                viewpoint_name: options.viewpoint[0],
-                viewpoint_value: options.viewpoint[1]
-              })
-              .select('identity_id');
-          })
-          .then(function(res) {
-            if (res.length) {
-              recipientIdentityId = res[0].identity_id;
-            }
-          });
+          recipientIdentityIdQuery = knex('IdentityAttributes')
+            .where({
+              name: options.recipient[0],
+              value: options.recipient[1],
+              viewpoint_name: options.viewpoint[0],
+              viewpoint_value: options.viewpoint[1]
+            })
+            .select('identity_id');
         }
       }
 
-      return identityIdQuery.then(function() {
+      return P.all([authorIdentityIdQuery, recipientIdentityIdQuery]).then(function(response) {
+        var authorIdentityId = response[0].length > 0 && response[0][0].identity_id;
+        var recipientIdentityId = response[1].length > 0 && response[1][0].identity_id;
         var select = ['Messages.*'];
         if (options.viewpoint) {
           select.push(knex.raw('MIN("td"."distance") AS "distance"'));
@@ -242,10 +231,13 @@ module.exports = function(knex) {
               this.andOn('td.distance', '<=', knex.raw('?', options.maxDistance));
             }
           });
+          if (options.maxDistance > 0) {
+            query.where('Messages.priority', '>', 0);
+          }
           if (options.author) {
             // Extend message search to other attributes connected to the author
             if (authorIdentityId) {
-              query.where('author_attribute.identity_id', knex.raw('?', authorIdentityId));
+              query.where('author_attribute.identity_id', authorIdentityId);
             } else {
               query.where('author.name', options.author[0]);
               query.where('author.value', options.author[1]);
@@ -253,7 +245,7 @@ module.exports = function(knex) {
           }
           if (options.recipient) {
             if (recipientIdentityId) {
-              query.where('recipient_attribute.identity_id', knex.raw('?', recipientIdentityId));
+              query.where('recipient_attribute.identity_id', recipientIdentityId);
             } else {
               query.where('recipient.name', options.recipient[0]);
               query.where('recipient.value', options.recipient[1]);
