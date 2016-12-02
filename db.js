@@ -222,9 +222,8 @@ module.exports = function(knex) {
             'AND (recipient_name.name = ? OR recipient_name.name = ?)', ['name', 'nickname']
           );
           query.innerJoin('TrustDistances as td', function() {
-            this.on('author.name', '=', 'td.end_attr_name')
-              .andOn('author.value', '=', 'td.end_attr_value')
-              .andOn('author.is_recipient', '=', knex.raw('?', false))
+            this.on('author_attribute.name', '=', 'td.end_attr_name')
+              .andOn('author_attribute.value', '=', 'td.end_attr_value')
               .andOn('td.start_attr_name', '=', knex.raw('?', options.viewpoint[0]))
               .andOn('td.start_attr_value', '=', knex.raw('?', options.viewpoint[1]));
             if (options.maxDistance > 0) {
