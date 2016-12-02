@@ -920,13 +920,8 @@ module.exports = function(knex) {
               this.on('author.value', '=', 'ia.value');
             });
             sent.where('ia.identity_id', identityId);
+            sent.where('m.priority', '>', 0);
             sent.groupBy('m.hash', 'ia.identity_id');
-            sent.innerJoin('TrustDistances as td_signer', function() {
-              this.on('td_signer.start_attr_name', '=', knex.raw('?', options.viewpoint[0]));
-              this.on('td_signer.start_attr_value', '=', knex.raw('?', options.viewpoint[1]));
-              this.on('td_signer.end_attr_name', '=', knex.raw('?', 'keyID'));
-              this.on('td_signer.end_attr_value', '=', 'm.signer_keyid');
-            });
 
             var sentSubquery = knex.raw(sent).wrap('(', ') s');
             sent = knex('Messages as m')

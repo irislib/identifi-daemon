@@ -659,7 +659,9 @@ function getNewMessages(url, since) {
   var qs = {
     timestamp_gte: since,
     limit: 100,
-    offset: 0
+    offset: 0,
+    order_by: 'priority',
+    direction: 'desc'
   };
   return requestMessages(url, qs);
 }
@@ -692,7 +694,7 @@ if (process.env.NODE_ENV !== 'test') {
       log('Attempting connection to saved peer ' + peers[i].url);
       var s = identifiClient.getSocket({ url: peers[i].url, isPeer: true, options: { connect_timeout: 5000 }});
       outgoingConnections[peers[i].url] = s;
-      s.on('connect', makeConnectHandler(peers[i].url, peers[i].last_seen, s));
+      s.on('connect', makeConnectHandler(peers[i].url, new Date(peers[i].last_seen), s));
     }
   });
 }
