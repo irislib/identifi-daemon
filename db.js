@@ -117,142 +117,162 @@ module.exports = function(knex) {
         options[key] = options[key] !== undefined ? options[key] : defaultOptions[key];
       }
 
-      var select = ['Messages.*'];
-      if (options.viewpoint) {
-        select.push(knex.raw('MIN("td"."distance") AS "distance"'));
-        select.push(knex.raw('MAX(st.positive_score) AS author_pos'));
-        select.push(knex.raw('MAX(st.negative_score) AS author_neg'));
-        select.push(knex.raw('MAX(author_email.value) AS author_email'));
-        select.push(knex.raw('MAX(recipient_name.value) AS recipient_name'));
-      }
-      var query = knex.select(select)
-        .groupBy('Messages.hash')
-        .from('Messages')
-        .innerJoin('MessageAttributes as author', function() {
-          this.on('Messages.hash', '=', 'author.message_hash');
-          this.on('author.is_recipient', '=', knex.raw('?', false));
-        })
-        .innerJoin('MessageAttributes as recipient', function() {
-          this.on('Messages.hash', '=', 'recipient.message_hash');
-          this.andOn('recipient.is_recipient', '=', knex.raw('?', true));
-        })
-        .orderBy(options.orderBy, options.direction)
-        .limit(options.limit)
-        .offset(options.offset);
+      var authorIdentityId, recipientIdentityId, identityIdQuery = new P(function(resolve) { resolve(); });
+      if (options.viewpoint && options.maxDistance > -1) {
+        if (options.author) {
+          identityIdQuery.then(function() {
+            return knex('IdentityAttributes')
+              .where({
+                name: options.author[0],
+                value: options.author[1],
+                viewpoint_name: options.viewpoint[0],
+                viewpoint_value: options.viewpoint[1]
+              })
+              .select('identity_id');
+          })
+          .then(function(res) {
+            if (res.length) {
+              authorIdentityId = res[0].identity_id;
+            }
+          });
+        }
 
-      if (options.distinctAuthor) {
-        // group by author
-      }
-
-      if (options.timestampGte) {
-        query.andWhere('Messages.timestamp', '>=', options.timestampGte);
-      }
-
-      if (options.timestampLte) {
-        query.andWhere('Messages.timestamp', '<=', options.timestampLte);
-      }
-
-      if (options.where['Messages.type'] && options.where['Messages.type'].match(/^rating:(positive|neutral|negative)$/i)) {
-        var ratingType = options.where['Messages.type'].match(/(positive|neutral|negative)$/i)[0];
-        options.where['Messages.type'] = 'rating';
-        var bindings = { rating: 'Messages.rating', max_rating: 'Messages.max_rating', min_rating: 'Messages.min_rating' };
-        switch(ratingType) {
-          case 'positive':
-            query.whereRaw(':rating: > ( :max_rating: + :min_rating:) / 2', bindings);
-            break;
-          case 'neutral':
-            query.whereRaw(':rating: = ( :max_rating: + :min_rating:) / 2', bindings);
-            break;
-          case 'negative':
-            query.whereRaw(':rating: < ( :max_rating: + :min_rating:) / 2', bindings);
-            break;
+        if (options.recipient) {
+          identityIdQuery.then(function() {
+            return knex('IdentityAttributes')
+              .where({
+                name: options.recipient[0],
+                value: options.recipient[1],
+                viewpoint_name: options.viewpoint[0],
+                viewpoint_value: options.viewpoint[1]
+              })
+              .select('identity_id');
+          })
+          .then(function(res) {
+            if (res.length) {
+              recipientIdentityId = res[0].identity_id;
+            }
+          });
         }
       }
 
-      if (options.viewpoint) {
-        query.innerJoin('TrustDistances as td_signer', function() {
-          this.on('td_signer.start_attr_name', '=', knex.raw('?', options.viewpoint[0]));
-          this.on('td_signer.start_attr_value', '=', knex.raw('?', options.viewpoint[1]));
-          this.on('td_signer.end_attr_name', '=', knex.raw('?', 'keyID'));
-          this.on('td_signer.end_attr_value', '=', 'Messages.signer_keyid');
-        });
-        query.innerJoin('TrustDistances as td', function() {
-          this.on('author.name', '=', 'td.end_attr_name')
-            .andOn('author.value', '=', 'td.end_attr_value')
-            .andOn('author.is_recipient', '=', knex.raw('?', false))
-            .andOn('td.start_attr_name', '=', knex.raw('?', options.viewpoint[0]))
-            .andOn('td.start_attr_value', '=', knex.raw('?', options.viewpoint[1]));
-          if (options.maxDistance > 0) {
-            this.andOn('td.distance', '<=', knex.raw('?', options.maxDistance));
+      return identityIdQuery.then(function() {
+        var select = ['Messages.*'];
+        if (options.viewpoint) {
+          select.push(knex.raw('MIN("td"."distance") AS "distance"'));
+          select.push(knex.raw('MAX(st.positive_score) AS author_pos'));
+          select.push(knex.raw('MAX(st.negative_score) AS author_neg'));
+          select.push(knex.raw('MAX(author_email.value) AS author_email'));
+          select.push(knex.raw('MAX(recipient_name.value) AS recipient_name'));
+        }
+        var query = knex.select(select)
+          .groupBy('Messages.hash')
+          .from('Messages')
+          .innerJoin('MessageAttributes as author', function() {
+            this.on('Messages.hash', '=', 'author.message_hash');
+            this.on('author.is_recipient', '=', knex.raw('?', false));
+          })
+          .innerJoin('MessageAttributes as recipient', function() {
+            this.on('Messages.hash', '=', 'recipient.message_hash');
+            this.andOn('recipient.is_recipient', '=', knex.raw('?', true));
+          })
+          .orderBy(options.orderBy, options.direction)
+          .limit(options.limit)
+          .offset(options.offset);
+
+        if (options.distinctAuthor) {
+          // group by author
+        }
+
+        if (options.timestampGte) {
+          query.andWhere('Messages.timestamp', '>=', options.timestampGte);
+        }
+
+        if (options.timestampLte) {
+          query.andWhere('Messages.timestamp', '<=', options.timestampLte);
+        }
+
+        if (options.where['Messages.type'] && options.where['Messages.type'].match(/^rating:(positive|neutral|negative)$/i)) {
+          var ratingType = options.where['Messages.type'].match(/(positive|neutral|negative)$/i)[0];
+          options.where['Messages.type'] = 'rating';
+          var bindings = { rating: 'Messages.rating', max_rating: 'Messages.max_rating', min_rating: 'Messages.min_rating' };
+          switch(ratingType) {
+            case 'positive':
+              query.whereRaw(':rating: > ( :max_rating: + :min_rating:) / 2', bindings);
+              break;
+            case 'neutral':
+              query.whereRaw(':rating: = ( :max_rating: + :min_rating:) / 2', bindings);
+              break;
+            case 'negative':
+              query.whereRaw(':rating: < ( :max_rating: + :min_rating:) / 2', bindings);
+              break;
           }
-        });
-        // Replace left joins with subquery for performance?
-        query.leftJoin('IdentityAttributes as author_attribute', function() {
-          this.on('author_attribute.name', '=', 'author.name');
-          this.on('author_attribute.value', '=', 'author.value');
-          this.on('author_attribute.viewpoint_name', '=', knex.raw('?', options.viewpoint[0]));
-          this.on('author_attribute.viewpoint_value', '=', knex.raw('?', options.viewpoint[1]));
-        });
-        query.leftJoin('IdentityStats as st', 'st.identity_id', 'author_attribute.identity_id');
-        query.leftJoin('IdentityAttributes as author_email', function() {
-          this.on('author_attribute.identity_id', '=', 'author_email.identity_id');
-          this.on('author_email.name', '=', knex.raw('?', 'email'));
-        });
-        query.leftJoin('IdentityAttributes as recipient_attribute', function() {
-          this.on('recipient_attribute.name', '=', 'recipient.name');
-          this.on('recipient_attribute.value', '=', 'recipient.value');
-          this.on('recipient_attribute.viewpoint_name', '=', knex.raw('?', options.viewpoint[0]));
-          this.on('recipient_attribute.viewpoint_value', '=', knex.raw('?', options.viewpoint[1]));
-        });
-        query.joinRaw('left join "IdentityAttributes" AS recipient_name ON ' +
-          'recipient_attribute.identity_id = recipient_name.identity_id ' +
-          'AND (recipient_name.name = ? OR recipient_name.name = ?)', ['name', 'nickname']
-        );
-        if (options.author) {
-          // Extend message search to other attributes connected to the author. Slows down the query a bit.
-          query.leftJoin('IdentityAttributes as other_author_attribute', function() {
-            this.on('author_attribute.identity_id', '=', 'other_author_attribute.identity_id');
-          });
-          query.where(function() {
-            this.where(function() {
-              this.where('other_author_attribute.name', options.author[0]);
-              this.where('other_author_attribute.value', options.author[1]);
-            });
-            this.orWhere(function() {
-              this.where('author.name', options.author[0]);
-              this.where('author.value', options.author[1]);
-            });
-          });
         }
-        if (options.recipient) {
-          // Extend message search to other attributes connected to the recipient. Slows down the query a bit.
-          query.leftJoin('IdentityAttributes as other_recipient_attribute', function() {
-            this.on('recipient_attribute.identity_id', '=', 'other_recipient_attribute.identity_id');
-          });
-          query.where(function() {
-            this.where(function() {
-              this.where('other_recipient_attribute.name', options.recipient[0]);
-              this.where('other_recipient_attribute.value', options.recipient[1]);
-            });
-            this.orWhere(function() {
-              this.where('recipient.name', options.recipient[0]);
-              this.where('recipient.value', options.recipient[1]);
-            });
-          });
-        }
-      } else {
-        if (options.author) {
-          options.where['author.name'] = options.author[0];
-          options.where['author.value'] = options.author[1];
-        }
-        if (options.recipient) {
-          options.where['recipient.name'] = options.recipient[0];
-          options.where['recipient.value'] = options.recipient[1];
-        }
-      }
-      query.where(options.where);
 
-      return query;
+        if (options.viewpoint) {
+          // Replace left joins with subquery for performance?
+          query.leftJoin('IdentityAttributes as author_attribute', function() {
+            this.on('author_attribute.name', '=', 'author.name');
+            this.on('author_attribute.value', '=', 'author.value');
+            this.on('author_attribute.viewpoint_name', '=', knex.raw('?', options.viewpoint[0]));
+            this.on('author_attribute.viewpoint_value', '=', knex.raw('?', options.viewpoint[1]));
+          });
+          query.leftJoin('IdentityStats as st', 'st.identity_id', 'author_attribute.identity_id');
+          query.leftJoin('IdentityAttributes as author_email', function() {
+            this.on('author_attribute.identity_id', '=', 'author_email.identity_id');
+            this.on('author_email.name', '=', knex.raw('?', 'email'));
+          });
+          query.leftJoin('IdentityAttributes as recipient_attribute', function() {
+            this.on('recipient_attribute.name', '=', 'recipient.name');
+            this.on('recipient_attribute.value', '=', 'recipient.value');
+            this.on('recipient_attribute.viewpoint_name', '=', knex.raw('?', options.viewpoint[0]));
+            this.on('recipient_attribute.viewpoint_value', '=', knex.raw('?', options.viewpoint[1]));
+          });
+          query.joinRaw('left join "IdentityAttributes" AS recipient_name ON ' +
+            'recipient_attribute.identity_id = recipient_name.identity_id ' +
+            'AND (recipient_name.name = ? OR recipient_name.name = ?)', ['name', 'nickname']
+          );
+          query.innerJoin('TrustDistances as td', function() {
+            this.on('author.name', '=', 'td.end_attr_name')
+              .andOn('author.value', '=', 'td.end_attr_value')
+              .andOn('author.is_recipient', '=', knex.raw('?', false))
+              .andOn('td.start_attr_name', '=', knex.raw('?', options.viewpoint[0]))
+              .andOn('td.start_attr_value', '=', knex.raw('?', options.viewpoint[1]));
+            if (options.maxDistance > 0) {
+              this.andOn('td.distance', '<=', knex.raw('?', options.maxDistance));
+            }
+          });
+          if (options.author) {
+            // Extend message search to other attributes connected to the author
+            if (authorIdentityId) {
+              query.where('author_attribute.identity_id', knex.raw('?', authorIdentityId));
+            } else {
+              query.where('author.name', options.author[0]);
+              query.where('author.value', options.author[1]);
+            }
+          }
+          if (options.recipient) {
+            if (recipientIdentityId) {
+              query.where('recipient_attribute.identity_id', knex.raw('?', recipientIdentityId));
+            } else {
+              query.where('recipient.name', options.recipient[0]);
+              query.where('recipient.value', options.recipient[1]);
+            }
+          }
+        } else {
+          if (options.author) {
+            options.where['author.name'] = options.author[0];
+            options.where['author.value'] = options.author[1];
+          }
+          if (options.recipient) {
+            options.where['recipient.name'] = options.recipient[0];
+            options.where['recipient.value'] = options.recipient[1];
+          }
+        }
+        query.where(options.where);
+
+        return query;
+      });
     },
 
     dropMessage: function(messageHash) {
@@ -939,12 +959,6 @@ module.exports = function(knex) {
               if (options.maxDistance > 0) {
                 this.andOn('td.distance', '<=', options.maxDistance);
               }
-            });
-            received.innerJoin('TrustDistances as td_signer', function() {
-              this.on('td_signer.start_attr_name', '=', knex.raw('?', options.viewpoint[0]));
-              this.on('td_signer.start_attr_value', '=', knex.raw('?', options.viewpoint[1]));
-              this.on('td_signer.end_attr_name', '=', knex.raw('?', 'keyID'));
-              this.on('td_signer.end_attr_value', '=', 'm.signer_keyid');
             });
 
             var receivedSubquery = knex.raw(received).wrap('(', ') s');
