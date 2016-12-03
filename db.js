@@ -225,20 +225,10 @@ module.exports = function(knex) {
             });
           });
           query.innerJoin('TrustDistances as td', function() {
-            this.on(function() {
-              this.on(function() {
-                this.on('author_attribute.name', '=', 'td.end_attr_name')
-                  .andOn('author_attribute.value', '=', 'td.end_attr_value')
-                  .andOn('td.start_attr_name', '=', knex.raw('?', options.viewpoint[0]))
-                  .andOn('td.start_attr_value', '=', knex.raw('?', options.viewpoint[1]));
-              });
-              this.orOn(function() {
-                this.on('author.name', '=', 'td.end_attr_name')
-                  .andOn('author.value', '=', 'td.end_attr_value')
-                  .andOn('td.start_attr_name', '=', knex.raw('?', options.viewpoint[0]))
-                  .andOn('td.start_attr_value', '=', knex.raw('?', options.viewpoint[1]));
-              });
-            });
+            this.on('author_attribute.name', '=', 'td.end_attr_name')
+              .andOn('author_attribute.value', '=', 'td.end_attr_value')
+              .andOn('td.start_attr_name', '=', knex.raw('?', options.viewpoint[0]))
+              .andOn('td.start_attr_value', '=', knex.raw('?', options.viewpoint[1]));
             if (options.maxDistance > 0) {
               this.andOn('td.distance', '<=', knex.raw('?', options.maxDistance));
             }
@@ -660,6 +650,9 @@ module.exports = function(knex) {
       } else {
         q = new P(function(resolve) { resolve(); });
       }
+      q = q.then(function() {
+        return pub.mapIdentityAttributes({ id: id, viewpoint: id });
+      });
       var i;
       return q.then(function() {
         return knex.transaction(function(trx) {
@@ -1260,6 +1253,9 @@ module.exports = function(knex) {
       .then(function() {
         // TODO: if myId is changed, the old one should be removed from TrustIndexedAttributes
         return pub.addTrustIndexedAttribute(myId, myTrustIndexDepth);
+      })
+      .then(function() {
+        return pub.mapIdentityAttributes({ id: myId });
       })
       .then(function() {
         return pub.checkDefaultTrustList();
