@@ -217,15 +217,28 @@ module.exports = function(knex) {
             this.on('recipient_attribute.viewpoint_name', '=', knex.raw('?', options.viewpoint[0]));
             this.on('recipient_attribute.viewpoint_value', '=', knex.raw('?', options.viewpoint[1]));
           });
-          query.joinRaw('left join "IdentityAttributes" AS recipient_name ON ' +
-            'recipient_attribute.identity_id = recipient_name.identity_id ' +
-            'AND (recipient_name.name = ? OR recipient_name.name = ?)', ['name', 'nickname']
-          );
+          query.leftJoin('IdentityAttributes as recipient_name', function() {
+            this.on('recipient_attribute.identity_id', '=', 'recipient_name.identity_id');
+            this.on(function() {
+              this.on('recipient.name', '=', knex.raw('?', 'name'));
+              this.orOn('recipient.name', '=', knex.raw('?', 'nickname'));
+            });
+          });
           query.innerJoin('TrustDistances as td', function() {
-            this.on('author_attribute.name', '=', 'td.end_attr_name')
-              .andOn('author_attribute.value', '=', 'td.end_attr_value')
-              .andOn('td.start_attr_name', '=', knex.raw('?', options.viewpoint[0]))
-              .andOn('td.start_attr_value', '=', knex.raw('?', options.viewpoint[1]));
+            this.on(function() {
+              this.on(function() {
+                this.on('author_attribute.name', '=', 'td.end_attr_name')
+                  .andOn('author_attribute.value', '=', 'td.end_attr_value')
+                  .andOn('td.start_attr_name', '=', knex.raw('?', options.viewpoint[0]))
+                  .andOn('td.start_attr_value', '=', knex.raw('?', options.viewpoint[1]));
+              });
+              this.orOn(function() {
+                this.on('author.name', '=', 'td.end_attr_name')
+                  .andOn('author.value', '=', 'td.end_attr_value')
+                  .andOn('td.start_attr_name', '=', knex.raw('?', options.viewpoint[0]))
+                  .andOn('td.start_attr_value', '=', knex.raw('?', options.viewpoint[1]));
+              });
+            });
             if (options.maxDistance > 0) {
               this.andOn('td.distance', '<=', knex.raw('?', options.maxDistance));
             }
@@ -389,21 +402,6 @@ module.exports = function(knex) {
           resolve(arr);
         });
       });
-
-/*
-      if (options.searchValue) {
-        return knex.from('MessageAttributes').distinct('name', 'value').select()
-          .where(options.where)
-          .where('value', 'like', '%' + options.searchValue + '%')
-          .orderBy(options.orderBy, options.direction)
-          .limit(options.limit)
-          .offset(options.offset);
-      }
-      return knex.from('MessageAttributes').distinct('name', 'value').select()
-        .where(options.where)
-        .orderBy(options.orderBy, options.direction)
-        .limit(options.limit)
-        .offset(options.offset); */
     },
 
     mapIdentityAttributes: function(options) {
@@ -424,7 +422,7 @@ module.exports = function(knex) {
         existingId = res;
         return knex('IdentityAttributes')
           .where('identity_id', 'in', getExistingId).del()
-          .then(function() {
+          .then(function(res) {
             if (existingId.length) {
               return new P(function(resolve) { resolve(existingId); });
             } else {
@@ -745,121 +743,9 @@ module.exports = function(knex) {
       });
     },
 
-    /*
-    identitySearch: function(query, limit, offset, viewpoint) {
-      viewpoint = viewpoint || ['', ''];
-      var useViewpoint = viewpoint[0] && viewpoint[1];
-
-      var sql = "SELECT IFNULL(OtherAttributes.name,attrname) AS name, IFNULL(OtherAttributes.value,attrvalue) AS value, MAX(iid) AS iid FROM (";
-      sql += "SELECT DISTINCT mi.name as attrname, mi.value as attrvalue, -1 AS iid FROM MessageAttributes AS mi ";
-      sql += "WHERE ";
-      sql += "mi.value LIKE '%' || :query || '%' ";
-
-      if (query[0]) {
-        sql += "AND mi.name = :name ";
-      }
-
-      sql += "UNION ";
-      sql += "SELECT DISTINCT ii.name as attrname, ii.value as attrvalue, ii.identity_id AS iid FROM IdentityAttributes AS ii ";
-      sql += "WHERE ";
-      sql += "ii.value LIKE '%' || :query || '%' ";
-
-      if (query[0]) {
-        sql += "AND ii.name = :name ";
-      }
-
-      sql += "AND viewpoint_name = :viewType AND viewpoint_value = :viewID ";
-      sql += ") ";
-
-      if (useViewpoint) {
-        sql += "LEFT JOIN TrustDistances AS tp ON tp.end_name = attrname AND tp.end_value = attrvalue ";
-        sql += "AND tp.start_name = :viewType AND tp.start_value = :viewID ";
-      }
-
-      sql += "LEFT JOIN UniqueIdentifierTypes AS UID ON UID.name = attrname ";
-      sql += "LEFT JOIN IdentityAttributes AS OtherAttributes ON OtherAttributes.identity_id = iid AND OtherAttributes.confirmations >= OtherAttributes.refutations ";
-
-      if (useViewpoint) {
-        sql += "AND OtherAttributes.viewpoint_name = :viewType AND OtherAttributes.viewpoint_value = :viewID ";
-      }
-
-      //sql += "LEFT JOIN CachedNames AS cn ON cn.name = name AND cn.value = id ";
-      //sql += "LEFT JOIN CachedEmails AS ce ON ce.name = name AND ce.value = id ";
-
-      sql += "GROUP BY IFNULL(OtherAttributes.name,attrname), IFNULL(OtherAttributes.value,attrvalue) ";
-
-      if (useViewpoint) {
-        sql += "ORDER BY iid >= 0 DESC, IFNULL(tp.Distance,1000) ASC, CASE WHEN attrvalue LIKE :query || '%' THEN 0 ELSE 1 END, UID.name IS NOT NULL DESC, attrvalue ASC ";
-      }
-
-      var params = { query: query[1], name: query[0], viewType: viewpoint[0], viewID: viewpoint[1] };
-      return knex.raw(sql, params);
-    }, */
-
     getTrustPaths: function(start, end, maxLength, shortestOnly, viewpoint, limit) {
       return new P(function(resolve) { resolve([]); }); // Disabled until the performance is improved
-      /*
-      if (!viewpoint) {
-        if (start[0] === 'keyID') {
-          viewpoint = start;
-        } else {
-          viewpoint = myId;
-        }
-      }
 
-      limit = limit || 50;
-
-      var sql = '';
-      sql += "WITH RECURSIVE transitive_closure(attr1name, attr1val, attr2name, attr2val, distance, path_string) AS ";
-      sql += "(";
-      sql += "SELECT attr1.name, attr1.value, attr2.name, attr2.value, 1 AS distance, ";
-      sql += SQL_PRINTF + "('%s:%s:%s:%s:',replace(attr1.name,':','::'),replace(attr1.value,':','::'),replace(attr2.name,':','::'),replace(attr2.value,':','::')) AS path_string ";
-      sql += "FROM \"Messages\" AS m ";
-      sql += "INNER JOIN \"TrustDistances\" as td ON ";
-      sql += "td.start_attr_name = :viewpoint_name AND td.start_attr_value = :viewpoint_value AND ";
-      sql += "td.end_attr_name = 'keyID' AND td.end_attr_value = m.signer_keyid ";
-      sql += "INNER JOIN \"MessageAttributes\" as attr1 ON m.Hash = attr1.message_hash AND attr1.is_recipient = :false ";
-      sql += "INNER JOIN \"UniqueIdentifierTypes\" AS ia1 ON ia1.name = attr1.name ";
-      sql += "INNER JOIN \"MessageAttributes\" as attr2 ON m.Hash = attr2.message_hash AND (attr1.name != attr2.name OR attr1.value != attr2.value) ";
-      sql += "INNER JOIN \"UniqueIdentifierTypes\" AS ia2 ON ia2.name = attr2.name ";
-      sql += "WHERE m.is_latest AND m.Rating > (m.min_rating + m.max_rating) / 2 AND attr1.name = :attr1name AND attr1.value = :attr1val ";
-
-      sql += "UNION ALL ";
-
-      sql += "SELECT tc.attr1name, tc.attr1val, attr2.name, attr2.value, tc.distance + 1, ";
-      sql += SQL_PRINTF + "('%s%s:%s:',tc.path_string,replace(attr2.name,':','::'),replace(attr2.value,':','::')) AS path_string ";
-      sql += "FROM \"Messages\" AS m ";
-      sql += "INNER JOIN \"TrustDistances\" as td ON ";
-      sql += "td.start_attr_name = :viewpoint_name AND td.start_attr_value = :viewpoint_value AND ";
-      sql += "td.end_attr_name = 'keyID' AND td.end_attr_value = m.signer_keyid ";
-      sql += "INNER JOIN \"MessageAttributes\" as attr1 ON m.Hash = attr1.message_hash AND attr1.is_recipient = :false ";
-      sql += "INNER JOIN \"UniqueIdentifierTypes\" AS ia1 ON ia1.name = attr1.name ";
-      sql += "INNER JOIN \"MessageAttributes\" as attr2 ON m.Hash = attr2.message_hash AND (attr1.name != attr2.name OR attr1.value != attr2.value) ";
-      sql += "INNER JOIN \"UniqueIdentifierTypes\" AS ia2 ON ia2.name = attr2.name ";
-      sql += "JOIN transitive_closure AS tc ON attr1.name = tc.attr2name AND attr1.value = tc.attr2val ";
-      sql += "WHERE m.is_latest AND m.Rating > (m.min_rating + m.max_rating) / 2 AND tc.distance < :max_length AND tc.path_string NOT LIKE " + SQL_PRINTF + "('%%%s:%s:%%',replace(attr2.name,':','::'),replace(attr2.value,':','::')) ";
-      sql += ") ";
-      sql += "SELECT path_string FROM transitive_closure ";
-      sql += "WHERE attr2name = :attr2name AND attr2val = :attr2val ";
-      sql += "ORDER BY distance ";
-      sql += "LIMIT :limit ";
-
-      return knex.raw(sql,
-        { attr1name: start[0],
-          attr1val: start[1],
-          max_length: maxLength,
-          attr2name: end[0],
-          attr2val: end[1],
-          viewpoint_name: viewpoint[0],
-          viewpoint_value: viewpoint[1],
-          limit: limit,
-          true: true,
-          false: false
-        })
-        .then(function(res) {
-          return res.rows || res;
-        });
-        */
     },
 
     getMessageCount: function() {
@@ -875,12 +761,16 @@ module.exports = function(knex) {
       sentSql += "SUM(CASE WHEN m.rating = (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS sent_neutral, ";
       sentSql += "SUM(CASE WHEN m.rating < (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS sent_negative ";
 
-      var dbTrue = knex.raw('?', true), dbFalse = knex.raw('?', false);
+      var dbTrue = true, dbFalse = false;
+      if (config.db.dialect === 'sqlite3') { // sqlite in test env fails otherwise, for some reason
+        dbTrue = 1;
+        dbFalse = 0;
+      }
 
       var sent = knex('Messages as m')
         .innerJoin('MessageAttributes as author', function() {
           this.on('author.message_hash', '=', 'm.hash');
-          this.andOn('author.is_recipient', '=', dbFalse);
+          this.on('author.is_recipient', '=', knex.raw('?', dbFalse));
         })
         .where('m.type', 'rating')
         .where('m.public', dbTrue);
@@ -894,7 +784,7 @@ module.exports = function(knex) {
       var received = knex('Messages as m')
         .innerJoin('MessageAttributes as recipient', function() {
           this.on('recipient.message_hash', '=', 'm.hash');
-          this.andOn('recipient.is_recipient', '=', dbTrue);
+          this.on('recipient.is_recipient', '=', knex.raw('?', dbTrue));
         })
         .where('m.type', 'rating')
         .where('m.public', dbTrue);

@@ -559,7 +559,8 @@ router.get('/identities/:attr_name/:attr_value/generatewotindex', authRequired, 
   } else if (req.params.attr_name !== 'keyID') {
     trustedKeyID = myKey.hash;
   }
-  db.generateWebOfTrustIndex([req.params.attr_name, req.params.attr_value], depth, false, trustedKeyID)
+  var maintain = parseInt(req.query.maintain) === 1;
+  db.generateWebOfTrustIndex([req.params.attr_name, req.params.attr_value], depth, maintain, trustedKeyID)
   .then(function(dbRes) {
     res.json(dbRes);
   }).catch(function(err) { handleError(err, req, res); });
