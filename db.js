@@ -34,13 +34,14 @@ module.exports = function(knex) {
       }
       var queries = [];
 
-      var q = this.messageExists(message.hash).then(function(exists) {
+      var q = ipfs.files.add(new Buffer(message.jws, 'utf8')).then(function(res) {
+        message.hash = res[0].hash;
+      })
+      .then(this.messageExists(message.hash))
+      .then(function(exists) {
         if (!exists) {
           var isPublic = typeof message.signedData.public === 'undefined' ? true : message.signedData.public;
-          return ipfs.files.add(new Buffer(message.jws, 'utf8')).then(function(res) {
-            message.hash = res[0].hash;
-          })
-          .then(p.deletePreviousMessage(message))
+          return p.deletePreviousMessage(message)
           .then(function() {
             return p.getPriority(message);
           })

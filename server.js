@@ -643,6 +643,7 @@ function requestMessages(url, qs) {
     apiMethod: 'messages',
     qs: qs
   }).then(function(res) {
+    var p = new P(function(resolve) { resolve(); });
     function bufferToJws(m) {
       return function(buffer) {
         m.jws = buffer.toString();
@@ -652,22 +653,23 @@ function requestMessages(url, qs) {
     function verifyAndSaveMsg(m) {
       return function() {
         Message.verify(m);
-        db.saveMessage(m).return(); // dis async!!!
+        return db.saveMessage(m).return();
       };
     }
 
     for (var i = 0; i < res.length; i++) {
       var m = res[i];
-      var p = new P(function(resolve) { resolve(); });
       if (m.hash && !m.jws) { // new peer version that stores msg jws in ipfs
-        p = ipfs.files.cat(m.hash, { buffer: true })
+        p.then(ipfs.files.cat(m.hash, { buffer: true }))
         .then(bufferToJws(m));
       }
       p.then(verifyAndSaveMsg(m));
     }
     if (res.length === qs.limit) {
       qs.offset += qs.limit;
-      return requestMessages(url, qs);
+      return p.then(function() {
+        requestMessages(url, qs);
+      });
     }
   })
   .catch(function(e) {
