@@ -353,12 +353,7 @@ router.route('/messages/:hash')
       if (!dbRes.length) {
         return res.status(404).json('Message not found');
       }
-      var m = dbRes[0];
-      ipfs.files.cat(m.hash, { buffer: true })
-      .then(function(buffer) {
-        m.jws = buffer.toString('utf8');
-        res.json(m);
-      });
+      res.json(dbRes[0]);
     }).catch(function(err) { handleError(err, req, res); });
   })
 
@@ -648,13 +643,27 @@ function requestMessages(url, qs) {
     apiMethod: 'messages',
     qs: qs
   }).then(function(res) {
+    function bufferToJws(m) {
+      return function(buffer) {
+        m.jws = buffer.toString();
+      };
+    }
+
+    function verifyAndSaveMsg(m) {
+      return function() {
+        Message.verify(m);
+        db.saveMessage(m).return(); // dis async!!!
+      };
+    }
+
     for (var i = 0; i < res.length; i++) {
       var m = res[i];
+      var p = new P(function(resolve) { resolve(); });
       if (m.hash && !m.jws) { // new peer version that stores msg jws in ipfs
-        m.jws = ipfs.files.get(m.hash);
+        p = ipfs.files.cat(m.hash, { buffer: true })
+        .then(bufferToJws(m));
       }
-      Message.verify(m);
-      db.saveMessage(m).return(); // dis async!!!
+      p.then(verifyAndSaveMsg(m));
     }
     if (res.length === qs.limit) {
       qs.offset += qs.limit;
