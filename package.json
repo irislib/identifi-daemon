@@ -37,6 +37,7 @@
     "express-jwt": "^5.1.0",
     "express-session": "^1.13.0",
     "identifi-lib": "0.0.20",
+    "ipfs-api": "^12.0.2",
     "jws": "^3.0.0",
     "knex": "^0.12.6",
     "moment": "^2.10.2",

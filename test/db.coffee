@@ -71,8 +71,8 @@ describe 'Database', ->
         rating: 1
         context: 'identifi'
       Message.sign message, privKey, pubKey
-      hash = message.hash
-      db.saveMessage(message)
+      db.saveMessage(message).then (res) ->
+        hash = res.hash
     it 'should have 4 messages', ->
       db.getMessageCount().then (res) ->
         res.should.equal 4

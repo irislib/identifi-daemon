@@ -3,7 +3,12 @@
 var util = require('./util.js');
 var schema = require('./schema.js');
 var P = require("bluebird");
+var Promise = P; // For ipfs
+
 var moment = require('moment');
+
+var ipfsAPI = require('ipfs-api');
+var ipfs = ipfsAPI('localhost', '5001', {protocol: 'http'});
 
 var Message = require('identifi-lib/message');
 var keyutil = require('identifi-lib/keyutil');
@@ -30,69 +35,75 @@ module.exports = function(knex) {
       var queries = [];
 
       var q = this.messageExists(message.hash).then(function(exists) {
-          if (!exists) {
-            var isPublic = typeof message.signedData.public === 'undefined' ? true : message.signedData.public;
-            return p.deletePreviousMessage(message).then(function() {
-              return p.getPriority(message);
-            })
-            .then(function(priority) {
-              return knex.transaction(function(trx) {
-                return trx('Messages').insert({
-                  hash:           message.hash,
-                  jws:            message.jws,
-                  timestamp:      message.signedData.timestamp,
-                  type:           message.signedData.type || 'rating',
-                  rating:         message.signedData.rating || 0,
-                  max_rating:     message.signedData.maxRating || 0,
-                  min_rating:     message.signedData.minRating || 0,
-                  public:         isPublic,
-                  priority:       priority,
-                  is_latest:      p.isLatest(message),
-                  signer_keyid:   message.signerKeyHash,
-                })
-                .then(function() {
-                  var i, queries = [];
-                  for (i = 0; i < message.signedData.author.length; i++) {
-                    queries.push(trx('MessageAttributes').insert({
-                      message_hash: message.hash,
-                      name: message.signedData.author[i][0],
-                      value: message.signedData.author[i][1],
-                      is_recipient: false
-                    }));
-                  }
-                  for (i = 0; i < message.signedData.recipient.length; i++) {
-                    queries.push(trx('MessageAttributes').insert({
-                      message_hash: message.hash,
-                      name: message.signedData.recipient[i][0],
-                      value: message.signedData.recipient[i][1],
-                      is_recipient: true
-                    }));
-                  }
-                  return P.all(queries);
-                });
+        if (!exists) {
+          var isPublic = typeof message.signedData.public === 'undefined' ? true : message.signedData.public;
+          return ipfs.files.add(new Buffer(message.jws, 'utf8')).then(function(res) {
+            message.hash = res[0].hash;
+          })
+          .then(p.deletePreviousMessage(message))
+          .then(function() {
+            return p.getPriority(message);
+          })
+          .then(function(priority) {
+            return knex.transaction(function(trx) {
+              return trx('Messages').insert({
+                hash:           message.hash,
+                timestamp:      message.signedData.timestamp,
+                type:           message.signedData.type || 'rating',
+                rating:         message.signedData.rating || 0,
+                max_rating:     message.signedData.maxRating || 0,
+                min_rating:     message.signedData.minRating || 0,
+                public:         isPublic,
+                priority:       priority,
+                is_latest:      p.isLatest(message),
+                signer_keyid:   message.signerKeyHash,
               })
               .then(function() {
-                if (updateTrustIndexes) {
-                  return p.updateWotIndexesByMessage(message)
-                  .then(function() {
-                    return p.updateIdentityIndexesByMessage(message)
-                    .then(function(res) {
-                      return res;
-                    });
-                  });
+                var i, queries = [];
+                for (i = 0; i < message.signedData.author.length; i++) {
+                  queries.push(trx('MessageAttributes').insert({
+                    message_hash: message.hash,
+                    name: message.signedData.author[i][0],
+                    value: message.signedData.author[i][1],
+                    is_recipient: false
+                  }));
                 }
+                for (i = 0; i < message.signedData.recipient.length; i++) {
+                  queries.push(trx('MessageAttributes').insert({
+                    message_hash: message.hash,
+                    name: message.signedData.recipient[i][0],
+                    value: message.signedData.recipient[i][1],
+                    is_recipient: true
+                  }));
+                }
+                return P.all(queries);
               });
+            })
+            .then(function() {
+              if (updateTrustIndexes) {
+                return p.updateWotIndexesByMessage(message)
+                .then(function() {
+                  return p.updateIdentityIndexesByMessage(message)
+                  .then(function(res) {
+                    return res;
+                  });
+                });
+              }
             });
-          } else {
-            return new P(function(resolve) {
-              resolve(false);
-            });
-          }
-        });
+          })
+          .then(function() {
+            return message;
+          });
+        } else {
+          return new P(function(resolve) {
+            resolve(false);
+          });
+        }
+      });
 
-        return this.ensureFreeSpace().then(function() {
-          return q;
-        });
+      return this.ensureFreeSpace().then(function() {
+        return q;
+      });
     },
 
     messageExists: function(hash) {

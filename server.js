@@ -1,5 +1,10 @@
+/*jshint unused: false */
 var P = require("bluebird");
 var moment = require('moment');
+
+var Promise = P; // For ipfs
+var ipfsAPI = require('ipfs-api');
+var ipfs = ipfsAPI('localhost', '5001', {protocol: 'http'});
 
 var express    = require('express');
 var session = require('express-session');
@@ -322,8 +327,9 @@ router.route('/messages')
     .then(function(exists) {
       if (!exists) {
         Message.verify(m);
-        db.saveMessage(m).then(function() {
-          res.status(201).json(m);
+        db.saveMessage(m)
+        .then(function(r) {
+          res.status(201).json(r);
         });
         emitMsg(m);
       } else {
@@ -347,7 +353,12 @@ router.route('/messages/:hash')
       if (!dbRes.length) {
         return res.status(404).json('Message not found');
       }
-      res.json(dbRes[0]);
+      var m = dbRes[0];
+      ipfs.files.cat(m.hash, { buffer: true })
+      .then(function(buffer) {
+        m.jws = buffer.toString('utf8');
+        res.json(m);
+      });
     }).catch(function(err) { handleError(err, req, res); });
   })
 
@@ -638,11 +649,12 @@ function requestMessages(url, qs) {
     qs: qs
   }).then(function(res) {
     for (var i = 0; i < res.length; i++) {
-      if (res[i].jws) {
-        var m = res[i];
-        Message.verify(m);
-        db.saveMessage(m).return();
+      var m = res[i];
+      if (m.hash && !m.jws) { // new peer version that stores msg jws in ipfs
+        m.jws = ipfs.files.get(m.hash);
       }
+      Message.verify(m);
+      db.saveMessage(m).return(); // dis async!!!
     }
     if (res.length === qs.limit) {
       qs.offset += qs.limit;
