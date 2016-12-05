@@ -560,7 +560,7 @@ router.get('/identities/:attr_name/:attr_value/generatewotindex', authRequired, 
   }
   var depth = parseInt(req.query.depth) || 3;
   var trustedKeyID = null;
-  if (req.params.trusted_keyid) {
+  if (req.query.trusted_keyid) {
     trustedKeyID = req.params.trusted_keyid;
   } else if (req.params.attr_name !== 'keyID') {
     trustedKeyID = myKey.hash;
@@ -574,6 +574,16 @@ router.get('/identities/:attr_name/:attr_value/generatewotindex', authRequired, 
 
 // Register the routes
 app.use('/api', router);
+
+app.get('/ipfs/:hash', function(req, res) {
+  ipfs.files.cat(req.params.hash)
+  .then(function(stream) {
+    stream.pipe(res);
+  })
+  .catch(function(e) {
+    res.status(404).json("not found");
+  });
+});
 
 app.use('/apidoc', express.static('./apidoc'));
 // Serve identifi-angular if the node module is available
