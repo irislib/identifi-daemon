@@ -397,6 +397,7 @@ module.exports = function(knex) {
     mapIdentityAttributes: function(options) {
       var countBefore, identityId, sql;
       options.viewpoint = options.viewpoint || myId;
+      // Find out existing identity_id for the identifier
       var getExistingId = knex.from('IdentityAttributes as ia')
         .select('identity_id')
         .where({
@@ -411,17 +412,23 @@ module.exports = function(knex) {
       return getExistingId.then(function(res) {
         existingId = res;
         return knex('IdentityAttributes')
+          // Delete previously saved attributes of the identity_id
           .where('identity_id', 'in', getExistingId).del()
           .then(function(res) {
+            console.log('initially deleted', res);
             if (existingId.length) {
+              // Pass on the existing identity_id
               return new P(function(resolve) { resolve(existingId); });
             } else {
               return knex('IdentityAttributes')
+              // No existing identity_id - return a new one
                 .select(knex.raw(SQL_IFNULL + "(MAX(identity_id), 0) + 1 AS identity_id"));
             }
           })
           .then(function(res) {
             identityId = parseInt(res[0].identity_id);
+            console.log('identityId', identityId);
+            // First insert the queried identifier with the identity_id
             return knex('IdentityAttributes').insert({
               identity_id: identityId,
               name: options.id[0],
@@ -460,6 +467,8 @@ module.exports = function(knex) {
 
             function generateDeleteSubQuery() {
               return generateSubQuery()
+                // Select for deletion the related identity attributes that were previously inserted
+                // with a different identity_id
                 .innerJoin('IdentityAttributes as existing', function() {
                   this.on('existing.identity_id', '!=', identityId);
                   this.on('existing.name', '=', 'attr2.name');
@@ -473,6 +482,8 @@ module.exports = function(knex) {
 
             function generateInsertSubQuery() {
               return generateSubQuery()
+                // Select for insertion the related identity attributes that do not already exist
+                // on the identity_id
                 .leftJoin('IdentityAttributes as existing', function() {
                   this.on('existing.identity_id', '=', identityId);
                   this.on('existing.name', '=', 'attr2.name');
@@ -494,17 +505,20 @@ module.exports = function(knex) {
 
             function iterateSearch() {
               return knex('IdentityAttributes').whereIn('identity_id', generateDeleteSubQuery()).del()
-              .then(
-                knex('IdentityAttributes').insert(generateInsertSubQuery()).then(function(res) {
-                  if (JSON.stringify(last) !== JSON.stringify(res)) {
-                    last = res;
-                    return iterateSearch().return();
-                  }
-                })
-              );
+              .then(function(res) {
+                console.log('deleted', res);
+                return knex('IdentityAttributes').insert(generateInsertSubQuery());
+              })
+              .then(function(res) {
+                console.log('inserted', res.rowCount);
+                if (JSON.stringify(last) !== JSON.stringify(res)) {
+                  last = res;
+                  return iterateSearch();
+                }
+              });
             }
 
-            return iterateSearch().return();
+            return iterateSearch();
           })
           .then(function(res) {
             var hasSearchedAttributes = options.searchedAttributes && options.searchedAttributes.length > 0;
