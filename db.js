@@ -415,7 +415,6 @@ module.exports = function(knex) {
           // Delete previously saved attributes of the identity_id
           .where('identity_id', 'in', getExistingId).del()
           .then(function(res) {
-            console.log('initially deleted', res);
             if (existingId.length) {
               // Pass on the existing identity_id
               return new P(function(resolve) { resolve(existingId); });
@@ -427,7 +426,6 @@ module.exports = function(knex) {
           })
           .then(function(res) {
             identityId = parseInt(res[0].identity_id);
-            console.log('identityId', identityId);
             // First insert the queried identifier with the identity_id
             return knex('IdentityAttributes').insert({
               identity_id: identityId,
@@ -506,11 +504,9 @@ module.exports = function(knex) {
             function iterateSearch() {
               return knex('IdentityAttributes').whereIn('identity_id', generateDeleteSubQuery()).del()
               .then(function(res) {
-                console.log('deleted', res);
                 return knex('IdentityAttributes').insert(generateInsertSubQuery());
               })
               .then(function(res) {
-                console.log('inserted', res.rowCount);
                 if (JSON.stringify(last) !== JSON.stringify(res)) {
                   last = res;
                   return iterateSearch();
