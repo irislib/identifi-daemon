@@ -596,18 +596,20 @@ try {
 
 function handleMsgEvent(data) {
   var m = data;
+  try {
+    Message.verify(m);
+  } catch (e) {
+    log('failed to verify msg');
+    return;
+  }
   db.messageExists(m.hash)
   .then(function(exists) {
     if (!exists) {
-      try {
-        Message.verify(m);
-      } catch (e) {
-        log('failed to verify msg');
-        return;
-      }
       db.saveMessage(m).then(function() {
         emitMsg(m);
-      }).catch(function() {});
+      }).catch(function(e) {
+        log('error handling msg', m.hash, e);
+      });
     }
   });
 }
@@ -621,7 +623,7 @@ function handleIncomingWebsocket(socket) {
   }
 
   socket.on('msg', function (data) {
-    log('msg received from ' + socket.client.conn.remoteAddress + ': ' + data.hash);
+    log('msg received from ' + socket.client.conn.remoteAddress + ': ' + (data.hash || data.ipfs_hash));
     handleMsgEvent(data);
   });
 }

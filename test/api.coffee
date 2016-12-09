@@ -585,13 +585,13 @@ describe 'API', ->
         body: m
       return
     it 'should accept and save a message', (done) ->
-      socket.emit('msg', { jws: 'eyJhbGciOiJFUzI1NiIsImtpZCI6IjMwNTYzMDEwMDYwNzJhODY0OGNlM2QwMjAxMDYwNTJiODEwNDAwMGEwMzQyMDAwNDllM2JjYjQ5OGRlY2FkYzIwYzRhMDkzMDI2ZGQ4NzgxZWUxMTNhM2VkNjBmZTU4ZGRmNzQ0MWJmZjYyZTA3ZjZmZmQ4ZDE2MjNmZWZiMWUwZDU3NDlhZTg5NjdkNDU2NGQzZDY2NjE3YWQ3Zjk5OTJlMjNiMDVlMjU3ZjQwODUwIn0.eyJhdXRob3IiOltbImVtYWlsIiwibWFydHRpQG1vbmkuY29tIl0sWyJuYW1lIiwiU2F0b3NoaSBOYWthbW90byJdLFsia2V5SUQiLCIvcGJ4alhqd0Vzb2piU2ZkTTN3R1dmRTI0RjRmWDNHYXNtb0hYWTN5WVBNPSJdXSwicmVjaXBpZW50IjpbWyJlbWFpbCIsInNpcml1c0Bpa2kuZmkiXSxbImVtYWlsIiwibWFydHRpQG1vbmkuY29tIl1dLCJ0eXBlIjoidmVyaWZ5X2lkZW50aXR5IiwidGltZXN0YW1wIjoiMjAxNi0wNS0xMFQwOTowNjo1MS4yMzRaIn0.fwQ22hyVeWbBMLdYqnwFT--jfF7l6xPUuCKO-YKMCoqzKvxPOBCRPdLa5qDj2suXPngDzTKp9CmHmRCC3XcbWw', hash: 'QmVR3edvUJaiwgxScnGakeuwZFF6ttTwgJhtWHDd4QicpR' })
+      socket.emit('msg', { jws: 'eyJhbGciOiJFUzI1NiIsImtpZCI6IjMwNTYzMDEwMDYwNzJhODY0OGNlM2QwMjAxMDYwNTJiODEwNDAwMGEwMzQyMDAwNDllM2JjYjQ5OGRlY2FkYzIwYzRhMDkzMDI2ZGQ4NzgxZWUxMTNhM2VkNjBmZTU4ZGRmNzQ0MWJmZjYyZTA3ZjZmZmQ4ZDE2MjNmZWZiMWUwZDU3NDlhZTg5NjdkNDU2NGQzZDY2NjE3YWQ3Zjk5OTJlMjNiMDVlMjU3ZjQwODUwIn0.eyJhdXRob3IiOltbImVtYWlsIiwibWFydHRpQG1vbmkuY29tIl0sWyJuYW1lIiwiU2F0b3NoaSBOYWthbW90byJdLFsia2V5SUQiLCIvcGJ4alhqd0Vzb2piU2ZkTTN3R1dmRTI0RjRmWDNHYXNtb0hYWTN5WVBNPSJdXSwicmVjaXBpZW50IjpbWyJlbWFpbCIsInNpcml1c0Bpa2kuZmkiXSxbImVtYWlsIiwibWFydHRpQG1vbmkuY29tIl1dLCJ0eXBlIjoidmVyaWZ5X2lkZW50aXR5IiwidGltZXN0YW1wIjoiMjAxNi0wNS0xMFQwOTowNjo1MS4yMzRaIn0.fwQ22hyVeWbBMLdYqnwFT--jfF7l6xPUuCKO-YKMCoqzKvxPOBCRPdLa5qDj2suXPngDzTKp9CmHmRCC3XcbWw', ipfs_hash: 'QmVR3edvUJaiwgxScnGakeuwZFF6ttTwgJhtWHDd4QicpR' })
       setTimeout ->
         r = identifi.request
           method: 'GET'
           apiMethod: 'messages'
           apiId: 'QmVR3edvUJaiwgxScnGakeuwZFF6ttTwgJhtWHDd4QicpR'
-        r.then ->
+        r.then (res) ->
           done()
       , 1000
       return
@@ -599,7 +599,7 @@ describe 'API', ->
       socket.on 'msg', (e) ->
         done('Fail!')
         socket._callbacks['$msg'] = []
-      socket.emit('msg', { jws: 'eyJhbGciOiJFUzI1NiIsImtpZCI6IjMwNTYzMDEwMDYwNzJhODY0OGNlM2QwMjAxMDYwNTJiODEwNDAwMGEwMzQyMDAwNDllM2JjYjQ5OGRlY2FkYzIwYzRhMDkzMDI2ZGQ4NzgxZWUxMTNhM2VkNjBmZTU4ZGRmNzQ0MWJmZjYyZTA3ZjZmZmQ4ZDE2MjNmZWZiMWUwZDU3NDlhZTg5NjdkNDU2NGQzZDY2NjE3YWQ3Zjk5OTJlMjNiMDVlMjU3ZjQwODUwIn0.eyJhdXRob3IiOltbImVtYWlsIiwibWFydHRpQG1vbmkuY29tIl0sWyJuYW1lIiwiU2F0b3NoaSBOYWthbW90byJdLFsia2V5SUQiLCIvcGJ4alhqd0Vzb2piU2ZkTTN3R1dmRTI0RjRmWDNHYXNtb0hYWTN5WVBNPSJdXSwicmVjaXBpZW50IjpbWyJlbWFpbCIsInNpcml1c0Bpa2kuZmkiXSxbImVtYWlsIiwibWFydHRpQG1vbmkuY29tIl1dLCJ0eXBlIjoidmVyaWZ5X2lkZW50aXR5IiwidGltZXN0YW1wIjoiMjAxNi0wNS0xMFQwOTowNjo1MS4yMzRaIn0.fwQ22hyVeWbBMLdYqnwFT--jfF7l6xPUuCKO-YKMCoqzKvxPOBCRPdLa5qDj2suXPngDzTKp9CmHmRCC3XcbWw', hash: 'QmVR3edvUJaiwgxScnGakeuwZFF6ttTwgJhtWHDd4QicpR' })
+      socket.emit('msg', { jws: 'eyJhbGciOiJFUzI1NiIsImtpZCI6IjMwNTYzMDEwMDYwNzJhODY0OGNlM2QwMjAxMDYwNTJiODEwNDAwMGEwMzQyMDAwNDllM2JjYjQ5OGRlY2FkYzIwYzRhMDkzMDI2ZGQ4NzgxZWUxMTNhM2VkNjBmZTU4ZGRmNzQ0MWJmZjYyZTA3ZjZmZmQ4ZDE2MjNmZWZiMWUwZDU3NDlhZTg5NjdkNDU2NGQzZDY2NjE3YWQ3Zjk5OTJlMjNiMDVlMjU3ZjQwODUwIn0.eyJhdXRob3IiOltbImVtYWlsIiwibWFydHRpQG1vbmkuY29tIl0sWyJuYW1lIiwiU2F0b3NoaSBOYWthbW90byJdLFsia2V5SUQiLCIvcGJ4alhqd0Vzb2piU2ZkTTN3R1dmRTI0RjRmWDNHYXNtb0hYWTN5WVBNPSJdXSwicmVjaXBpZW50IjpbWyJlbWFpbCIsInNpcml1c0Bpa2kuZmkiXSxbImVtYWlsIiwibWFydHRpQG1vbmkuY29tIl1dLCJ0eXBlIjoidmVyaWZ5X2lkZW50aXR5IiwidGltZXN0YW1wIjoiMjAxNi0wNS0xMFQwOTowNjo1MS4yMzRaIn0.fwQ22hyVeWbBMLdYqnwFT--jfF7l6xPUuCKO-YKMCoqzKvxPOBCRPdLa5qDj2suXPngDzTKp9CmHmRCC3XcbWw', ipfs_hash: 'QmVR3edvUJaiwgxScnGakeuwZFF6ttTwgJhtWHDd4QicpR' })
       setTimeout ->
         r = identifi.request
           method: 'GET'

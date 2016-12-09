@@ -45,6 +45,7 @@ var init = function(db, config) {
 
   queries.push(db.schema.createTableIfNotExists('Messages', function(t) {
     t.string('hash').unique().primary();
+    t.string('ipfs_hash', 50).unique();
     t.string('jws', 10000).notNullable();
     t.timestamp('saved_at');
     t.datetime('timestamp');
@@ -57,6 +58,7 @@ var init = function(db, config) {
     t.boolean('is_latest');
     t.string('signer_keyid');
     t.index(['timestamp']);
+    t.index(['ipfs']);
     t.index(['type']);
   }).catch(catcher)
   .then(function() {

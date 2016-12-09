@@ -35,8 +35,8 @@ module.exports = function(knex) {
       var queries = [];
 
       var q = ipfs.files.add(new Buffer(message.jws, 'utf8')).then(function(res) {
-        message.hash = res[0].hash;
-      })
+        message.ipfs_hash = res[0].hash;
+      }).catch()
       .then(this.messageExists(message.hash))
       .then(function(exists) {
         if (!exists) {
@@ -49,6 +49,7 @@ module.exports = function(knex) {
             return knex.transaction(function(trx) {
               return trx('Messages').insert({
                 hash:           message.hash,
+                ipfs_hash:      message.ipfs_hash,
                 jws:            message.jws,
                 timestamp:      message.signedData.timestamp,
                 type:           message.signedData.type || 'rating',
@@ -209,6 +210,15 @@ module.exports = function(knex) {
               query.whereRaw(':rating: < ( :max_rating: + :min_rating:) / 2', bindings);
               break;
           }
+        }
+
+        if (options.where['hash']) {
+          var hash = options.where['hash'];
+          query.where(function() {
+            this.where('Messages.hash', hash);
+            this.orWhere('Messages.ipfs_hash', hash);
+          });
+          delete options.where['hash'];
         }
 
         if (options.viewpoint) {
