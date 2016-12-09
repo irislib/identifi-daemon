@@ -58,7 +58,7 @@ var init = function(db, config) {
     t.boolean('is_latest');
     t.string('signer_keyid');
     t.index(['timestamp']);
-    t.index(['ipfs']);
+    t.index(['ipfs_hash']);
     t.index(['type']);
   }).catch(catcher)
   .then(function() {

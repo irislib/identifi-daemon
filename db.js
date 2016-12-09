@@ -8,7 +8,13 @@ var Promise = P; // For ipfs
 var moment = require('moment');
 
 var ipfsAPI = require('ipfs-api');
-var ipfs = ipfsAPI('localhost', '5001', {protocol: 'http'});
+var ipfs;
+try {
+  ipfs = ipfsAPI('localhost', '5001', {protocol: 'http'});
+} catch (e) {
+  ipfs = false;
+  console.log('no ipfs connection available');
+}
 
 var Message = require('identifi-lib/message');
 var keyutil = require('identifi-lib/keyutil');
@@ -34,10 +40,15 @@ module.exports = function(knex) {
       }
       var queries = [];
 
-      var q = ipfs.files.add(new Buffer(message.jws, 'utf8')).then(function(res) {
-        message.ipfs_hash = res[0].hash;
-      }).catch()
-      .then(this.messageExists(message.hash))
+      var q = new P(function(resolve) { resolve(); });
+      // Unobtrusively store msg to ipfs
+      if (ipfs && !message.ipfs_hash) {
+        q = ipfs.files.add(new Buffer(message.jws, 'utf8'))
+        .then(function(res) {
+          message.ipfs_hash = res[0].hash;
+        }).catch(function() {});
+      }
+      q = q.then(this.messageExists(message.hash))
       .then(function(exists) {
         if (!exists) {
           var isPublic = typeof message.signedData.public === 'undefined' ? true : message.signedData.public;

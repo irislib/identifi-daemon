@@ -4,7 +4,10 @@ var moment = require('moment');
 
 var Promise = P; // For ipfs
 var ipfsAPI = require('ipfs-api');
-var ipfs = ipfsAPI('localhost', '5001', {protocol: 'http'});
+var ipfs;
+try {
+  ipfs = ipfsAPI('localhost', '5001', {protocol: 'http'});
+} catch (e) { console.log('no ipfs connection available'); }
 
 var express    = require('express');
 var session = require('express-session');
@@ -576,6 +579,9 @@ router.get('/identities/:attr_name/:attr_value/generatewotindex', authRequired, 
 app.use('/api', router);
 
 app.get('/ipfs/:hash', function(req, res) {
+  if (!ipfs) {
+    return res.status(503).json("ipfs proxy not available");
+  }
   ipfs.files.cat(req.params.hash)
   .then(function(stream) {
     stream.pipe(res);
@@ -671,7 +677,7 @@ function requestMessages(url, qs) {
 
     for (var i = 0; i < res.length; i++) {
       var m = res[i];
-      if (m.hash && !m.jws) { // new peer version that stores msg jws in ipfs
+      if (ipfs && m.ipfs_hash && !m.jws) { // new peer version that stores msg jws in ipfs
         p.then(ipfs.files.cat(m.hash, { buffer: true }))
         .then(bufferToJws(m));
       }
