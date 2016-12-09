@@ -95,6 +95,7 @@ var init = function(db, config) {
     t.index(['identity_id', 'name']);
     t.index(['viewpoint_name', 'viewpoint_value']);
     t.index(['name', 'viewpoint_name', 'viewpoint_value']);
+    t.index(['name', 'value', 'viewpoint_name', 'viewpoint_value']);
     t.primary(['identity_id', 'name', 'value', 'viewpoint_name', 'viewpoint_value']);
   }).catch(catcher));
 
