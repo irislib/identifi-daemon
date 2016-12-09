@@ -45,6 +45,7 @@ var init = function(db, config) {
 
   queries.push(db.schema.createTableIfNotExists('Messages', function(t) {
     t.string('hash').unique().primary();
+    t.string('jws', 10000).notNullable();
     t.timestamp('saved_at');
     t.datetime('timestamp');
     t.string('type');

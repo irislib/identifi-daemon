@@ -49,6 +49,7 @@ module.exports = function(knex) {
             return knex.transaction(function(trx) {
               return trx('Messages').insert({
                 hash:           message.hash,
+                jws:            message.jws,
                 timestamp:      message.signedData.timestamp,
                 type:           message.signedData.type || 'rating',
                 rating:         message.signedData.rating || 0,
