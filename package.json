@@ -43,12 +43,15 @@
     "moment": "^2.10.2",
     "os-homedir": "^1.0.1",
     "passport": "^0.3.2",
+    "socket.io": "^1.4.5",
+    "sqlite3": "^3.1.8"
+  },
+  "optionalDependencies": {
+    "ipfs": "^0.20.3",
     "passport-facebook": "^2.1.1",
     "passport-google-oauth2": "^0.1.6",
     "passport-persona": "^0.2.1",
-    "passport-twitter": "^1.0.4",
-    "socket.io": "^1.4.5",
-    "sqlite3": "^3.1.2"
+    "passport-twitter": "^1.0.4"
   },
   "devDependencies": {
     "apidoc": "^0.16.1",

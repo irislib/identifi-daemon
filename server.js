@@ -1,13 +1,9 @@
 /*jshint unused: false */
 var P = require("bluebird");
 var moment = require('moment');
+var fs = require('fs');
 
 var Promise = P; // For ipfs
-var ipfsAPI = require('ipfs-api');
-var ipfs;
-try {
-  ipfs = ipfsAPI('localhost', '5001', {protocol: 'http'});
-} catch (e) { console.log('no ipfs connection available'); }
 
 var express    = require('express');
 var session = require('express-session');
@@ -22,7 +18,6 @@ var identifiClient = identifi.client;
 var pkg = require('./package.json');
 
 var osHomedir = require('os-homedir');
-var fs = require('fs');
 var path = require('path');
 var util = require('util');
 
@@ -34,6 +29,55 @@ var jwt = require('express-jwt');
 var authRequired = jwt({ secret: new Buffer(myKey.public.pem) });
 var authOptional = jwt({ secret: new Buffer(myKey.public.pem), credentialsRequired: false });
 var passport = require('passport');
+
+var ipfsAPI = require('ipfs-api');
+var ipfs = ipfsAPI();
+var getIpfs = ipfs.id()
+  .then(function() {
+    console.log("Connected to local IPFS API");
+    return ipfs;
+  })
+  .catch(function() {
+    console.log('No local IPFS API found, starting embedded IPFS node');
+    function loadIpfs() {
+      ipfs.load(function(err) {
+        if (err) { throw err; }
+        console.log('IPFS repo was loaded');
+        ipfs.goOnline(function(err) {
+          if (err) { throw err; }
+
+          if (ipfs.isOnline()) {
+            console.log('IPFS is online');
+            ipfs.swarm.addrs().then(function(res) {
+              console.log('addrs', res);
+            });
+          }
+        });
+      });
+    }
+
+    try {
+      var IpfsLib = require('ipfs');
+      ipfs = new IpfsLib();
+
+      ipfs._repo.version.exists(function(err, exists) {
+        if (err) { throw err; }
+        if (exists) {
+          loadIpfs();
+        } else {
+          ipfs.init({ emptyRepo: true, bits: 2048 }, function(err) {
+            console.log('IPFS repo was initialized');
+            if (err) { throw err; }
+            loadIpfs();
+          });
+        }
+      });
+    } catch(e) {
+      console.log('instantiating ipfs node failed:', e);
+      ipfs = null;
+    }
+    return ipfs;
+  });
 
 var loginOptions = [];
 
@@ -80,7 +124,10 @@ try {
   var dbConf = config.get('db');
   knex = require('knex')(dbConf);
   db = require('./db.js')(knex);
-  server.ready = db.init(config).return();
+  server.ready = getIpfs
+  .then(function(ipfs) {
+    return db.init(config, ipfs).return();
+  });
 } catch (ex) {
   log(ex);
   process.exit(0);

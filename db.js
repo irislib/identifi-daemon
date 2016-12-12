@@ -7,15 +7,6 @@ var Promise = P; // For ipfs
 
 var moment = require('moment');
 
-var ipfsAPI = require('ipfs-api');
-var ipfs;
-try {
-  ipfs = ipfsAPI('localhost', '5001', {protocol: 'http'});
-} catch (e) {
-  ipfs = false;
-  console.log('no ipfs connection available');
-}
-
 var Message = require('identifi-lib/message');
 var keyutil = require('identifi-lib/keyutil');
 var myKey = keyutil.getDefault();
@@ -42,15 +33,25 @@ module.exports = function(knex) {
 
       var q = new P(function(resolve) { resolve(); });
       // Unobtrusively store msg to ipfs
-      if (ipfs && !message.ipfs_hash) {
-        q = ipfs.files.add(new Buffer(message.jws, 'utf8'))
+      var addToIpfs = p.ipfs && !message.ipfs_hash;
+      if (addToIpfs) {
+        q = p.ipfs.files.add(new Buffer(message.jws, 'utf8'))
         .then(function(res) {
           message.ipfs_hash = res[0].hash;
-        }).catch(function() {});
+        }).catch(function(e) { console.log('adding to ipfs failed:', e); });
       }
       q = q.then(this.messageExists(message.hash))
       .then(function(exists) {
-        if (!exists) {
+        if (exists) {
+          if (addToIpfs && message.ipfs_hash) {
+            // Msg was added to IPFS - update ipfs_hash
+            return knex('Messages').where({ hash: message.hash }).update({ ipfs_hash: message.ipfs_hash });
+          } else {
+            return new P(function(resolve) {
+              resolve(false);
+            });
+          }
+        } else {
           var isPublic = typeof message.signedData.public === 'undefined' ? true : message.signedData.public;
           return p.deletePreviousMessage(message)
           .then(function() {
@@ -107,10 +108,6 @@ module.exports = function(knex) {
           })
           .then(function() {
             return message;
-          });
-        } else {
-          return new P(function(resolve) {
-            resolve(false);
           });
         }
       });
@@ -1285,7 +1282,8 @@ module.exports = function(knex) {
     }
   };
 
-  pub.init = function(conf) {
+  pub.init = function(conf, ipfs) {
+    p.ipfs = ipfs;
     config = conf;
     if (conf.db.client === 'pg') {
       SQL_IFNULL = 'COALESCE';
