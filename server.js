@@ -45,13 +45,21 @@ var getIpfs = ipfs.id()
         console.log('IPFS repo was loaded');
         ipfs.goOnline(function(err) {
           if (err) { throw err; }
-
-          if (ipfs.isOnline()) {
-            console.log('IPFS is online');
-            ipfs.swarm.addrs().then(function(res) {
-              console.log('addrs', res);
-            });
-          }
+          // We have to do this manually as of ipfs 0.20.3
+          ipfs.bootstrap.list(function(err, res) {
+            if (err) { return; }
+            var i;
+            for (i = 0; i < res.length; i++) {
+              console.log('connecting to peer', res[i]);
+              ipfs.swarm.connect(res[i])
+              .then(function() {
+                console.log('connected to peer', res[i]);
+              })
+              .catch(function(e) {
+                console.log('connection to peer', res[i], 'failed:');
+              });
+            }
+          });
         });
       });
     }
@@ -390,7 +398,10 @@ router.route('/messages')
         });
         emitMsg(m);
       } else {
-        res.status(200).json(m);
+        db.saveMessage(m)
+        .then(function(r) {
+          res.status(200).json(r);
+        });
       }
     }).catch(function(err) { handleError(err, req, res); });
   });
