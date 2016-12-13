@@ -33,6 +33,26 @@ var passport = require('passport');
 process.env.NODE_CONFIG_DIR = __dirname + '/config';
 var config = require('config');
 
+if (process.env.NODE_ENV !== 'test') {
+  // Extend default config from datadir/config.json and write the result back to it
+  (function setConfig() {
+    if (!fs.existsSync(datadir)) {
+      fs.mkdirSync(datadir);
+    }
+    var cfgFile = datadir + '/config.json';
+    if (fs.existsSync(cfgFile)) {
+      var cfgFromFile = require(cfgFile);
+      Object.assign(config, cfgFromFile);
+    }
+    fs.writeFileSync(cfgFile, JSON.stringify(config, null, 4), 'utf8');
+    // Set some paths
+    if (config.db.connection.filename) {
+      config.db.connection.filename = datadir + '/' + config.db.connection.filename;
+    }
+    config.logfile = datadir + '/' + config.logfile;
+  })();
+}
+
 var logStream = fs.createWriteStream(config.get('logfile'), {flags: 'a', encoding: 'utf8'});
 
 function log(msg) {
@@ -99,26 +119,6 @@ var getIpfs = ipfs.id()
 
 var loginOptions = [];
 var outgoingConnections = {};
-
-if (process.env.NODE_ENV !== 'test') {
-  // Extend default config from datadir/config.json and write the result back to it
-  (function setConfig() {
-    if (!fs.existsSync(datadir)) {
-      fs.mkdirSync(datadir);
-    }
-    var cfgFile = datadir + '/config.json';
-    if (fs.existsSync(cfgFile)) {
-      var cfgFromFile = require(cfgFile);
-      Object.assign(config, cfgFromFile);
-    }
-    fs.writeFileSync(cfgFile, JSON.stringify(config, null, 4), 'utf8');
-    // Set some paths
-    if (config.db.connection.filename) {
-      config.db.connection.filename = datadir + '/' + config.db.connection.filename;
-    }
-    config.logfile = datadir + '/' + config.logfile;
-  })();
-}
 
 process.on("uncaughtException", function(e) {
   log(e);
@@ -286,7 +286,7 @@ router.get('/', function(req, res) {
 
 
 /**
- * @api {get} /reindex Reindex messages
+ * @api {get} /reindex Reindex messages onto IPFS
  * @apiName Reindex
  * @apiGroup Reindex
  */
