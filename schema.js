@@ -19,7 +19,10 @@ function addDefaultUniqueIdentifierTypes(db) {
 }
 
 function catcher(e) {
-  console.error(e);
+  // Ignore sqlite and pg "already exists" errors
+  if (!(e.code.match(/^42/) || e.errno === 1 || e.errno === 19)) {
+    console.error(e);
+  }
 }
 
 var init = function(db, config) {
