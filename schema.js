@@ -18,19 +18,6 @@ function addDefaultUniqueIdentifierTypes(db) {
   );
 }
 
-function addDefaultPeers(db) {
-  return db.table('Peers').count('* as count')
-  .then(function(res) {
-    if (parseInt(res[0].count) === 0) {
-      return db('Peers').insert([
-        { url: 'http://seed1.identifi.org:4944/api' },
-        { url: 'http://seed2.identifi.org:4944/api' },
-        { url: 'http://seed3.identifi.org:4944/api' }
-      ]);
-    }
-  });
-}
-
 function catcher(e) {
   console.error(e);
 }
@@ -117,14 +104,6 @@ var init = function(db, config) {
     t.string('value');
     t.integer('depth').unsigned().notNullable();
     t.primary(['name', 'value']);
-  }).catch(catcher));
-
-  queries.push(db.schema.createTableIfNotExists('Peers', function(t) {
-    t.string('url').primary();
-    t.integer('misbehaving').unsigned().notNullable().default(0);
-    t.datetime('last_seen');
-  }).then(function() {
-    return addDefaultPeers(db).catch(catcher);
   }).catch(catcher));
 
   return P.all(queries);

@@ -117,6 +117,38 @@ module.exports = function(knex) {
       });
     },
 
+    addMessagesToIpfs: function() {
+      var counter = 0;
+      var hash;
+
+      function getReindexQuery() {
+        return knex('Messages').whereNull('ipfs_hash').select('jws', 'hash').limit(1)
+        .then(function(res) {
+          if (res.length && p.ipfs) {
+            hash = res[0].hash;
+            return p.ipfs.files.add(new Buffer(res[0].jws, 'utf8'));
+          }
+          return [];
+        })
+        .then(function(res) {
+          if (res.length) {
+            return knex('Messages').where({ hash: hash }).update({ ipfs_hash: res[0].hash });
+          }
+        })
+        .then(function(res) {
+          if (parseInt(res)) {
+            counter += 1;
+            return getReindexQuery();
+          }
+        })
+        .catch(function(e) { console.log('adding to ipfs failed:', e); });
+      }
+
+      return getReindexQuery().then(function() {
+        return 'Reindexed ' + counter + ' messages';
+      })
+    },
+
     messageExists: function(hash) {
       return knex('Messages').where('hash', hash).count('* as exists')
         .then(function(res) {
@@ -924,31 +956,6 @@ module.exports = function(knex) {
           });
         });
       });
-    },
-
-    updatePeerLastSeen: function(peer) {
-      return knex('Peers').where({ url: peer.url }).update({ last_seen: peer.last_seen || null });
-    },
-
-    addPeer: function(peer) {
-      var _ = this;
-      return knex('Peers').where({ url: peer.url }).count('* as count')
-      .then(function(res) {
-        if (parseInt(res[0].count) === 0) {
-          return knex('Peers').insert(peer);
-        } else {
-          return _.updatePeerLastSeen(peer);
-        }
-      });
-    },
-
-    getPeers: function(where) {
-      where = where || {};
-      return knex('Peers').select('url', 'last_seen').where(where).orderBy('last_seen', 'desc');
-    },
-
-    getPeerCount: function() {
-      return knex('Peers').count('* as count').then(function(res) { return parseInt(res.count); });
     },
 
     checkDefaultTrustList: function(db) {

@@ -288,30 +288,16 @@ router.get('/', function(req, res) {
 
 
 /**
- * @api {get} /peers List peers
- * @apiName ListPeers
- * @apiGroup Peers
+ * @api {get} /reindex Reindex messages
+ * @apiName Reindex
+ * @apiGroup Reindex
  */
-router.route('/peers')
-  .get(function(req, res) {
-    db.getPeers()
+router.route('/reindex')
+  .get(authRequired, function(req, res) {
+    db.addMessagesToIpfs()
     .then(function(dbRes) {
       res.json(dbRes);
     }).catch(function(err) { handleError(err, req, res); });
-  })
-
-  .post(authRequired, function(req, res) {
-    if (!req.user.admin) {
-      return res.sendStatus(401);
-    }
-    res.json("add peer");
-  })
-
-  .delete(authRequired, function(req, res) {
-    if (!req.user.admin) {
-      return res.sendStatus(401);
-    }
-    res.json("remove peer");
   });
 
 
@@ -687,11 +673,6 @@ function handleMsgEvent(data) {
 
 function handleIncomingWebsocket(socket) {
   log('connection from ' + socket.client.conn.remoteAddress);
-  var isLocalhost = (socket.client.conn.remoteAddress === '::ffff:127.0.0.1');
-  if (!isLocalhost && socket.request.headers['x-accept-incoming-connections']) {
-    var peer = { url: 'http://[' + socket.client.conn.remoteAddress + ']:4944/api', last_seen: new Date() };
-    db.addPeer(peer).then(function() { log('saved peer ' + peer.url); });
-  }
 
   socket.on('msg', function (data) {
     log('msg received from ' + socket.client.conn.remoteAddress + ': ' + (data.hash || data.ipfs_hash));
@@ -701,23 +682,6 @@ function handleIncomingWebsocket(socket) {
 
 // Handle incoming websockets
 io.on('connection', handleIncomingWebsocket);
-
-function askForMorePeers(url, peersNeeded) {
-  log('asking ' + url + ' for more peers');
-  identifiClient.request({
-    uri: url,
-    apiMethod: 'peers'
-  }).then(function(res) {
-    for (var i = 0; i < res.length && i < peersNeeded; i++) {
-      if (res[i].url) {
-        db.addPeer({ url: res[i].url }).return();
-      }
-    }
-  })
-  .catch(function(e) {
-    log('caught error requesting peers: ' + e);
-  });
-}
 
 /* TODO: prevent infinite loops & peer misbehavior. Should maybe request by trust distance. */
 function requestMessages(url, qs) {
@@ -778,32 +742,7 @@ function makeConnectHandler(url, lastSeen, socket) {
     log('Connected to ' + url);
     socket.on('msg', handleMsgEvent);
     getNewMessages(url, lastSeen);
-    db.updatePeerLastSeen({ url: url, last_seen: new Date() }).return();
-    db.getPeerCount().then(function(count) {
-      var peersNeeded = config.maxPeerDBsize - count;
-      if (peersNeeded > 0) {
-        askForMorePeers(url, peersNeeded);
-      }
-    });
   };
-}
-
-// Websocket connect to saved peers
-if (process.env.NODE_ENV !== 'test') {
-  server.ready.then(function() {
-    return db.getPeers();
-  })
-  .then(function(peers) {
-    for (var i = 0; i < peers.length; i++) {
-      if (Object.keys(outgoingConnections).length >= config.maxConnectionsOut) {
-        break;
-      }
-      log('Attempting connection to saved peer ' + peers[i].url);
-      var s = identifiClient.getSocket({ url: peers[i].url, isPeer: true, options: { connect_timeout: 5000 }});
-      outgoingConnections[peers[i].url] = s;
-      s.on('connect', makeConnectHandler(peers[i].url, new Date(peers[i].last_seen), s));
-    }
-  });
 }
 
 // Start the http server
