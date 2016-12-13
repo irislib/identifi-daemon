@@ -43,6 +43,10 @@ var getIpfs = ipfs.id()
       ipfs.load(function(err) {
         if (err) { throw err; }
         console.log('IPFS repo was loaded');
+        if (process.env.NODE_ENV === 'test') {
+          // Do not connect to peers
+          return;
+        }
         ipfs.goOnline(function(err) {
           if (err) { throw err; }
           // We have to do this manually as of ipfs 0.20.3
