@@ -432,13 +432,6 @@ describe 'API', ->
           #res[1].value.should.equal 'alice@example.com'
           #res[2].value.should.equal 'david@example.com'
           #res[3].value.should.equal 'http://twitter.com/charles'
-      it 'should return a list of peers as identifi identities', ->
-        r = identifi.request
-          apiMethod: 'identities'
-          qs:
-            attr_name: 'identifi_node'
-        r.then (res) ->
-          res.length.should.equal 0
     describe 'verifications', ->
       it 'should return an identity, i.e. set of attributes connected to the query param', ->
         r = identifi.request
@@ -609,12 +602,4 @@ describe 'API', ->
           done()
         return
       , 1000
-      return
-  describe 'peers', ->
-    it 'should have 4 peer addresses', (done) ->
-      r = identifi.request
-        apiMethod: 'peers'
-      r.then (res) ->
-        res.length.should.equal 3
-        done()
       return

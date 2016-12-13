@@ -146,7 +146,7 @@ module.exports = function(knex) {
 
       return getReindexQuery().then(function() {
         return 'Reindexed ' + counter + ' messages';
-      })
+      });
     },
 
     messageExists: function(hash) {

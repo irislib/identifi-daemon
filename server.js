@@ -30,15 +30,26 @@ var authRequired = jwt({ secret: new Buffer(myKey.public.pem) });
 var authOptional = jwt({ secret: new Buffer(myKey.public.pem), credentialsRequired: false });
 var passport = require('passport');
 
+process.env.NODE_CONFIG_DIR = __dirname + '/config';
+var config = require('config');
+
+var logStream = fs.createWriteStream(config.get('logfile'), {flags: 'a', encoding: 'utf8'});
+
+function log(msg) {
+  msg = moment.utc().format() + ": " + util.format(msg);
+  logStream.write(msg + '\n');
+  console.log(msg);
+}
+
 var ipfsAPI = require('ipfs-api');
 var ipfs = ipfsAPI();
 var getIpfs = ipfs.id()
   .then(function() {
-    console.log("Connected to local IPFS API");
+    log("Connected to local IPFS API");
     return ipfs;
   })
   .catch(function() {
-    console.log('No local IPFS API found, starting embedded IPFS node');
+    log('No local IPFS API found, starting embedded IPFS node');
     function loadIpfs() {
       ipfs.load(function(err) {
         if (err) { throw err; }
@@ -56,12 +67,7 @@ var getIpfs = ipfs.id()
             for (i = 0; i < res.length; i++) {
               console.log('connecting to peer', res[i]);
               ipfs.swarm.connect(res[i])
-              .then(function() {
-                console.log('connected to peer', res[i]);
-              })
-              .catch(function(e) {
-                console.log('connection to peer', res[i], 'failed:');
-              });
+              .catch(log);
             }
           });
         });
@@ -78,24 +84,20 @@ var getIpfs = ipfs.id()
           loadIpfs();
         } else {
           ipfs.init({ emptyRepo: true, bits: 2048 }, function(err) {
-            console.log('IPFS repo was initialized');
+            log('IPFS repo was initialized');
             if (err) { throw err; }
             loadIpfs();
           });
         }
       });
     } catch(e) {
-      console.log('instantiating ipfs node failed:', e);
+      log('instantiating ipfs node failed:', e);
       ipfs = null;
     }
     return ipfs;
   });
 
 var loginOptions = [];
-
-process.env.NODE_CONFIG_DIR = __dirname + '/config';
-var config = require('config');
-
 var outgoingConnections = {};
 
 if (process.env.NODE_ENV !== 'test') {
@@ -116,14 +118,6 @@ if (process.env.NODE_ENV !== 'test') {
     }
     config.logfile = datadir + '/' + config.logfile;
   })();
-}
-
-var logStream = fs.createWriteStream(config.get('logfile'), {flags: 'a', encoding: 'utf8'});
-
-function log(msg) {
-  msg = moment.utc().format() + ": " + util.format(msg);
-  logStream.write(msg + '\n');
-  console.log(msg);
 }
 
 process.on("uncaughtException", function(e) {
