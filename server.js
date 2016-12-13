@@ -747,7 +747,7 @@ function makeConnectHandler(url, lastSeen, socket) {
 
 // Start the http server
 server.ready.then(function() {
-  server.listen(port);
+  server.listen(port, 'localhost');
   log('Identifi server started on port ' + port);
 });
 
