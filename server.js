@@ -284,15 +284,9 @@ router.get('/', function(req, res) {
   }).catch(function(err) { handleError(err, req, res); });
 });
 
-
-/**
- * @api {get} /reindex Reindex messages onto IPFS
- * @apiName Reindex
- * @apiGroup Reindex
- */
 router.route('/reindex')
   .get(authRequired, function(req, res) {
-    db.addMessagesToIpfs()
+    db.addMessageIndexToIpfs()
     .then(function(dbRes) {
       res.json(dbRes);
     }).catch(function(err) { handleError(err, req, res); });

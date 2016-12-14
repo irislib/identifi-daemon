@@ -149,6 +149,56 @@ module.exports = function(knex) {
       });
     },
 
+    addMessageIndexToIpfs: function() {
+      var limit = 100;
+      var offset = 0;
+      var distance = 0;
+      var totalMsgs = 0;
+      var maxMsgCount = 1000;
+      var maxDepth = 10;
+      function iterate(limit, offset, distance) {
+        return knex('Messages')
+        .innerJoin('MessageAttributes as author', 'author.message_hash', 'Messages.hash')
+        .innerJoin('TrustDistances as td', function() {
+          this.on('td.start_attr_name', '=', knex.raw('?', myId[0]));
+          this.on('td.start_attr_value', '=', knex.raw('?', myId[1]));
+          this.on('td.end_attr_name', '=', 'author.name');
+          this.on('td.end_attr_value', '=', 'author.value');
+        })
+        .where('td.distance', distance)
+        .select('jws')
+        .limit(limit)
+        .offset(offset)
+        .then(function(msgs) {
+          if (msgs.length < limit) {
+            distance += 1;
+            offset = 0;
+          } else {
+            offset += limit;
+          }
+          var i;
+          var q = new P(function(resolve) { resolve(); });
+          for (i = 0; i < msgs.length; i++) {
+            totalMsgs += 1;
+            if (totalMsgs >= maxMsgCount) { break; }
+            q = q.then(p.ipfs.files.add(new Buffer(msgs[i].jws, 'utf8')))
+            .then(function(res) {
+              return res[0].hash;
+            }).catch(function(e) { console.log('adding to ipfs failed:', e); });
+          }
+          return q;
+        })
+        .then(function(msg_hashes) {
+          if (totalMsgs < maxMsgCount) {
+            return iterate(limit, offset, distance);
+          }
+          else return totalMsgs;
+        });
+      }
+
+      return iterate(limit, offset, distance);
+    },
+
     messageExists: function(hash) {
       return knex('Messages').where('hash', hash).count('* as exists')
         .then(function(res) {
@@ -202,11 +252,9 @@ module.exports = function(knex) {
         var recipientIdentityId = response[1].length > 0 && response[1][0].identity_id;
         var select = ['Messages.*'];
         if (options.viewpoint) {
-          select.push(knex.raw('MIN("td"."distance") AS "distance"'));
+          select.push(knex.raw('MIN(td.distance) AS "distance"'));
           select.push(knex.raw('MAX(st.positive_score) AS author_pos'));
           select.push(knex.raw('MAX(st.negative_score) AS author_neg'));
-          select.push(knex.raw('MAX(author_email.value) AS author_email'));
-          select.push(knex.raw('MAX(recipient_name.value) AS recipient_name'));
         }
         var query = knex.select(select)
           .groupBy('Messages.hash')
@@ -270,22 +318,11 @@ module.exports = function(knex) {
             this.on('author_attribute.viewpoint_value', '=', knex.raw('?', options.viewpoint[1]));
           });
           query.leftJoin('IdentityStats as st', 'st.identity_id', 'author_attribute.identity_id');
-          query.leftJoin('IdentityAttributes as author_email', function() {
-            this.on('author_attribute.identity_id', '=', 'author_email.identity_id');
-            this.on('author_email.name', '=', knex.raw('?', 'email'));
-          });
           query.leftJoin('IdentityAttributes as recipient_attribute', function() {
             this.on('recipient_attribute.name', '=', 'recipient.name');
             this.on('recipient_attribute.value', '=', 'recipient.value');
             this.on('recipient_attribute.viewpoint_name', '=', knex.raw('?', options.viewpoint[0]));
             this.on('recipient_attribute.viewpoint_value', '=', knex.raw('?', options.viewpoint[1]));
-          });
-          query.leftJoin('IdentityAttributes as recipient_name', function() {
-            this.on('recipient_attribute.identity_id', '=', 'recipient_name.identity_id');
-            this.on(function() {
-              this.on('recipient.name', '=', knex.raw('?', 'name'));
-              this.orOn('recipient.name', '=', knex.raw('?', 'nickname'));
-            });
           });
           query.innerJoin('TrustDistances as td', function() {
             this.on('author_attribute.name', '=', 'td.end_attr_name')
