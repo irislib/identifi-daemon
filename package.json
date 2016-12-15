@@ -38,7 +38,7 @@
     "express-session": "^1.14.2",
     "identifi-lib": "0.0.21",
     "ipfs-api": "^12.1.0",
-    "ipfs-block": "git+https://github.com/ipfs/js-ipfs-block.git#987d4e21d547bf225f4de0b502ef2284fc4e18b6",
+    "ipfs-block": "git+https://github.com/ipfs/js-ipfs-block.git#1a6a82041825da4c842ac9023af603190b2306e5",
     "jws": "^3.1.4",
     "knex": "^0.12.6",
     "moment": "^2.17.1",

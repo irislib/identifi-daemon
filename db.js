@@ -35,7 +35,7 @@ module.exports = function(knex) {
       // Unobtrusively store msg to ipfs
       var addToIpfs = p.ipfs && !message.ipfs_hash;
       if (addToIpfs) {
-        q = p.ipfs.files.add(new Buffer(message.jws, 'utf8'))
+        q = pub.addMessageToIpfs(message)
         .then(function(res) {
           message.ipfs_hash = res[0].hash;
         }).catch(function(e) { console.log('adding to ipfs failed:', e); });
@@ -117,6 +117,10 @@ module.exports = function(knex) {
       });
     },
 
+    addMessageToIpfs: function(message) {
+      return p.ipfs.files.add(new Buffer(message.jws, 'utf8'));
+    },
+
     addMessagesToIpfs: function() {
       var counter = 0;
       var hash;
@@ -126,7 +130,7 @@ module.exports = function(knex) {
         .then(function(res) {
           if (res.length && p.ipfs) {
             hash = res[0].hash;
-            return p.ipfs.files.add(new Buffer(res[0].jws, 'utf8'));
+            return pub.addMessageToIpfs(res[0]);
           }
           return [];
         })
@@ -149,6 +153,10 @@ module.exports = function(knex) {
       });
     },
 
+    addIdentityIndexToIpfs: function() {
+      // Stub
+    },
+
     addMessageIndexToIpfs: function() {
       var limit = 100;
       var offset = 0;
@@ -156,6 +164,7 @@ module.exports = function(knex) {
       var totalMsgs = 0;
       var maxMsgCount = 1000;
       var maxDepth = 10;
+      var hashes = [];
       function iterate(limit, offset, distance) {
         return knex('Messages')
         .innerJoin('MessageAttributes as author', 'author.message_hash', 'Messages.hash')
@@ -170,6 +179,9 @@ module.exports = function(knex) {
         .limit(limit)
         .offset(offset)
         .then(function(msgs) {
+          if (msgs.length === 0 && offset === 0) {
+            return;
+          }
           if (msgs.length < limit) {
             distance += 1;
             offset = 0;
@@ -177,26 +189,62 @@ module.exports = function(knex) {
             offset += limit;
           }
           var i;
-          var q = new P(function(resolve) { resolve(); });
+          var q = new P(function(resolve) { resolve(msgs.length); });
+          if (!p.ipfs) {
+            return 'No IPFS connection';
+          }
+          function getSaveToIpfsFunction(message) {
+            return function() {
+              process.stdout.write(".");
+              return pub.addMessageToIpfs(message)
+              .then(function (res) {
+                if (res.length && res[0].hash) {
+                  hashes.push(res[0].hash);
+                }
+              })
+              .catch(function(e) {
+                console.log('adding message to ipfs failed:', e);
+              });
+            };
+          }
           for (i = 0; i < msgs.length; i++) {
             totalMsgs += 1;
             if (totalMsgs >= maxMsgCount) { break; }
-            q = q.then(p.ipfs.files.add(new Buffer(msgs[i].jws, 'utf8')))
-            .then(function(res) {
-              return res[0].hash;
-            }).catch(function(e) { console.log('adding to ipfs failed:', e); });
+            q = q.then(getSaveToIpfsFunction(msgs[i]));
           }
           return q;
         })
-        .then(function(msg_hashes) {
-          if (totalMsgs < maxMsgCount) {
+        .then(function(res) {
+          if (totalMsgs <= maxMsgCount) {
             return iterate(limit, offset, distance);
           }
-          else return totalMsgs;
+          return totalMsgs;
         });
       }
 
-      return iterate(limit, offset, distance);
+      console.log('adding msgs to ipfs');
+      return iterate(limit, offset, distance)
+      .then(function(res) {
+        // Add message index to IPFS
+        console.log('adding', hashes.length, 'message hashes to ipfs');
+        return p.ipfs.files.add(new Buffer(JSON.stringify(hashes), 'utf8'));
+      })
+      .then(function(res) {
+        if (p.ipfs.name && res.length && res[0].hash) {
+          console.log(res);
+          console.log('publishing index', res[0].hash);
+          return p.ipfs.name.publish(res[0].hash, {});
+        } else {
+          return res;
+        }
+      })
+      .then(function(res) {
+        console.log('published index', res);
+        return res;
+      })
+      .catch(function(e) {
+        console.log('error publishing index', e);
+      });
     },
 
     messageExists: function(hash) {
