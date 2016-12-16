@@ -286,7 +286,7 @@ router.get('/', function(req, res) {
 
 router.route('/reindex')
   .get(authRequired, function(req, res) {
-    db.saveMessagesFromIpfsIndexes()
+    db.addMessageIndexToIpfs()
     .then(function(dbRes) {
       res.json(dbRes);
     }).catch(function(err) { handleError(err, req, res); });
@@ -615,6 +615,9 @@ router.get('/identities/:attr_name/:attr_value/generatewotindex', authRequired, 
   db.generateWebOfTrustIndex([req.params.attr_name, req.params.attr_value], depth, maintain, trustedKeyID)
   .then(function(dbRes) {
     res.json(dbRes);
+    if (req.params.attr_name === 'keyID' && req.params.attr_value === myKey.hash) {
+      db.addMessageIndexToIpfs();
+    }
   }).catch(function(err) { handleError(err, req, res); });
 });
 

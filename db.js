@@ -267,6 +267,9 @@ module.exports = function(knex) {
 
     saveMessagesFromIpfsIndex: function(ipnsName) {
       console.log('Getting path for name', ipnsName);
+      if (!(p.ipfs && p.ipfs.name)) {
+        console.log('ipfs.name is not available');
+      }
       return p.ipfs.name.resolve(ipnsName)
       .then(function(res) {
         var path = res['Path'].replace('/ipfs/', '');
@@ -1485,6 +1488,9 @@ module.exports = function(knex) {
       })
       .then(function() {
         return pub.checkDefaultTrustList();
+      })
+      .then(function() {
+        pub.saveMessagesFromIpfsIndexes(); // non-blocking
       });
   };
 
