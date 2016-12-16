@@ -40,7 +40,9 @@ module.exports = function(knex) {
           message.ipfs_hash = res[0].hash;
         }).catch(function(e) { console.log('adding to ipfs failed:', e); });
       }
-      q = q.then(this.messageExists(message.hash))
+      q = q.then(function() {
+        return pub.messageExists(message.hash);
+      })
       .then(function(exists) {
         if (exists) {
           if (addToIpfs && message.ipfs_hash) {
@@ -167,7 +169,10 @@ module.exports = function(knex) {
       var hashes = [];
       function iterate(limit, offset, distance) {
         return knex('Messages')
-        .innerJoin('MessageAttributes as author', 'author.message_hash', 'Messages.hash')
+        .innerJoin('MessageAttributes as author', function() {
+          this.on('author.message_hash', '=', 'Messages.hash');
+          this.andOn('author.is_recipient', '=', knex.raw('?', false));
+        })
         .innerJoin('TrustDistances as td', function() {
           this.on('td.start_attr_name', '=', knex.raw('?', myId[0]));
           this.on('td.start_attr_value', '=', knex.raw('?', myId[1]));
@@ -244,6 +249,83 @@ module.exports = function(knex) {
       })
       .catch(function(e) {
         console.log('error publishing index', e);
+      });
+    },
+
+    saveMessageFromIpfs: function(path) {
+      return p.ipfs.files.cat(path, { buffer: true })
+      .then(function(buffer) {
+        var msg = { jws: buffer.toString('utf8'), ipfs_hash: path };
+        Message.verify(msg);
+        console.log('saving msg from ipfs:', msg.hash);
+        return pub.saveMessage(msg);
+      })
+      .catch(function(e) {
+        console.log('Processing message', path, 'failed:', e);
+      });
+    },
+
+    saveMessagesFromIpfsIndex: function(ipnsName) {
+      console.log('Getting path for name', ipnsName);
+      return p.ipfs.name.resolve(ipnsName)
+      .then(function(res) {
+        var path = res['Path'].replace('/ipfs/', '');
+        console.log('resolved name', path);
+        return p.ipfs.files.cat(path, { buffer: true });
+      })
+      .then(function(buffer) {
+        console.log(buffer.toString('utf8'));
+        var msgs = JSON.parse(buffer.toString('utf8'));
+        var i;
+        var q = new P(function(resolve) { resolve(); });
+        function getFn(path) {
+          return function() {
+            return pub.saveMessageFromIpfs(path);
+          }
+        }
+        for (i = 0; i < msgs.length; i++) {
+          q = q.then(getFn(msgs[i]));
+        }
+        return q;
+      })
+      .then(function() {
+        console.log('Finished saving messages from index', ipnsName);
+      })
+      .catch(function(e) {
+        console.log('Processing index', ipnsName, 'failed:', e);
+      });
+    },
+
+    saveMessagesFromIpfsIndexes: function() {
+      return knex('Messages')
+      .innerJoin('MessageAttributes as author', function() {
+        this.on('author.message_hash', '=', 'Messages.hash');
+        this.andOn('author.is_recipient', '=', knex.raw('?', false));
+      })
+      .innerJoin('MessageAttributes as recipient', function() {
+        this.on('recipient.message_hash', '=', 'Messages.hash');
+        this.andOn('recipient.is_recipient', '=', knex.raw('?', true));
+      })
+      .innerJoin('TrustDistances as td', function() {
+        this.on('td.start_attr_name', '=', knex.raw('?', myId[0]));
+        this.on('td.start_attr_value', '=', knex.raw('?', myId[1]));
+        this.on('td.end_attr_name', '=', 'author.name');
+        this.on('td.end_attr_value', '=', 'author.value');
+      })
+      .where('td.distance', '<=', 2)
+      .andWhere('recipient.name', 'nodeID')
+      .select()
+      .distinct('recipient.value')
+      .then(function(res) {
+        var i;
+        var q = new P(function(resolve) { resolve(); });
+        for (i = 0; i < res.length; i++) {
+          q = q.then(pub.saveMessagesFromIpfsIndex(res[i].value));
+        }
+        return q;
+      })
+      .catch(function(e) {
+        console.log('Saving messages from indexes failed:', e);
       });
     },
 
@@ -1051,14 +1133,24 @@ module.exports = function(knex) {
           var queries = [];
           var message = Message.createRating({
             author: [myId],
-            recipient: [['keyID', 'NK0R68KzRFFOZq8mHsyu7GL1jtJXS7LFdATPyXkMBb0=']],
-            comment: 'An Identifi seed node, trusted by default',
+            recipient: [['keyID', '/pbxjXjwEsojbSfdM3wGWfE24F4fX3GasmoHXY3yYPM==']],
+            comment: 'Identifi seed node, trusted by default',
+            rating: 10,
+            context: 'identifi_network',
+            public: false
+          });
+          var message2 = Message.createRating({
+            author: [myId],
+            recipient: [['nodeID', 'Qmbb1DRwd75rZk5TotTXJYzDSJL6BaNT1DAQ6VbKcKLhbs=']],
+            comment: 'Identifi IPFS seed node, trusted by default',
             rating: 10,
             context: 'identifi_network',
             public: false
           });
           Message.sign(message, myKey.private.pem, myKey.public.hex);
+          Message.sign(message2, myKey.private.pem, myKey.public.hex);
           queries.push(_.saveMessage(message));
+          queries.push(_.saveMessage(message2));
           return P.all(queries);
         }
       });

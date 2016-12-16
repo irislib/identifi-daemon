@@ -286,7 +286,7 @@ router.get('/', function(req, res) {
 
 router.route('/reindex')
   .get(authRequired, function(req, res) {
-    db.addMessageIndexToIpfs()
+    db.saveMessagesFromIpfsIndexes()
     .then(function(dbRes) {
       res.json(dbRes);
     }).catch(function(err) { handleError(err, req, res); });

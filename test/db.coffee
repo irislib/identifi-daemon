@@ -45,9 +45,9 @@ describe 'Database', ->
     cleanup()
 
   describe 'save and retrieve messages', ->
-    it 'should initially have 1 message', ->
+    it 'should initially have 2 messages', ->
       db.getMessageCount().then (res) ->
-        res.should.equal 1
+        res.should.equal 2
     it 'should save a rating', ->
       message = Message.createRating
         author: [['email', 'alice@example.com']]
@@ -75,7 +75,7 @@ describe 'Database', ->
         hash = res.hash
     it 'should have 4 messages', ->
       db.getMessageCount().then (res) ->
-        res.should.equal 4
+        res.should.equal 5
     it 'should return message by hash', ->
       db.getMessages({ where: { hash: hash } }).then (res) ->
         res.length.should.equal 1
