@@ -269,6 +269,7 @@ module.exports = function(knex) {
       console.log('Getting path for name', ipnsName);
       if (!(p.ipfs && p.ipfs.name)) {
         console.log('ipfs.name is not available');
+        return;
       }
       return p.ipfs.name.resolve(ipnsName)
       .then(function(res) {
@@ -284,7 +285,7 @@ module.exports = function(knex) {
         function getFn(path) {
           return function() {
             return pub.saveMessageFromIpfs(path);
-          }
+          };
         }
         for (i = 0; i < msgs.length; i++) {
           q = q.then(getFn(msgs[i]));
@@ -1144,7 +1145,7 @@ module.exports = function(knex) {
           });
           var message2 = Message.createRating({
             author: [myId],
-            recipient: [['nodeID', 'Qmbb1DRwd75rZk5TotTXJYzDSJL6BaNT1DAQ6VbKcKLhbs=']],
+            recipient: [['nodeID', 'Qmbb1DRwd75rZk5TotTXJYzDSJL6BaNT1DAQ6VbKcKLhbs']],
             comment: 'Identifi IPFS seed node, trusted by default',
             rating: 10,
             context: 'identifi_network',
