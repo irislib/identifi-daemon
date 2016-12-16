@@ -1138,7 +1138,7 @@ module.exports = function(knex) {
           var queries = [];
           var message = Message.createRating({
             author: [myId],
-            recipient: [['keyID', '/pbxjXjwEsojbSfdM3wGWfE24F4fX3GasmoHXY3yYPM==']],
+            recipient: [['keyID', '/pbxjXjwEsojbSfdM3wGWfE24F4fX3GasmoHXY3yYPM=']],
             comment: 'Identifi seed node, trusted by default',
             rating: 10,
             context: 'identifi_network',
