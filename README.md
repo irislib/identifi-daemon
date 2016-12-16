@@ -10,6 +10,8 @@ https://www.npmjs.com/package/identifi-daemon
 $ npm install -g identifi-daemon
 ```
 
+Currently requires a running [IPFS daemon](https://ipfs.io/docs/install/), as the embedded [js-ipfs](https://github.com/ipfs/js-ipfs) does not support IPNS.
+
 
 ## Usage
 

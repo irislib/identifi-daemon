@@ -180,6 +180,7 @@ module.exports = function(knex) {
           this.on('td.end_attr_value', '=', 'author.value');
         })
         .where('td.distance', distance)
+        .andWhere('public', true)
         .select('jws')
         .limit(limit)
         .offset(offset)
