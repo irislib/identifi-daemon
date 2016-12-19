@@ -273,15 +273,20 @@ module.exports = function(knex) {
     },
 
     saveMessageFromIpfs: function(path) {
-      return p.ipfs.files.cat(path, { buffer: true })
-      .then(function(buffer) {
-        var msg = { jws: buffer.toString('utf8'), ipfs_hash: path };
-        Message.verify(msg);
-        console.log('saving msg from ipfs:', msg.ipfs_hash);
-        return pub.saveMessage(msg);
-      })
-      .catch(function(e) {
-        console.log('Processing message', path, 'failed:', e);
+      return knex('Messages').where('ipfs_hash', path).count('* as count')
+      .then(function(res) {
+        if (!res[0].count) {
+          return p.ipfs.files.cat(path, { buffer: true })
+          .then(function(buffer) {
+            var msg = { jws: buffer.toString('utf8'), ipfs_hash: path };
+            Message.verify(msg);
+            console.log('saving new msg from ipfs:', msg.ipfs_hash);
+            return pub.saveMessage(msg);
+          })
+          .catch(function(e) {
+            console.log('Processing message', path, 'failed:', e);
+          });
+        }
       });
     },
 
@@ -298,7 +303,6 @@ module.exports = function(knex) {
         return p.ipfs.files.cat(path, { buffer: true });
       })
       .then(function(buffer) {
-        console.log(buffer.toString('utf8'));
         var msgs = JSON.parse(buffer.toString('utf8'));
         var i;
         var q = new P(function(resolve) { resolve(); });
