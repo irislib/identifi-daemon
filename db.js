@@ -14,6 +14,8 @@ var myId = ['keyID', myKey.hash];
 var myTrustIndexDepth = 4;
 var config;
 
+const dagPB = require('ipld-dag-pb');
+
 var SQL_IFNULL = 'IFNULL';
 var SQL_INSERT_OR_REPLACE = 'INSERT OR REPLACE';
 var SQL_ON_CONFLICT = '';
@@ -156,15 +158,29 @@ module.exports = function(knex) {
     },
 
     addIndexRootToIpfs: function() {
+      // saves indexes as an IPFS directory
       return p.ipfs.files.add([
-        { path: '/messages', content: new Buffer(p.messageIndex || '[]', 'utf8') },
-        { path: '/identities', content: new Buffer(p.identityIndex || '[]', 'utf8') }
+        { path: 'messages', content: new Buffer(p.messageIndex || '[]', 'utf8') },
+        { path: 'identities', content: new Buffer(p.identityIndex || '[]', 'utf8') }
       ])
       .then(function(res) {
-        if (p.ipfs.name && res.length && res[0].hash) {
-          console.log(res);
-          console.log('publishing index', res[0].hash);
-          return p.ipfs.name.publish(res[0].hash, {});
+        var links = [];
+        for (var i = 0; i < res.length; i++) {
+          links.push({ Name: res[i].path, Hash: res[i].hash, Size: res[i].size });
+        }
+        return new Promise(function(resolve, reject) {
+          dagPB.DAGNode.create(new Buffer('\u0008\u0001'), links, function(err, dag) {
+            if (err) {
+              reject(err);
+            }
+            resolve(p.ipfs.object.put(dag));
+          });
+        });
+      })
+      .then(function(res) {
+        if (p.ipfs.name && res._json.multihash) {
+          console.log('publishing index', res._json.multihash);
+          return p.ipfs.name.publish(res._json.multihash, {});
         } else {
           return res;
         }
@@ -194,7 +210,7 @@ module.exports = function(knex) {
       var offset = 0;
       var distance = 0;
       var totalMsgs = 0;
-      var maxMsgCount = 2000;
+      var maxMsgCount = 5000;
       var maxDepth = 10;
       var hashes = [];
       function iterate(limit, offset, distance) {
@@ -247,6 +263,7 @@ module.exports = function(knex) {
               });
             };
           }
+          console.log('saving trusted messages to ipfs index');
           for (i = 0; i < msgs.length; i++) {
             totalMsgs += 1;
             if (totalMsgs >= maxMsgCount) { break; }
@@ -298,7 +315,7 @@ module.exports = function(knex) {
       }
       return p.ipfs.name.resolve(ipnsName)
       .then(function(res) {
-        var path = res['Path'].replace('/ipfs/', '');
+        var path = res['Path'].replace('/ipfs/', '') + '/messages';
         console.log('resolved name', path);
         return p.ipfs.files.cat(path, { buffer: true });
       })
