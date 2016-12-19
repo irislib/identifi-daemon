@@ -211,7 +211,7 @@ module.exports = function(knex) {
         })
         .where('td.distance', distance)
         .andWhere('public', true)
-        .select('jws')
+        .select('jws', 'ipfs_hash')
         .limit(limit)
         .offset(offset)
         .then(function(msgs) {
@@ -232,6 +232,10 @@ module.exports = function(knex) {
           function getSaveToIpfsFunction(message) {
             return function() {
               process.stdout.write(".");
+              if (message.ipfs_hash) { // don't re-save
+                hashes.push(message.ipfs_hash);
+                return;
+              }
               return pub.addMessageToIpfs(message)
               .then(function (res) {
                 if (res.length && res[0].hash) {
@@ -273,7 +277,7 @@ module.exports = function(knex) {
       .then(function(buffer) {
         var msg = { jws: buffer.toString('utf8'), ipfs_hash: path };
         Message.verify(msg);
-        console.log('saving msg from ipfs:', msg.hash, msg.ipfs_hash);
+        console.log('saving msg from ipfs:', msg.ipfs_hash);
         return pub.saveMessage(msg);
       })
       .catch(function(e) {
