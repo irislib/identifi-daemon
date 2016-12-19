@@ -14,7 +14,7 @@ var myId = ['keyID', myKey.hash];
 var myTrustIndexDepth = 4;
 var config;
 
-const dagPB = require('ipld-dag-pb');
+var dagPB = require('ipld-dag-pb');
 
 var SQL_IFNULL = 'IFNULL';
 var SQL_INSERT_OR_REPLACE = 'INSERT OR REPLACE';
@@ -315,8 +315,21 @@ module.exports = function(knex) {
       }
       return p.ipfs.name.resolve(ipnsName)
       .then(function(res) {
-        var path = res['Path'].replace('/ipfs/', '') + '/messages';
+        var path = res['Path'].replace('/ipfs/', '');
         console.log('resolved name', path);
+        return p.ipfs.object.links(path);
+      })
+      .then(function(links) {
+        var path;
+        for (var i = 0; i < links.length; i++) {
+          if (links[i]._name === 'messages') {
+            path = links[i]._multihash;
+          }
+        }
+        if (!path) {
+          throw new Error('No messages index found at', ipnsName);
+        }
+        console.log('Looking up index file');
         return p.ipfs.files.cat(path, { buffer: true });
       })
       .then(function(buffer) {
@@ -328,6 +341,7 @@ module.exports = function(knex) {
             return pub.saveMessageFromIpfs(path);
           };
         }
+        console.log('Processing', msgs.length, 'messages from index');
         for (i = 0; i < msgs.length; i++) {
           q = q.then(getFn(msgs[i]));
         }
@@ -1524,7 +1538,9 @@ module.exports = function(knex) {
         return pub.checkDefaultTrustList();
       })
       .then(function() {
-        pub.saveMessagesFromIpfsIndexes(); // non-blocking
+        if (process.env.NODE_ENV !== 'test') {
+          pub.saveMessagesFromIpfsIndexes(); // non-blocking
+        }
       });
   };
 

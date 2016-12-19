@@ -615,7 +615,7 @@ router.get('/identities/:attr_name/:attr_value/generatewotindex', authRequired, 
   db.generateWebOfTrustIndex([req.params.attr_name, req.params.attr_value], depth, maintain, trustedKeyID)
   .then(function(dbRes) {
     res.json(dbRes);
-    if (req.params.attr_name === 'keyID' && req.params.attr_value === myKey.hash) {
+    if (req.params.attr_name === 'keyID' && req.params.attr_value === myKey.hash && process.env.NODE_ENV !== 'test') {
       db.addMessageIndexToIpfs();
     }
   }).catch(function(err) { handleError(err, req, res); });
