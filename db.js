@@ -155,8 +155,38 @@ module.exports = function(knex) {
       });
     },
 
+    addIndexRootToIpfs: function() {
+      return p.ipfs.files.add([
+        { path: '/messages', content: new Buffer(p.messageIndex || '[]', 'utf8') },
+        { path: '/identities', content: new Buffer(p.identityIndex || '[]', 'utf8') }
+      ])
+      .then(function(res) {
+        if (p.ipfs.name && res.length && res[0].hash) {
+          console.log(res);
+          console.log('publishing index', res[0].hash);
+          return p.ipfs.name.publish(res[0].hash, {});
+        } else {
+          return res;
+        }
+      })
+      .then(function(res) {
+        console.log('published index', res);
+        return res;
+      })
+      .catch(function(e) {
+        console.log('error publishing index', e);
+      });
+    },
+
     addIdentityIndexToIpfs: function() {
-      // Stub
+      // TODO: save as B-tree
+      var maxIndexSize = 2000;
+      return this.getIdentityAttributes({ limit: maxIndexSize })
+      .then(function(res) {
+        console.log('adding to ipfs', res.length);
+        p.identityIndex = JSON.stringify(res);
+        return pub.addIndexRootToIpfs();
+      });
     },
 
     addMessageIndexToIpfs: function() {
@@ -164,7 +194,7 @@ module.exports = function(knex) {
       var offset = 0;
       var distance = 0;
       var totalMsgs = 0;
-      var maxMsgCount = 1000;
+      var maxMsgCount = 2000;
       var maxDepth = 10;
       var hashes = [];
       function iterate(limit, offset, distance) {
@@ -233,23 +263,8 @@ module.exports = function(knex) {
       .then(function(res) {
         // Add message index to IPFS
         console.log('adding', hashes.length, 'message hashes to ipfs');
-        return p.ipfs.files.add(new Buffer(JSON.stringify(hashes), 'utf8'));
-      })
-      .then(function(res) {
-        if (p.ipfs.name && res.length && res[0].hash) {
-          console.log(res);
-          console.log('publishing index', res[0].hash);
-          return p.ipfs.name.publish(res[0].hash, {});
-        } else {
-          return res;
-        }
-      })
-      .then(function(res) {
-        console.log('published index', res);
-        return res;
-      })
-      .catch(function(e) {
-        console.log('error publishing index', e);
+        p.messageIndex = JSON.stringify(hashes);
+        return pub.addIndexRootToIpfs();
       });
     },
 
@@ -258,7 +273,7 @@ module.exports = function(knex) {
       .then(function(buffer) {
         var msg = { jws: buffer.toString('utf8'), ipfs_hash: path };
         Message.verify(msg);
-        console.log('saving msg from ipfs:', msg.hash);
+        console.log('saving msg from ipfs:', msg.hash, msg.ipfs_hash);
         return pub.saveMessage(msg);
       })
       .catch(function(e) {
@@ -535,12 +550,6 @@ module.exports = function(knex) {
       options.where['attr.viewpoint_name'] = options.viewpoint[0];
       options.where['attr.viewpoint_value'] = options.viewpoint[1];
 
-      /* For debugging
-      knex('IdentityAttributes').select('*').then(function(res) {
-        console.log(res);
-      });
-      */
-
       var subquery = knex.from('IdentityAttributes AS attr2')
         .select(knex.raw('attr.identity_id'))
         .groupBy('attr.identity_id')
@@ -562,7 +571,6 @@ module.exports = function(knex) {
         subquery.where(knex.raw('lower("attr"."value")'), 'LIKE', '%' + options.searchValue.toLowerCase() + '%');
       }
 
-      // subquery.then(function(res) { console.log(JSON.stringify(res, null, 2)); });
       var q = knex.from('IdentityAttributes AS attr')
         .select([
           'attr.identity_id',
@@ -587,7 +595,6 @@ module.exports = function(knex) {
       // sql += "ORDER BY iid >= 0 DESC, IFNULL(tp.Distance,1000) ASC, CASE WHEN attrvalue LIKE :query || '%' THEN 0 ELSE 1 END, UID.name IS NOT NULL DESC, attrvalue ASC ";
 
       return q.then(function(res) {
-        // console.log(JSON.stringify(res, null, 2));
         var identities = {};
         var i;
         for (i = 0; i < res.length; i++) {
