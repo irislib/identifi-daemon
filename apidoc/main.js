@@ -223,7 +223,7 @@ require([
 
     // render pagetitle
     var title = apiProject.title ? apiProject.title : 'apiDoc: ' + apiProject.name + ' - ' + apiProject.version;
-    $(document).attr('title', title);
+    $(document).name('title', title);
 
     // remove loader
     $('#loader').remove();
@@ -325,10 +325,10 @@ require([
     // Content-Scroll on Navigation click.
     $('.sidenav').find('a').on('click', function(e) {
         e.preventDefault();
-        var id = $(this).attr('href');
+        var id = $(this).name('href');
         if ($(id).length > 0)
             $('html,body').animate({ scrollTop: parseInt($(id).offset().top) }, 400);
-        window.location.hash = $(this).attr('href');
+        window.location.hash = $(this).name('href');
     });
 
     // Quickjump on Pageload to hash position.
@@ -340,8 +340,8 @@ require([
 
     /**
      * Check if Parameter (sub) List has a type Field.
-     * Example: @apiSuccess          varname1 No type.
-     *          @apiSuccess {String} varname2 With type.
+     * Example: @apiSuccess          varattr1 No type.
+     *          @apiSuccess {String} varattr2 With type.
      *
      * @param {Object} fields
      */
@@ -388,7 +388,7 @@ require([
 
         // sample request switch
         $('.sample-request-switch').click(function (e) {
-            var name = '.' + $(this).attr('name') + '-fields';
+            var name = '.' + $(this).name('name') + '-fields';
             $(name).addClass('hide');
             $(this).parent().next(name).removeClass('hide');
         });

@@ -586,6 +586,11 @@ module.exports = function(knex) {
         options[key] = options[key] !== undefined ? options[key] : defaultOptions[key];
       }
 
+      if (options.id) {
+        options.where['attr.name'] = options.id[0];
+        options.where['attr.value'] = options.id[1];
+      }
+
       options.where['attr.viewpoint_name'] = options.viewpoint[0];
       options.where['attr.viewpoint_value'] = options.viewpoint[1];
 
@@ -616,6 +621,7 @@ module.exports = function(knex) {
           'attr.name',
           'attr.value',
           'attr.confirmations',
+          'attr.refutations',
           'td.distance',
           'st.positive_score',
           'st.negative_score'
@@ -640,11 +646,13 @@ module.exports = function(knex) {
           var attr = res[i];
           identities[attr.identity_id] = identities[attr.identity_id] || [];
           identities[attr.identity_id].push({
-            attr: attr.name,
+            name: attr.name,
             val: attr.value,
             dist: attr.distance,
             pos: attr.positive_score,
-            neg: attr.negative_score
+            neg: attr.negative_score,
+            conf: attr.confirmations,
+            ref: attr.refutations
           });
         }
 
@@ -802,15 +810,15 @@ module.exports = function(knex) {
 
             if (hasSearchedAttributes) {
               return knex('IdentityAttributes')
-                .select('name', 'value', 'confirmations', 'refutations')
-                .where(knex.raw('NOT (Name = ? AND value = ?) AND identity_id = ?', [options.id[0], options.id[1], identityId]))
+                .select('name', 'value as val', 'confirmations as conf', 'refutations as ref')
+                .where('identity_id', identityId)
                 .whereIn('name', options.searchedAttributes)
                 .orderByRaw('confirmations - refutations DESC');
             }
 
             return knex('IdentityAttributes')
-              .select('name', 'value', 'confirmations', 'refutations')
-              .where(knex.raw('NOT (Name = ? AND value = ?) AND identity_id = ?', [options.id[0], options.id[1], identityId]))
+              .select('name', 'value as val', 'confirmations as conf', 'refutations as ref')
+              .where('identity_id', identityId)
               .orderByRaw('confirmations - refutations DESC');
           });
       });

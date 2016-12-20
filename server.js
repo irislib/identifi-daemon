@@ -476,9 +476,27 @@ router.get('/identities', function(req, res) {
  *
  */
 router.get('/identities/:attr_name/:attr_value', function(req, res) {
-  db.getIdentityAttributes({ where: { 'attr.name': req.params.attr_name, 'attr.value': req.params.attr_value } }).then(function(dbRes) {
-    res.json(dbRes);
-  }).catch(function(err) { handleError(err, req, res); });
+  var options = {
+    id: [req.params.attr_name, req.params.attr_value],
+  };
+
+  if (req.query.viewpoint_name && req.query.viewpoint_value) {
+    options.viewpoint = [req.query.viewpoint_name, req.query.viewpoint_value];
+  }
+  if (req.query.max_distance) { options.maxDistance = parseInt(req.query.max_distance); }
+
+  if (req.query.type) {
+    options.searchedAttributes = [req.query.type];
+  }
+  db.getIdentityAttributes(options).then(function(dbRes) {
+    if (dbRes.length && (dbRes[0].length > 1)) {
+      res.json(dbRes[0]);
+    } else {
+      db.mapIdentityAttributes(options).then(function(dbRes) {
+        res.json(dbRes);
+      }).catch(function(err) { handleError(err, req, res); });
+    }
+  });
 });
 
 
@@ -533,32 +551,6 @@ router.get('/identities/:attr_name/:attr_value/received', function(req, res) {
   };
   getMessages(req, res, options);
 });
-
-
-
-/**
- * @api {get} /identities/:pointer_type/:pointer_value/verifications Identity verifications
- * @apiName GetIdentityVerifications
- * @apiGroup Identities
- */
-router.get('/identities/:attr_name/:attr_value/verifications', function(req, res) {
-  var options = {
-    id: [req.params.attr_name, req.params.attr_value],
-  };
-
-  if (req.query.viewpoint_name && req.query.viewpoint_value) {
-    options.viewpoint = [req.query.viewpoint_name, req.query.viewpoint_value];
-  }
-  if (req.query.max_distance) { options.maxDistance = parseInt(req.query.max_distance); }
-
-  if (req.query.type) {
-    options.searchedAttributes = [req.query.type];
-  }
-  db.mapIdentityAttributes(options).then(function(dbRes) {
-    res.json(dbRes);
-  }).catch(function(err) { handleError(err, req, res); });
-});
-
 
 
 /**

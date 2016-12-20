@@ -438,7 +438,6 @@ describe 'API', ->
           apiMethod: 'identities'
           apiIdType: 'email'
           apiId: 'bob@example.com'
-          apiAction: 'verifications'
           qs:
             viewpoint_name: 'email'
             viewpoint_value: 'alice@example.com'
@@ -453,7 +452,6 @@ describe 'API', ->
           apiMethod: 'identities'
           apiIdType: 'email'
           apiId: 'bob@example.org'
-          apiAction: 'verifications'
           qs:
             viewpoint_name: 'email'
             viewpoint_value: 'alice@example.com'
