@@ -6,6 +6,7 @@ var P = require("bluebird");
 var Promise = P; // For ipfs
 
 var moment = require('moment');
+var btree = require('merkle-btree');
 
 var Message = require('identifi-lib/message');
 var keyutil = require('identifi-lib/keyutil');
@@ -160,8 +161,8 @@ module.exports = function(knex) {
     addIndexRootToIpfs: function() {
       // saves indexes as an IPFS directory
       return p.ipfs.files.add([
-        { path: 'messages', content: new Buffer(p.messageIndex || '[]', 'utf8') },
-        { path: 'identities', content: new Buffer(p.identityIndex || '[]', 'utf8') }
+        { path: 'messages', content: new Buffer(p.messageIndex || '[]') },
+        { path: 'identities', content: new Buffer(p.ipfsIdentityIndex.rootNode.serialize()) }
       ])
       .then(function(res) {
         var links = [];
@@ -195,12 +196,41 @@ module.exports = function(knex) {
     },
 
     addIdentityIndexToIpfs: function() {
-      // TODO: save as B-tree
-      var maxIndexSize = 2000;
+      var maxIndexSize = 1000;
       return this.getIdentityAttributes({ limit: maxIndexSize })
       .then(function(res) {
         console.log('adding to ipfs', res.length);
-        p.identityIndex = JSON.stringify(res);
+        function iterate(i) {
+          console.log(`\n${i}/${maxIndexSize}`);
+          if (i >= res.length) {
+            return;
+          }
+          return p.ipfs.files.add(new Buffer(JSON.stringify(res[i])))
+          .then(function(r) {
+            var hash = r[0].hash;
+
+            function makePutFn(key, value) {
+              return function() {
+                return p.ipfsIdentityIndex.put(key.toLowerCase(), value);
+              };
+            }
+
+            var q = P.resolve();
+            for (var j = 0; j < res[i].length; j++) {
+              q = q.then(makePutFn(res[i][j].val, hash))
+              .then(function(r2) {
+                process.stdout.write(".");
+              });
+            }
+            return q;
+          })
+          .then(function() {
+            return iterate(i + 1);
+          });
+        }
+        return iterate(0);
+      })
+      .then(function() {
         return pub.addIndexRootToIpfs();
       });
     },
@@ -1527,6 +1557,8 @@ module.exports = function(knex) {
 
   pub.init = function(conf, ipfs) {
     p.ipfs = ipfs;
+    p.ipfsStorage = new btree.IPFSStorage(p.ipfs);
+    p.ipfsIdentityIndex = new btree.MerkleBTree(p.ipfsStorage, 100);
     config = conf;
     if (conf.db.client === 'pg') {
       SQL_IFNULL = 'COALESCE';
