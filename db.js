@@ -361,7 +361,10 @@ module.exports = function(knex) {
         console.log('Processing', msgs.length, 'messages from index');
         for (i = 0; i < msgs.length; i++) {
           if (msgs[i].ipfs_hash) {
+            process.stdout.write("+");
             q = q.then(getFn(msgs[i].ipfs_hash));
+          } else {
+            process.stdout.write("-");
           }
         }
         return q;
