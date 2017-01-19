@@ -348,7 +348,9 @@ module.exports = function(knex) {
         return btree.MerkleBTree.getByHash(path, p.ipfsStorage, 100);
       })
       .then(function(index) {
-        var msgs = index.searchText('', 10000);
+        return index.searchText('', 10000);
+      })
+      .then(function(msgs) {
         var i;
         var q = new P(function(resolve) { resolve(); });
         function getFn(path) {
