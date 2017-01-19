@@ -307,7 +307,7 @@ module.exports = function(knex) {
     saveMessageFromIpfs: function(path) {
       return knex('Messages').where('ipfs_hash', path).count('* as count')
       .then(function(res) {
-        if (!res[0].count) {
+        if (parseInt(res[0].count) === 0) {
           return p.ipfs.files.cat(path, { buffer: true })
           .then(function(buffer) {
             var msg = { jws: buffer.toString('utf8'), ipfs_hash: path };
@@ -352,7 +352,7 @@ module.exports = function(knex) {
       })
       .then(function(msgs) {
         var i;
-        var q = new P(function(resolve) { resolve(); });
+        var q = new P.resolve();
         function getFn(path) {
           return function() {
             return pub.saveMessageFromIpfs(path);
@@ -360,8 +360,11 @@ module.exports = function(knex) {
         }
         console.log('Processing', msgs.length, 'messages from index');
         for (i = 0; i < msgs.length; i++) {
-          if (msgs[i].ipfs_hash) {
-            q = q.then(getFn(msgs[i].ipfs_hash));
+          if (msgs[i].value.ipfs_hash) {
+            process.stdout.write("+");
+            q = q.then(getFn(msgs[i].value.ipfs_hash));
+          } else {
+            process.stdout.write("-");
           }
         }
         return q;
