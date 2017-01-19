@@ -307,7 +307,7 @@ module.exports = function(knex) {
     saveMessageFromIpfs: function(path) {
       return knex('Messages').where('ipfs_hash', path).count('* as count')
       .then(function(res) {
-        if (!res[0].count) {
+        if (parseInt(res[0].count) === 0) {
           return p.ipfs.files.cat(path, { buffer: true })
           .then(function(buffer) {
             var msg = { jws: buffer.toString('utf8'), ipfs_hash: path };
