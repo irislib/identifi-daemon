@@ -352,7 +352,7 @@ module.exports = function(knex) {
       })
       .then(function(msgs) {
         var i;
-        var q = new P(function(resolve) { resolve(); });
+        var q = new P.resolve();
         function getFn(path) {
           return function() {
             return pub.saveMessageFromIpfs(path);
@@ -360,9 +360,9 @@ module.exports = function(knex) {
         }
         console.log('Processing', msgs.length, 'messages from index');
         for (i = 0; i < msgs.length; i++) {
-          if (msgs[i].ipfs_hash) {
+          if (msgs[i].value.ipfs_hash) {
             process.stdout.write("+");
-            q = q.then(getFn(msgs[i].ipfs_hash));
+            q = q.then(getFn(msgs[i].value.ipfs_hash));
           } else {
             process.stdout.write("-");
           }
