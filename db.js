@@ -22,6 +22,16 @@ var SQL_INSERT_OR_REPLACE = 'INSERT OR REPLACE';
 var SQL_ON_CONFLICT = '';
 var SQL_PRINTF = 'PRINTF';
 
+function sortByKey(a, b) {
+  if (a.key < b.key) {
+    return -1;
+  }
+  if (a.key > b.key) {
+    return 1;
+  }
+  return 0;
+}
+
 module.exports = function(knex) {
   var p; // Private methods
 
@@ -164,7 +174,8 @@ module.exports = function(knex) {
       return p.ipfs.files.add([
         { path: 'messages_by_distance', content: new Buffer(p.ipfsMessagesByDistance.rootNode.serialize()) },
         { path: 'messages_by_timestamp', content: new Buffer(p.ipfsMessagesByTimestamp.rootNode.serialize()) },
-        { path: 'identities', content: new Buffer(p.ipfsIdentityIndex.rootNode.serialize()) }
+        { path: 'identities_by_searchkey', content: new Buffer(p.ipfsIdentitiesBySearchKey.rootNode.serialize()) },
+        { path: 'identities_by_distance', content: new Buffer(p.ipfsIdentitiesByDistance.rootNode.serialize()) }
       ])
       .then(function(res) {
         var links = [];
@@ -198,13 +209,13 @@ module.exports = function(knex) {
     },
 
     addIdentityIndexToIpfs: function() {
-      var maxIndexSize = 1000;
+      var maxIndexSize = 10000;
       var identityEntriesToAdd = [];
       return this.getIdentityAttributes({ limit: maxIndexSize })
       .then(function(res) {
         console.log('adding to ipfs', res.length);
         function iterate(i) {
-          console.log('\n' + i + '/' + maxIndexSize);
+          console.log(i + '/' + res.length);
           if (i >= res.length) {
             return;
           }
@@ -212,7 +223,21 @@ module.exports = function(knex) {
           .then(function(r) {
             var hash = r[0].hash;
             for (var j = 0; j < res[i].length; j++) {
-              identityEntriesToAdd.push({ key: res[i][j].val.toLowerCase(), value: hash, targetHash: null });
+              var distance = parseInt(res[i][j].dist);
+              distance = typeof distance == 'number' ? distance : 99;
+              distance = ('00'+distance).substring(distance.toString().length); // pad with zeros
+              var key = distance + ':' + res[i][j].val.toLowerCase();
+              identityEntriesToAdd.push({ key: key, value: hash, targetHash: null });
+              if (key.indexOf(' ') > -1) {
+                var words = key.split(' ');
+                words.forEach(function(word) {
+                  identityEntriesToAdd.push({ key: word, value: hash, targetHash: null });
+                });
+              }
+              if (key.match(/^http(s)?:\/\/.+\/[a-zA-Z0-9_]+$/)) {
+                var split = key.split('/');
+                identityEntriesToAdd.push({ key: split[split.length - 1], value: hash, targetHash: null });
+              }
             }
           })
           .catch(function(e) { console.log('adding', res[i], 'failed'); })
@@ -221,19 +246,19 @@ module.exports = function(knex) {
           });
         }
         return iterate(0).then(function() {
-          var sortedIdentityEntries = identityEntriesToAdd.sort(function(a, b) {
-            if (a.key < b.key) {
-              return -1;
-            }
-            if (a.key > b.key) {
-              return 1;
-            }
-            return 0;
-          });
-          return btree.MerkleBTree.fromSortedList(sortedIdentityEntries, 100, p.ipfsStorage);
+          console.log('building index identities_by_distance');
+          return btree.MerkleBTree.fromSortedList(identityEntriesToAdd.sort(sortByKey).slice(), 100, p.ipfsStorage);
         })
         .then(function(index) {
-          p.ipfsIdentityIndex = index;
+          p.ipfsIdentitiesByDistance = index;
+          identityEntriesToAdd.forEach(function(entry) {
+            entry.key = entry.key.substr(entry.key.indexOf(':') + 1);
+          });
+          console.log('building index identities_by_searchkey');
+          return btree.MerkleBTree.fromSortedList(identityEntriesToAdd.sort(sortByKey), 100, p.ipfsStorage);
+        })
+        .then(function(index) {
+          p.ipfsIdentitiesBySearchKey = index;
         });
       })
       .then(function() {
@@ -249,23 +274,14 @@ module.exports = function(knex) {
       var maxDepth = 10;
       var msgsToIndex = [];
       function iterate(limit, offset, distance) {
-        return knex('Messages')
-        .innerJoin('MessageAttributes as author', function() {
-          this.on('author.message_hash', '=', 'Messages.hash');
-          this.andOn('author.is_recipient', '=', knex.raw('?', false));
+        return pub.getMessages({
+          limit: limit,
+          offset: offset,
+          orderBy: 'timestamp',
+          direction: 'asc',
+          viewpoint: myId,
+          where: { 'td.distance': distance }
         })
-        .innerJoin('TrustDistances as td', function() {
-          this.on('td.start_attr_name', '=', knex.raw('?', myId[0]));
-          this.on('td.start_attr_value', '=', knex.raw('?', myId[1]));
-          this.on('td.end_attr_name', '=', 'author.name');
-          this.on('td.end_attr_value', '=', 'author.value');
-        })
-        .orderBy('Messages.timestamp', 'ASC')
-        .where('td.distance', distance)
-        .andWhere('public', true)
-        .select('jws', 'ipfs_hash')
-        .limit(limit)
-        .offset(offset)
         .then(function(msgs) {
           if (msgs.length === 0 && offset === 0) {
             return;
@@ -279,7 +295,7 @@ module.exports = function(knex) {
           msgs.forEach(msg => {
             process.stdout.write(".");
             var msg = Message.decode(msg);
-            var key = distance + ':' + msg.signedData.timestamp + ':' + (msg.ipfs_hash || msg.hash).substr(0,9);
+            var key = distance + ':' + Date.parse(msg.timestamp) + ':' + (msg.ipfs_hash || msg.hash).substr(0,9);
             msgsToIndex.push({ key: key, value: msg, targetHash: null })
           });
         })
@@ -295,10 +311,22 @@ module.exports = function(knex) {
       return iterate(limit, offset, distance)
       .then(function(res) {
         console.log('res', res);
-        return btree.MerkleBTree.fromSortedList(msgsToIndex, 100, p.ipfsStorage);
+        console.log('adding messages_by_distance index to ipfs');
+        return btree.MerkleBTree.fromSortedList(msgsToIndex.slice(), 100, p.ipfsStorage);
       })
       .then(function(index) {
         p.ipfsMessagesByDistance = index;
+
+        // create index of messages sorted by timestamp
+        msgsToIndex.forEach(function(msg) {
+          msg.key = msg.key.substr(msg.key.indexOf(':') + 1);
+        });
+        msgsToIndex = msgsToIndex.sort(sortByKey);
+        console.log('adding messages_by_timestamp index to ipfs');
+        return btree.MerkleBTree.fromSortedList(msgsToIndex, 100, p.ipfsStorage);
+      })
+      .then(function(index) {
+        p.ipfsMessagesByTimestamp = index;
         // Add message index to IPFS
         return pub.addIndexRootToIpfs();
       });
@@ -1550,7 +1578,8 @@ module.exports = function(knex) {
   pub.init = function(conf, ipfs) {
     p.ipfs = ipfs;
     p.ipfsStorage = new btree.IPFSStorage(p.ipfs);
-    p.ipfsIdentityIndex = new btree.MerkleBTree(p.ipfsStorage, 100);
+    p.ipfsIdentitiesBySearchKey = new btree.MerkleBTree(p.ipfsStorage, 100);
+    p.ipfsIdentitiesByDistance = new btree.MerkleBTree(p.ipfsStorage, 100);
     p.ipfsMessagesByDistance = new btree.MerkleBTree(p.ipfsStorage, 100);
     p.ipfsMessagesByTimestamp = new btree.MerkleBTree(p.ipfsStorage, 100);
     config = conf;
