@@ -171,12 +171,21 @@ module.exports = function(knex) {
     addIndexRootToIpfs: function() {
       // saves indexes as an IPFS directory
       // TODO: if index already exists, don't rewrite with []
-      return p.ipfs.files.add([
-        { path: 'messages_by_distance', content: new Buffer(p.ipfsMessagesByDistance.rootNode.serialize()) },
-        { path: 'messages_by_timestamp', content: new Buffer(p.ipfsMessagesByTimestamp.rootNode.serialize()) },
-        { path: 'identities_by_searchkey', content: new Buffer(p.ipfsIdentitiesBySearchKey.rootNode.serialize()) },
-        { path: 'identities_by_distance', content: new Buffer(p.ipfsIdentitiesByDistance.rootNode.serialize()) }
-      ])
+      return pub.getIdentityAttributes({ id: myId })
+      .then(function(attrs) {
+        if (attrs.length) {
+          attrs = attrs[0];
+        } else {
+          attrs = [];
+        }
+        return p.ipfs.files.add([
+          { path: 'info', content: new Buffer(JSON.stringify({ keyID: myId[1], attrs: attrs })) },
+          { path: 'messages_by_distance', content: new Buffer(p.ipfsMessagesByDistance.rootNode.serialize()) },
+          { path: 'messages_by_timestamp', content: new Buffer(p.ipfsMessagesByTimestamp.rootNode.serialize()) },
+          { path: 'identities_by_searchkey', content: new Buffer(p.ipfsIdentitiesBySearchKey.rootNode.serialize()) },
+          { path: 'identities_by_distance', content: new Buffer(p.ipfsIdentitiesByDistance.rootNode.serialize()) }
+        ])
+      })
       .then(function(res) {
         var links = [];
         for (var i = 0; i < res.length; i++) {
@@ -219,19 +228,69 @@ module.exports = function(knex) {
           if (i >= res.length) {
             return;
           }
-          return p.ipfs.files.add(new Buffer(JSON.stringify(res[i])))
+          var identityProfile = { attrs: res[i] };
+          return pub.getMessages({
+            recipient: [res[i][0].name, res[i][0].val], // TODO: make sure this attr is unique
+            limit: 10000,
+            orderBy: 'timestamp',
+            direction: 'asc',
+            viewpoint: myId
+          })
+          .then(function(received) {
+            var msgs = [];
+            received.forEach(function(msg) {
+              msgs.push({
+                key: Date.parse(msg.timestamp) + ':' + (msg.ipfs_hash || msg.hash).substr(0,9),
+                value: msg, // TODO: save only ipfs_hash
+                targetHash: null
+              });
+            });
+            return btree.MerkleBTree.fromSortedList(msgs, 100, p.ipfsStorage);
+          })
+          .then(function(receivedIndex) {
+            identityProfile.received = receivedIndex.rootNode.hash;
+            return pub.getMessages({
+              author: [res[i][0].name, res[i][0].val], // TODO: make sure this attr is unique
+              limit: 10000,
+              orderBy: 'timestamp',
+              direction: 'asc',
+              viewpoint: myId
+            });
+          })
+          .then(function(sent) {
+            var msgs = [];
+            sent.forEach(function(msg) {
+              msgs.push({
+                key: Date.parse(msg.timestamp) + ':' + (msg.ipfs_hash || msg.hash).substr(0,9),
+                value: { jws: msg.jws },
+                targetHash: null
+              });
+            });
+            return btree.MerkleBTree.fromSortedList(msgs, 100, p.ipfsStorage);
+          })
+          .then(function(sentIndex) {
+            identityProfile.sent = sentIndex.rootNode.hash;
+            return p.ipfs.files.add(new Buffer(JSON.stringify(identityProfile)))
+          })
           .then(function(r) {
             var hash = r[0].hash;
             for (var j = 0; j < res[i].length; j++) {
               var distance = parseInt(res[i][j].dist);
               distance = typeof distance == 'number' ? distance : 99;
               distance = ('00'+distance).substring(distance.toString().length); // pad with zeros
-              var key = distance + ':' + res[i][j].val.toLowerCase();
+              var value = encodeURIComponent(res[i][j].val);
+              var name = encodeURIComponent(res[i][j].name);
+              var key = distance + ':' + value + ':' + name + ':' + hash.substr(0, 9);
               identityEntriesToAdd.push({ key: key, value: hash, targetHash: null });
-              if (key.indexOf(' ') > -1) {
-                var words = key.split(' ');
+              var lowerCaseKey = key.toLowerCase();
+              if (key !== lowerCaseKey) {
+                identityEntriesToAdd.push({ key: lowerCaseKey, value: hash, targetHash: null });
+              }
+              if (res[i][j].val.indexOf(' ') > -1) {
+                var words = res[i][j].val.toLowerCase().split(' ');
                 words.forEach(function(word) {
-                  identityEntriesToAdd.push({ key: word, value: hash, targetHash: null });
+                  var k = distance + ':' + encodeURIComponent(word) + ':' + name + ':' + hash.substr(0, 9);
+                  identityEntriesToAdd.push({ key: k, value: hash, targetHash: null });
                 });
               }
               if (key.match(/^http(s)?:\/\/.+\/[a-zA-Z0-9_]+$/)) {
@@ -240,7 +299,7 @@ module.exports = function(knex) {
               }
             }
           })
-          .catch(function(e) { console.log('adding', res[i], 'failed'); })
+          .catch(function(e) { console.log('adding', res[i], 'failed:', e); })
           .then(function() {
             return iterate(i + 1);
           });
