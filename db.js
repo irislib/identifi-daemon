@@ -44,14 +44,28 @@ module.exports = function(knex) {
       }
       var queries = [];
 
-      var q = new P(function(resolve) { resolve(); });
+      var q = P.resolve();
       // Unobtrusively store msg to ipfs
       var addToIpfs = p.ipfs && !message.ipfs_hash;
       if (addToIpfs) {
+        var msgIndexKey = pub.getMsgIndexKey(message);
         q = pub.addMessageToIpfs(message)
         .then(function(res) {
           message.ipfs_hash = res[0].hash;
-        }).catch(function(e) { console.log('adding to ipfs failed:', e); });
+        })
+        .then(function(res) {
+          return p.ipfsMessagesByDistance.put(msgIndexKey, message);
+        })
+        .then(function(res) {
+          return p.ipfsMessagesByTimestamp.put(msgIndexKey.substr(msgIndexKey.indexOf(':') + 1), message);
+        })
+        .then(function(res) {
+          return pub.addIndexRootToIpfs();
+        })
+        .then(function(indexRoot) {
+          message.ipfsIndexRoot = indexRoot;
+        })
+        .catch(function(e) { console.log('adding to ipfs failed:', e); });
       }
       q = q.then(function() {
         return pub.messageExists(message.hash);
@@ -62,9 +76,7 @@ module.exports = function(knex) {
             // Msg was added to IPFS - update ipfs_hash
             return knex('Messages').where({ hash: message.hash }).update({ ipfs_hash: message.ipfs_hash });
           } else {
-            return new P(function(resolve) {
-              resolve(false);
-            });
+            return P.resolve(false);
           }
         } else {
           var isPublic = typeof message.signedData.public === 'undefined' ? true : message.signedData.public;
@@ -170,7 +182,8 @@ module.exports = function(knex) {
 
     addIndexRootToIpfs: function() {
       // saves indexes as an IPFS directory
-      // TODO: if index already exists, don't rewrite with []
+      // TODO: if info already exists, don't rewrite
+      var indexRoot;
       return pub.getIdentityAttributes({ id: myId })
       .then(function(attrs) {
         if (attrs.length) {
@@ -201,16 +214,23 @@ module.exports = function(knex) {
         });
       })
       .then(function(res) {
-        if (p.ipfs.name && res._json.multihash) {
-          console.log('publishing index', res._json.multihash);
-          return p.ipfs.name.publish(res._json.multihash, {});
-        } else {
-          return res;
+        if (res._json.multihash) {
+          indexRoot = res._json.multihash;
+          return knex('TrustIndexedAttributes')
+            .where({ name: myId[0], value: myId[1] })
+            .update('ipfs_index_root', res._json.multihash)
+            .return(res);
         }
+        return P.resolve(res);
       })
       .then(function(res) {
-        console.log('published index', res);
-        return res;
+        if (p.ipfs.name && res._json.multihash) {
+          console.log('publishing index', res._json.multihash);
+          p.ipfs.name.publish(res._json.multihash, {}).then(function(res) {
+            console.log('published index', res);
+          });
+        }
+        return indexRoot;
       })
       .catch(function(e) {
         console.log('error publishing index', e);
@@ -325,6 +345,13 @@ module.exports = function(knex) {
       });
     },
 
+    getMsgIndexKey: function(msg) {
+      var distance = parseInt(msg.distance);
+      distance = typeof distance == 'number' ? distance : 99;
+      distance = ('00'+distance).substring(distance.toString().length); // pad with zeros
+      return distance + ':' + Date.parse(msg.timestamp) + ':' + (msg.ipfs_hash || msg.hash).substr(0,9);
+    },
+
     addMessageIndexToIpfs: function() {
       var limit = 10000;
       var offset = 0;
@@ -354,7 +381,7 @@ module.exports = function(knex) {
           msgs.forEach(msg => {
             process.stdout.write(".");
             var msg = Message.decode(msg);
-            var key = distance + ':' + Date.parse(msg.timestamp) + ':' + (msg.ipfs_hash || msg.hash).substr(0,9);
+            var key = pub.getMsgIndexKey(msg);
             msgsToIndex.push({ key: key, value: msg, targetHash: null })
           });
         })
@@ -486,7 +513,7 @@ module.exports = function(knex) {
       .distinct('recipient.value')
       .then(function(res) {
         var i;
-        var q = new P(function(resolve) { resolve(); });
+        var q = P.resolve();
         for (i = 0; i < res.length; i++) {
           q = q.then(pub.saveMessagesFromIpfsIndex(res[i].value));
         }
@@ -500,9 +527,7 @@ module.exports = function(knex) {
     messageExists: function(hash) {
       return knex('Messages').where('hash', hash).count('* as exists')
         .then(function(res) {
-          return new P(function(resolve) {
-            resolve(!!parseInt(res[0].exists));
-          });
+          return P.resolve(!!parseInt(res[0].exists));
         });
     },
 
@@ -519,8 +544,8 @@ module.exports = function(knex) {
         options[key] = options[key] !== undefined ? options[key] : defaultOptions[key];
       }
 
-      var authorIdentityIdQuery = new P(function(resolve) { resolve([]); }),
-        recipientIdentityIdQuery = new P(function(resolve) { resolve([]); });
+      var authorIdentityIdQuery = P.resolve([]),
+        recipientIdentityIdQuery = P.resolve([]);
       if (options.viewpoint) {
         if (options.author) {
           authorIdentityIdQuery = knex('IdentityAttributes')
@@ -786,9 +811,7 @@ module.exports = function(knex) {
           return smallestDistance1 - smallestDistance2;
         });
 
-        return new P(function(resolve) {
-          resolve(arr);
-        });
+        return P.resolve(arr);
       });
     },
 
@@ -815,7 +838,7 @@ module.exports = function(knex) {
           .then(function(res) {
             if (existingId.length) {
               // Pass on the existing identity_id
-              return new P(function(resolve) { resolve(existingId); });
+              return P.resolve(existingId);
             } else {
               return knex('IdentityAttributes')
               // No existing identity_id - return a new one
@@ -935,7 +958,7 @@ module.exports = function(knex) {
 
     getTrustDistance: function(from, to) {
       if (from[0] === to[0] && from[1] === to[1]) {
-        return new P(function(resolve) { resolve(0); });
+        return P.resolve(0);
       }
       return knex.select('distance').from('TrustDistances').where({
         'start_attr_name': from[0],
@@ -947,7 +970,7 @@ module.exports = function(knex) {
         if (res.length) {
           distance = res[0].distance;
         }
-        return new P(function(resolve) { resolve(distance); });
+        return P.resolve(distance);
       });
     },
 
@@ -1056,7 +1079,7 @@ module.exports = function(knex) {
       if (maintain) {
         q = this.addTrustIndexedAttribute(id, maxDepth);
       } else {
-        q = new P(function(resolve) { resolve(); });
+        q = P.resolve();
       }
       q = q.then(function() {
         return pub.mapIdentityAttributes({ id: id, viewpoint: id });
@@ -1082,14 +1105,14 @@ module.exports = function(knex) {
                 });
             })
             .then(function() {
-              q2 = new P(function(resolve) { resolve(); });
+              q2 = P.resolve();
               for (i = 1; i <= maxDepth; i++) {
                 q2.then(buildQuery(true, trx, i));
               }
               return q2;
             })
             .then(function() {
-              q2 = new P(function(resolve) { resolve(); });
+              q2 = P.resolve();
               for (i = 1; i <= maxDepth; i++) {
                 q2.then(buildQuery(false, trx, i));
               }
@@ -1136,7 +1159,7 @@ module.exports = function(knex) {
 
     getTrustIndexedAttributes: function(forceRefresh) {
       if (pub.trustIndexedAttributes && !forceRefresh) {
-        return new P(function(resolve) { resolve(pub.trustIndexedAttributes); });
+        return P.resolve(pub.trustIndexedAttributes);
       }
       return knex('TrustIndexedAttributes').select('*').then(function(res) {
         pub.trustIndexedAttributes = res;
@@ -1145,7 +1168,7 @@ module.exports = function(knex) {
     },
 
     getTrustPaths: function(start, end, maxLength, shortestOnly, viewpoint, limit) {
-      return new P(function(resolve) { resolve([]); }); // Disabled until the performance is improved
+      return P.resolve([]); // Disabled until the performance is improved
 
     },
 
@@ -1190,7 +1213,7 @@ module.exports = function(knex) {
         .where('m.type', 'rating')
         .where('m.public', dbTrue);
 
-      var identityId, identityIdQuery = new P(function(resolve) { resolve(); });
+      var identityId, identityIdQuery = P.resolve();
       if (options.viewpoint && options.maxDistance > -1) {
         identityIdQuery = knex('IdentityAttributes')
           .where({
@@ -1286,9 +1309,7 @@ module.exports = function(knex) {
             });
           }
 
-          return new P(function(resolve) {
-            return resolve(res);
-          });
+          return P.resolve(res);
         });
       });
     },
@@ -1360,7 +1381,7 @@ module.exports = function(knex) {
       return pub.getTrustDistance(myId, ['keyID', message.signerKeyHash])
       .then(function(distanceToSigner) {
         if (distanceToSigner === -1) { // Unknown signer
-          return new P(function(resolve) { resolve(0); });
+          return P.resolve(0);
         }
         var i, queries = [];
         // Get distances to message authors
@@ -1397,7 +1418,7 @@ module.exports = function(knex) {
           if (!hasAuthorKeyID) { priority -= 1; }
           if (!hasRecipientKeyID) { priority -= 1; }
           priority = Math.max(priority, 0);
-          return new P(function(resolve) { resolve(priority); });
+          return P.resolve(priority);
         });
       });
     },
@@ -1452,9 +1473,7 @@ module.exports = function(knex) {
 
     updateIdentityIndexesByMessage: function(message, trustedKeyID) {
       if (message.signedData.type !== 'verify_identity' && message.signedData.type !== 'unverify_identity') {
-        return new P(function(resolve) {
-          resolve();
-        });
+        return P.resolve();
       }
 
       var queries = [];
@@ -1631,16 +1650,58 @@ module.exports = function(knex) {
       }
 
       return P.all(queries);
+    },
+
+    getIndexesFromIpfsRoot: function() {
+      return knex('TrustIndexedAttributes').where({ name: myId[0], value: myId[1] }).select('ipfs_index_root')
+      .then(function(res) {
+        var q = P.resolve();
+        if (res.length) {
+          q = q.then(function() {
+            return p.ipfs.object.links(res[0].ipfs_index_root)
+            .then(function(links) {
+              var queries = [];
+              for (var i = 0; i < links.length; i++) {
+                switch(links[i]._name) {
+                  case 'messages_by_distance':
+                    queries.push(btree.MerkleBTree.getByHash(links[i]._multihash, p.ipfsStorage).then(function(index) {
+                      p.ipfsMessagesByDistance = index;
+                    }));
+                    break;
+                  case 'messages_by_timestamp':
+                    queries.push(btree.MerkleBTree.getByHash(links[i]._multihash, p.ipfsStorage).then(function(index) {
+                      p.ipfsMessagesByTimestamp = index;
+                    }));
+                    break;
+                  case 'identities_by_distance':
+                    queries.push(btree.MerkleBTree.getByHash(links[i]._multihash, p.ipfsStorage).then(function(index) {
+                      p.ipfsIdentitiesByDistance = index;
+                    }));
+                    break;
+                  case 'identities_by_searchkey':
+                    queries.push(btree.MerkleBTree.getByHash(links[i]._multihash, p.ipfsStorage).then(function(index) {
+                      p.ipfsIdentitiesBySearchKey = index;
+                    }));
+                    break;
+                }
+              }
+              return P.all(queries);
+            });
+          });
+        }
+        return q.then(function() {
+          p.ipfsIdentitiesBySearchKey = p.ipfsIdentitiesBySearchKey || new btree.MerkleBTree(p.ipfsStorage, 100);
+          p.ipfsIdentitiesByDistance = p.ipfsIdentitiesByDistance || new btree.MerkleBTree(p.ipfsStorage, 100);
+          p.ipfsMessagesByDistance = p.ipfsMessagesByDistance || new btree.MerkleBTree(p.ipfsStorage, 100);
+          p.ipfsMessagesByTimestamp = p.ipfsMessagesByTimestamp || new btree.MerkleBTree(p.ipfsStorage, 100);
+        });
+      });
     }
   };
 
   pub.init = function(conf, ipfs) {
     p.ipfs = ipfs;
     p.ipfsStorage = new btree.IPFSStorage(p.ipfs);
-    p.ipfsIdentitiesBySearchKey = new btree.MerkleBTree(p.ipfsStorage, 100);
-    p.ipfsIdentitiesByDistance = new btree.MerkleBTree(p.ipfsStorage, 100);
-    p.ipfsMessagesByDistance = new btree.MerkleBTree(p.ipfsStorage, 100);
-    p.ipfsMessagesByTimestamp = new btree.MerkleBTree(p.ipfsStorage, 100);
     config = conf;
     if (conf.db.client === 'pg') {
       SQL_IFNULL = 'COALESCE';
@@ -1658,6 +1719,9 @@ module.exports = function(knex) {
       })
       .then(function() {
         return pub.checkDefaultTrustList();
+      })
+      .then(function() {
+        return p.getIndexesFromIpfsRoot();
       })
       .then(function() {
         if (process.env.NODE_ENV !== 'test') {

@@ -103,8 +103,9 @@ var init = function(db, config) {
   }).catch(catcher));
 
   queries.push(db.schema.createTableIfNotExists('TrustIndexedAttributes', function(t) {
-    t.string('name');
-    t.string('value');
+    t.string('name').notNullable();
+    t.string('value').notNullable();
+    t.string('ipfs_index_root');
     t.integer('depth').unsigned().notNullable();
     t.primary(['name', 'value']);
   }).catch(catcher));
