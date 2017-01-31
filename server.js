@@ -1,9 +1,6 @@
 /*jshint unused: false */
-var P = require("bluebird");
 var moment = require('moment');
 var fs = require('fs');
-
-var Promise = P; // For ipfs
 
 var express    = require('express');
 var session = require('express-session');
@@ -272,7 +269,7 @@ function emitMsg(msg) {
  */
 router.get('/', function(req, res) {
   var queries = [db.getMessageCount()];
-  P.all(queries).then(function(results) {
+  Promise.all(queries).then(function(results) {
     res.json({ message: 'Identifi API',
                 version: pkg.version,
                 identifiLibVersion: identifi.VERSION,
