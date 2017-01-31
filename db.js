@@ -206,7 +206,7 @@ module.exports = function(knex) {
           { path: 'messages_by_timestamp', content: new Buffer(p.ipfsMessagesByTimestamp.rootNode.serialize()) },
           { path: 'identities_by_searchkey', content: new Buffer(p.ipfsIdentitiesBySearchKey.rootNode.serialize()) },
           { path: 'identities_by_distance', content: new Buffer(p.ipfsIdentitiesByDistance.rootNode.serialize()) }
-        ])
+        ]);
       })
       .then(function(res) {
         var links = [];
@@ -299,13 +299,13 @@ module.exports = function(knex) {
           })
           .then(function(sentIndex) {
             identityProfile.sent = sentIndex.rootNode.hash;
-            return p.ipfs.files.add(new Buffer(JSON.stringify(identityProfile)))
+            return p.ipfs.files.add(new Buffer(JSON.stringify(identityProfile)));
           })
           .then(function(r) {
             var hash = r[0].hash;
             for (var j = 0; j < res[i].length; j++) {
               var distance = parseInt(res[i][j].dist);
-              distance = typeof distance == 'number' ? distance : 99;
+              distance = typeof distance === 'number' ? distance : 99;
               distance = ('00'+distance).substring(distance.toString().length); // pad with zeros
               var value = encodeURIComponent(res[i][j].val);
               var name = encodeURIComponent(res[i][j].name);
@@ -317,10 +317,10 @@ module.exports = function(knex) {
               }
               if (res[i][j].val.indexOf(' ') > -1) {
                 var words = res[i][j].val.toLowerCase().split(' ');
-                words.forEach(function(word) {
-                  var k = distance + ':' + encodeURIComponent(word) + ':' + name + ':' + hash.substr(0, 9);
+                for (var l = 0; l < words.length; l++) {
+                  var k = distance + ':' + encodeURIComponent(words[l]) + ':' + name + ':' + hash.substr(0, 9);
                   identityEntriesToAdd.push({ key: k, value: hash, targetHash: null });
-                });
+                }
               }
               if (key.match(/^http(s)?:\/\/.+\/[a-zA-Z0-9_]+$/)) {
                 var split = key.split('/');
@@ -356,7 +356,7 @@ module.exports = function(knex) {
 
     getMsgIndexKey: function(msg) {
       var distance = parseInt(msg.distance);
-      distance = typeof distance == 'number' ? distance : 99;
+      distance = typeof distance === 'number' ? distance : 99;
       distance = ('00'+distance).substring(distance.toString().length); // pad with zeros
       return distance + ':' + Date.parse(msg.timestamp) + ':' + (msg.ipfs_hash || msg.hash).substr(0,9);
     },
@@ -387,11 +387,11 @@ module.exports = function(knex) {
           } else {
             offset += limit;
           }
-          msgs.forEach(msg => {
+          msgs.forEach(function(msg) {
             process.stdout.write(".");
-            var msg = Message.decode(msg);
+            msg = Message.decode(msg);
             var key = pub.getMsgIndexKey(msg);
-            msgsToIndex.push({ key: key, value: msg, targetHash: null })
+            msgsToIndex.push({ key: key, value: msg, targetHash: null });
           });
         })
         .then(function(res) {
@@ -1566,7 +1566,7 @@ module.exports = function(knex) {
           hashes.push(res[i].hash);
           if (deleteFromIpfsIndexes && res[i].ipfs_hash && res[i].ipfs_hash.length) {
             var msg = res[i];
-            ipfsIndexKeys.push(getMsgIndexKey(msg));
+            ipfsIndexKeys.push(pub.getMsgIndexKey(msg));
           }
         }
       }
@@ -1615,7 +1615,7 @@ module.exports = function(knex) {
         ipfsIndexKeys = util.removeDuplicates(ipfsIndexKeys);
         for (i = 0; i < ipfsIndexKeys.length; i++) {
           queries.push(p.ipfsMessagesByDistance.delete(ipfsIndexKeys[i]));
-          queries.push(p.ipfsMessagesByTimestamp.delete(ipfsIndexKeys[i].substr(msgIndexKey.indexOf(':') + 1)));
+          queries.push(p.ipfsMessagesByTimestamp.delete(ipfsIndexKeys[i].substr(ipfsIndexKeys[i].indexOf(':') + 1)));
         }
         return P.all(queries);
       });
