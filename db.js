@@ -37,8 +37,9 @@ module.exports = function(knex) {
 
   var pub = {
     trustIndexedAttributes: null,
-    saveMessage: function(message, updateTrustIndexes) {
+    saveMessage: function(message, updateTrustIndexes, addToIpfsIndex) {
       if (typeof updateTrustIndexes === 'undefined') { updateTrustIndexes = true; }
+      if (typeof addToIpfsIndex === 'undefined') { addToIpfsIndex = true; }
       if (typeof message.signerKeyHash === 'undefined') {
         message.signerKeyHash = Message.getSignerKeyHash(message);
       }
@@ -54,16 +55,24 @@ module.exports = function(knex) {
           message.ipfs_hash = res[0].hash;
         })
         .then(function(res) {
-          return p.ipfsMessagesByDistance.put(msgIndexKey, message);
+          if (addToIpfsIndex) {
+            return p.ipfsMessagesByDistance.put(msgIndexKey, message);
+          }
         })
         .then(function(res) {
-          return p.ipfsMessagesByTimestamp.put(msgIndexKey.substr(msgIndexKey.indexOf(':') + 1), message);
+          if (addToIpfsIndex) {
+            return p.ipfsMessagesByTimestamp.put(msgIndexKey.substr(msgIndexKey.indexOf(':') + 1), message);
+          }
         })
         .then(function(res) {
-          return pub.addIndexRootToIpfs();
+          if (addToIpfsIndex) {
+            return pub.addIndexRootToIpfs();
+          }
         })
         .then(function(indexRoot) {
-          message.ipfsIndexRoot = indexRoot;
+          if (addToIpfsIndex) {
+            message.ipfsIndexRoot = indexRoot;
+          }
         })
         .catch(function(e) { console.log('adding to ipfs failed:', e); });
       }
@@ -1499,14 +1508,14 @@ module.exports = function(knex) {
       // If the attribute doesn't exist, add it with 1 confirmation or refutation
     },
 
-    deletePreviousMessage: function(message) {
+    deletePreviousMessage: function(message, deleteFromIpfsIndexes) {
       var i, j;
       var verifyTypes = ['verify_identity', 'unverify_identity'], t = message.signedData.type;
       var isVerifyMsg = verifyTypes.indexOf(t) > -1;
 
       function getHashesQuery(author, recipient) {
         var q = knex('Messages as m')
-          .distinct('m.hash as hash', 'm.timestamp')
+          .distinct('m.hash as hash', 'm.ipfs_hash as ipfs_hash', 'm.timestamp as timestamp', 'td.distance as distance')
           .innerJoin('MessageAttributes as author', function() {
             this.on('author.message_hash', '=', 'm.hash');
             this.andOn('author.is_recipient', '=', knex.raw('?', false));
@@ -1516,6 +1525,12 @@ module.exports = function(knex) {
             this.andOn('recipient.is_recipient', '=', knex.raw('?', true));
           })
           .innerJoin('UniqueIdentifierTypes as ia1', 'ia1.name', 'author.name')
+          .leftJoin('TrustDistances as td', function() {
+            this.on('td.start_attr_name', '=', knex.raw(myId[0]));
+            this.andOn('td.start_attr_value', '=', knex.raw(myId[1]));
+            this.andOn('td.end_attr_name', '=', 'author.name');
+            this.andOn('td.end_attr_value', '=', 'author.value');
+          })
           .where({
             'm.signer_keyid': message.signerKeyHash,
             'author.name': author[0],
@@ -1544,10 +1559,15 @@ module.exports = function(knex) {
       }
 
       var hashes = [];
+      var ipfsIndexKeys = [];
 
       function addHashes(res) {
         for (var i = 0; i < res.length; i++) {
           hashes.push(res[i].hash);
+          if (deleteFromIpfsIndexes && res[i].ipfs_hash && res[i].ipfs_hash.length) {
+            var msg = res[i];
+            ipfsIndexKeys.push(getMsgIndexKey(msg));
+          }
         }
       }
 
@@ -1591,6 +1611,11 @@ module.exports = function(knex) {
         hashes = util.removeDuplicates(hashes);
         for (i = 0; i < hashes.length; i++) {
           queries.push(pub.dropMessage(hashes[i]));
+        }
+        ipfsIndexKeys = util.removeDuplicates(ipfsIndexKeys);
+        for (i = 0; i < ipfsIndexKeys.length; i++) {
+          queries.push(p.ipfsMessagesByDistance.delete(ipfsIndexKeys[i]));
+          queries.push(p.ipfsMessagesByTimestamp.delete(ipfsIndexKeys[i].substr(msgIndexKey.indexOf(':') + 1)));
         }
         return P.all(queries);
       });
