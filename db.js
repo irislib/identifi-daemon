@@ -74,7 +74,7 @@ module.exports = function(knex) {
         })
         .catch(function(e) { console.log('adding to ipfs failed:', e); });
       }
-      q = q.then(function() {
+      q.then(function() {
         return pub.messageExists(message.hash);
       })
       .then(function(exists) {
@@ -483,7 +483,7 @@ module.exports = function(knex) {
         for (i = 0; i < msgs.length; i++) {
           if (msgs[i].value.ipfs_hash) {
             process.stdout.write("+");
-            q = q.then(getFn(msgs[i].value.ipfs_hash));
+            q.then(getFn(msgs[i].value.ipfs_hash));
           } else {
             process.stdout.write("-");
           }
@@ -522,7 +522,7 @@ module.exports = function(knex) {
         var i;
         var q = Promise.resolve();
         for (i = 0; i < res.length; i++) {
-          q = q.then(pub.saveMessagesFromIpfsIndex(res[i].value));
+          q.then(pub.saveMessagesFromIpfsIndex(res[i].value));
         }
         return q;
       })
@@ -1088,7 +1088,7 @@ module.exports = function(knex) {
       } else {
         q = Promise.resolve();
       }
-      q = q.then(function() {
+      q.then(function() {
         return pub.mapIdentityAttributes({ id: id, viewpoint: id });
       });
       var i;
@@ -1680,7 +1680,7 @@ module.exports = function(knex) {
       .then(function(res) {
         var q = Promise.resolve();
         if (res.length) {
-          q = q.then(function() {
+          q.then(function() {
             return p.ipfs.object.links(res[0].ipfs_index_root)
             .then(function(links) {
               var queries = [];
