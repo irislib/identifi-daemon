@@ -1,4 +1,5 @@
 /*jshint unused: false */
+var Promise = require("bluebird");
 var moment = require('moment');
 var fs = require('fs');
 
@@ -674,7 +675,7 @@ function requestMessages(url, qs) {
     apiMethod: 'messages',
     qs: qs
   }).then(function(res) {
-    var p = new P(function(resolve) { resolve(); });
+    var p = Promise.resolve();
     function bufferToJws(m) {
       return function(buffer) {
         m.jws = buffer.toString();
