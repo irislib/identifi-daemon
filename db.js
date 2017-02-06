@@ -48,54 +48,10 @@ module.exports = function(knex) {
       // Unobtrusively store msg to ipfs
       var addToIpfs = p.ipfs && !message.ipfs_hash;
       if (addToIpfs) {
-        var msgIndexKey, identityEntriesToAdd;
+        var identityEntriesToAdd;
         q = pub.addMessageToIpfs(message)
         .then(function(res) {
           message.ipfs_hash = res[0].hash;
-          if (addToIpfsIndex) {
-            msgIndexKey = pub.getMsgIndexKey(message); // TODO: should have distance
-            return p.ipfsMessagesByDistance.put(msgIndexKey, message)
-            .then(function(res) {
-              return p.ipfsMessagesByTimestamp.put(msgIndexKey.substr(msgIndexKey.indexOf(':') + 1), message);
-            })
-            .then(function() {
-              return pub.getIdentityAttributes({ limit: 10, id: message.signedData.author[0] }); // TODO: make sure this is unique type
-            })
-            .then(function(attrs) {
-              identityEntriesToAdd = [];
-              attrs = attrs.length ? attrs[0] : [];
-              return pub.addIdentityToIpfs(attrs, identityEntriesToAdd);
-            })
-            .then(function() {
-              return pub.getIdentityAttributes({ limit: 10, id: message.signedData.recipient[0] }); // TODO: make sure this is unique type - and get distance
-            })
-            .then(function(attrs) {
-              identityEntriesToAdd = [];
-              attrs = attrs.length ? attrs[0] : [];
-              var shortestDistance = 99;
-              attrs.forEach(function(attr) {
-                if (typeof attr.dist === 'number' && attr.dist < shortestDistance) {
-                  shortestDistance = attr.dist;
-                }
-              });
-              if (shortestDistance < 99) {
-                message.distance = shortestDistance;
-              }
-              return pub.addIdentityToIpfs(attrs, identityEntriesToAdd);
-            })
-            .then(function() {
-              var queries2 = [];
-              identityEntriesToAdd.forEach(function(entry) {
-                queries2.push(
-                  p.ipfsIdentitiesByDistance.put(entry.key, entry.value).then(function() {
-                    return p.ipfsIdentitiesBySearchKey.put(entry.key.substr(entry.key.indexOf(':') + 1), entry.value);
-                  })
-                );
-              });
-              // return Promise.all(queries2); // TODO: it aint returning
-            })
-            .catch(function(e) { console.log('adding to ipfs failed:', e); });
-          }
         });
       }
       q = q.then(function() {
@@ -111,7 +67,7 @@ module.exports = function(knex) {
           }
         } else {
           var isPublic = typeof message.signedData.public === 'undefined' ? true : message.signedData.public;
-          return p.deletePreviousMessage(message, true)
+          return p.deletePreviousMessage(message)
           .then(function() {
             return p.getPriority(message);
           })
@@ -163,24 +119,69 @@ module.exports = function(knex) {
                 });
               }
             });
-          })
-          .then(function() {
-            if (addToIpfsIndex) {
-              return pub.addIndexRootToIpfs()
-              .then(function(indexRoot) {
-                message.ipfsIndexRoot = indexRoot;
-              });
-            }
-          })
-          .then(function() {
-            return message;
           });
         }
+      })
+      .then(function() {
+        return message;
       });
 
       return this.ensureFreeSpace().then(function() {
         return q;
       });
+    },
+
+    addMessageToIpfsIndex: function(message) {
+      var identityEntriesToAdd = [], msgIndexKey = pub.getMsgIndexKey(message); // TODO: should have distance
+      return p.ipfsMessagesByDistance.put(msgIndexKey, message)
+      .then(function(res) {
+        return p.ipfsMessagesByTimestamp.put(msgIndexKey.substr(msgIndexKey.indexOf(':') + 1), message);
+      })
+      .then(function() {
+        return pub.getIdentityAttributes({ limit: 10, id: message.signedData.author[0] }); // TODO: make sure this is unique type
+      })
+      .then(function(authorAttrs) {
+        var attrs = authorAttrs.length ? authorAttrs[0] : [];
+        return pub.addIdentityToIpfs(attrs, identityEntriesToAdd);
+      })
+      .then(function() {
+        return pub.getIdentityAttributes({ limit: 10, id: message.signedData.recipient[0] }); // TODO: make sure this is unique type - and get distance
+      })
+      .then(function(recipientAttrs) {
+        var attrs = recipientAttrs.length ? recipientAttrs[0] : [];
+        var shortestDistance = 99;
+        attrs.forEach(function(attr) {
+          if (typeof attr.dist === 'number' && attr.dist < shortestDistance) {
+            shortestDistance = attr.dist;
+          }
+        });
+        if (shortestDistance < 99) {
+          message.distance = shortestDistance;
+        }
+        return pub.addIdentityToIpfs(attrs, identityEntriesToAdd);
+      })
+      .then(function() {
+        var q = Promise.resolve();
+        identityEntriesToAdd.forEach(function(entry, i) {
+          console.log('start', i);
+          q = q.then(function() {
+            console.log('p.ipfsIdentitiesByDistance.put', entry.key);
+            return p.ipfsIdentitiesByDistance.put(entry.key, entry.value);
+          })
+          .then(function() {
+            console.log('p.ipfsIdentitiesBySearchKey.put', entry.key.substr(entry.key.indexOf(':') + 1));
+            return p.ipfsIdentitiesBySearchKey.put(entry.key.substr(entry.key.indexOf(':') + 1), entry.value);
+          }).then(function() { console.log('done', i) } );
+        });
+        return q; // TODO: it aint returning
+      })
+      .then(function() {
+        return pub.addIndexRootToIpfs();
+      })
+      .then(function(indexRoot) {
+        message.ipfsIndexRoot = indexRoot;
+      })
+      .catch(function(e) { console.log('adding to ipfs failed:', e); });
     },
 
     addMessageToIpfs: function(message) {
