@@ -36,9 +36,8 @@ module.exports = function(knex) {
 
   var pub = {
     trustIndexedAttributes: null,
-    saveMessage: function(message, updateTrustIndexes, addToIpfsIndex) {
+    saveMessage: function(message, updateTrustIndexes) {
       if (typeof updateTrustIndexes === 'undefined') { updateTrustIndexes = true; }
-      if (typeof addToIpfsIndex === 'undefined') { addToIpfsIndex = true; }
       if (typeof message.signerKeyHash === 'undefined') {
         message.signerKeyHash = Message.getSignerKeyHash(message);
       }
@@ -471,9 +470,14 @@ module.exports = function(knex) {
       return knex('Messages').where('ipfs_hash', path).count('* as count')
       .then(function(res) {
         if (parseInt(res[0].count) === 0) {
-          return p.ipfs.files.cat(path, { buffer: true })
+          return Promise.race([
+            p.ipfs.files.cat(path, { buffer: true }),
+            new Promise(function(resolve, reject) {
+              setTimeout(function() { reject('timeout'); }, 5000); // timeout after 5s
+            })
+          ])
           .then(function(buffer) {
-            var msg = { jws: buffer.toString('utf8'), ipfs_hash: path };
+            process.stdout.write("+");
             Message.verify(msg);
             console.log('saving new msg from ipfs:', msg.ipfs_hash);
             return pub.saveMessage(msg);
@@ -507,7 +511,7 @@ module.exports = function(knex) {
         if (!path) {
           throw new Error('No messages index found at', ipnsName);
         }
-        console.log('Looking up index file');
+        console.log('Looking up index');
         return btree.MerkleBTree.getByHash(path, p.ipfsStorage, 100);
       })
       .then(function(index) {
