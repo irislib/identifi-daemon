@@ -37,7 +37,7 @@ var init = function(db, config) {
     t.string('hash').unique().primary();
     t.string('ipfs_hash', 50).unique();
     t.string('jws', 10000).notNullable();
-    t.timestamp('saved_at');
+    t.datetime('saved_at').notNullable();
     t.datetime('timestamp');
     t.string('type');
     t.integer('rating');

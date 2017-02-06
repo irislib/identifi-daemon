@@ -34,6 +34,8 @@ function sortByKey(a, b) {
 module.exports = function(knex) {
   var p; // Private methods
 
+  var lastIpfsIndexedMessageSavedAt = new Date().toISOString();
+
   var pub = {
     trustIndexedAttributes: null,
     saveMessage: function(message, updateTrustIndexes) {
@@ -85,6 +87,7 @@ module.exports = function(knex) {
                 priority:       priority,
                 is_latest:      p.isLatest(message),
                 signer_keyid:   message.signerKeyHash,
+                saved_at:       new Date().toISOString(),
               })
               .then(function() {
                 var i, queries = [];
@@ -130,6 +133,50 @@ module.exports = function(knex) {
       });
     },
 
+    keepAddingNewMessagesToIpfsIndex: function() {
+      return pub.addNewMessagesToIpfsIndex()
+      .then(function() {
+        return new Promise(function(resolve) {
+          setTimeout(function() {
+            resolve(pub.keepAddingNewMessagesToIpfsIndex());
+          }, 10000);
+        });
+      })
+    },
+
+    addNewMessagesToIpfsIndex: function() {
+      return pub.getMessages({
+        limit: 10000,
+        orderBy: 'timestamp',
+        direction: 'desc',
+        viewpoint: myId,
+        savedAtGt: lastIpfsIndexedMessageSavedAt
+      })
+      .then(function(messages) {
+        if (messages.length) {
+          console.log('', messages.length, 'new messages to index');
+        }
+        var q = Promise.resolve();
+        messages.forEach(function(message) {
+          message = Message.decode(message);
+          var d = new Date(message.saved_at).toISOString();
+          if (d > lastIpfsIndexedMessageSavedAt) {
+            lastIpfsIndexedMessageSavedAt = d;
+          }
+          q = q.then(function() {
+            return pub.addMessageToIpfsIndex(message);
+          });
+        });
+        return q.return(messages.length);
+      })
+      .then(function(messagesAdded) {
+        if (messagesAdded) {
+          return pub.addIndexRootToIpfs();
+        }
+      })
+      .catch(function(e) { console.log('adding new messages to ipfs failed:', e); });
+    },
+
     addMessageToIpfsIndex: function(message) {
       var identityEntriesToAdd = [], msgIndexKey = pub.getMsgIndexKey(message); // TODO: should have distance
       return p.ipfsMessagesByDistance.put(msgIndexKey, message)
@@ -162,23 +209,17 @@ module.exports = function(knex) {
       .then(function() {
         var q = Promise.resolve();
         identityEntriesToAdd.forEach(function(entry, i) {
-          console.log('start', i);
+          // console.log('start', i);
           q = q.then(function() {
-            console.log('p.ipfsIdentitiesByDistance.put', entry.key);
             return p.ipfsIdentitiesByDistance.put(entry.key, entry.value);
           })
           .then(function() {
-            console.log('p.ipfsIdentitiesBySearchKey.put', entry.key.substr(entry.key.indexOf(':') + 1));
             return p.ipfsIdentitiesBySearchKey.put(entry.key.substr(entry.key.indexOf(':') + 1), entry.value);
-          }).then(function() { console.log('done', i) } );
+          }).then(function() {
+            // console.log('done', i)
+          });
         });
         return q; // TODO: it aint returning
-      })
-      .then(function() {
-        return pub.addIndexRootToIpfs();
-      })
-      .then(function(indexRoot) {
-        message.ipfsIndexRoot = indexRoot;
       })
       .catch(function(e) { console.log('adding to ipfs failed:', e); });
     },
@@ -472,15 +513,19 @@ module.exports = function(knex) {
         if (parseInt(res[0].count) === 0) {
           return Promise.race([
             p.ipfs.files.cat(path, { buffer: true }),
-            new Promise(function(resolve, reject) {
-              setTimeout(function() { reject('timeout'); }, 5000); // timeout after 5s
+            new Promise(function(resolve) {
+              setTimeout(function() { resolve(); }, 5000); // timeout after 5s
             })
           ])
           .then(function(buffer) {
-            process.stdout.write("+");
-            Message.verify(msg);
-            console.log('saving new msg from ipfs:', msg.ipfs_hash);
-            return pub.saveMessage(msg);
+            if (buffer) {
+              process.stdout.write("+");
+              Message.verify(msg);
+              console.log('saving new msg from ipfs:', msg.ipfs_hash);
+              return pub.saveMessage(msg);
+            } else {
+              process.stdout.write("-");
+            }
           })
           .catch(function(e) {
             console.log('Processing message', path, 'failed:', e);
@@ -657,6 +702,14 @@ module.exports = function(knex) {
 
         if (options.timestampLte) {
           query.andWhere('Messages.timestamp', '<=', options.timestampLte);
+        }
+
+        if (options.savedAtGt) {
+          query.andWhere('Messages.saved_at', '>', options.savedAtGt);
+        }
+
+        if (options.savedAtLt) {
+          query.andWhere('Messages.saved_at', '<', options.savedAtLt);
         }
 
         if (options.where['Messages.type'] && options.where['Messages.type'].match(/^rating:(positive|neutral|negative)$/i)) {
@@ -1798,6 +1851,7 @@ module.exports = function(knex) {
         if (process.env.NODE_ENV !== 'test') {
           pub.saveMessagesFromIpfsIndexes(); // non-blocking
         }
+        pub.keepAddingNewMessagesToIpfsIndex();
       });
   };
 
