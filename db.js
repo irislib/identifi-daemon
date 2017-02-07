@@ -39,8 +39,9 @@ module.exports = function(knex) {
 
   var pub = {
     trustIndexedAttributes: null,
-    saveMessage: function(message, updateTrustIndexes) {
+    saveMessage: function(message, updateTrustIndexes, addToIpfs) {
       if (typeof updateTrustIndexes === 'undefined') { updateTrustIndexes = true; }
+      if (typeof addToIpfs === 'undefined') { addToIpfs = true; }
       if (typeof message.signerKeyHash === 'undefined') {
         message.signerKeyHash = Message.getSignerKeyHash(message);
       }
@@ -48,7 +49,7 @@ module.exports = function(knex) {
 
       var q = Promise.resolve();
       // Unobtrusively store msg to ipfs
-      var addToIpfs = p.ipfs && !message.ipfs_hash;
+      addToIpfs = (p.ipfs && !message.ipfs_hash) && addToIpfs;
       if (addToIpfs) {
         var identityEntriesToAdd;
         q = pub.addMessageToIpfs(message)
@@ -229,7 +230,7 @@ module.exports = function(knex) {
       return p.ipfs.files.add(new Buffer(message.jws, 'utf8'));
     },
 
-    addMessagesToIpfs: function() {
+    addDbMessagesToIpfs: function() {
       var counter = 0;
       var hash;
 
@@ -486,7 +487,8 @@ module.exports = function(knex) {
           return msgs.length;
         })
         .then(function(msgsLength) {
-          if (msgsToIndex.length < maxMsgCount && !(msgsLength === 0 && offset === 0)) {
+          var hasMore = !(msgsLength === 0 && offset === 0);
+          if (msgsToIndex.length < maxMsgCount && hasMore) {
             return iterate(limit, offset, distance);
           }
           return msgsToIndex.length;
@@ -577,21 +579,21 @@ module.exports = function(knex) {
       .then(function(msgs) {
         var i;
         var q = Promise.resolve();
-        function getFn(path) {
-          return function() {
-            return pub.saveMessageFromIpfs(path);
-          };
-        }
         console.log('Processing', msgs.length, 'messages from index');
-        for (i = 0; i < msgs.length; i++) {
-          if (msgs[i].value.ipfs_hash) {
-            q = q.then(getFn(msgs[i].value.ipfs_hash));
+        msgs.forEach(function(entry) {
+          var msg = { jws: entry.value.jws };
+          if (Message.decode(msg)) {
+            process.stdout.write(".");
+            q = q.then(function() {
+              return pub.saveMessage(msg, false, false);
+            });
           }
-        }
+        });
         return q;
       })
       .then(function() {
         console.log('Finished saving messages from index', ipnsName);
+        return pub.addDbMessagesToIpfs();
       })
       .catch(function(e) {
         console.log('Processing index', ipnsName, 'failed:', e);

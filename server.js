@@ -285,7 +285,7 @@ router.get('/', function(req, res) {
 router.route('/reindex')
   .get(authRequired, function(req, res) {
     //db.addIdentityIndexToIpfs()
-    db.addMessagesToIpfs()
+    db.addDbMessagesToIpfs()
     .then(function(dbRes) {
       res.json(dbRes);
     }).catch(function(err) { handleError(err, req, res); });
