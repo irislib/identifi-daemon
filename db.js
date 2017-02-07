@@ -405,7 +405,7 @@ module.exports = function(knex) {
     },
 
     addIdentityIndexToIpfs: function() {
-      var maxIndexSize = 10000;
+      var maxIndexSize = 100000;
       var identityEntriesToAdd = [];
       return this.getIdentityAttributes({ limit: maxIndexSize })
       .then(function(res) {
@@ -453,7 +453,7 @@ module.exports = function(knex) {
       var limit = 10000;
       var offset = 0;
       var distance = 0;
-      var maxMsgCount = 10000;
+      var maxMsgCount = 100000;
       var maxDepth = 10;
       var msgsToIndex = [];
       function iterate(limit, offset, distance) {
@@ -528,6 +528,7 @@ module.exports = function(knex) {
           ])
           .then(function(buffer) {
             if (buffer) {
+              var msg = { jws: buffer.toString('utf8'), ipfs_hash: path };
               process.stdout.write("+");
               Message.verify(msg);
               console.log('saving new msg from ipfs:', msg.ipfs_hash);
@@ -582,10 +583,7 @@ module.exports = function(knex) {
         console.log('Processing', msgs.length, 'messages from index');
         for (i = 0; i < msgs.length; i++) {
           if (msgs[i].value.ipfs_hash) {
-            process.stdout.write("+");
             q = q.then(getFn(msgs[i].value.ipfs_hash));
-          } else {
-            process.stdout.write("-");
           }
         }
         return q;
