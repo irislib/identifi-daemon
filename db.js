@@ -13,6 +13,7 @@ var myKey = keyutil.getDefault();
 var myId = ['keyID', myKey.hash];
 var myTrustIndexDepth = 4;
 var config;
+var ipfsIndexWidth = 200;
 
 var dagPB = require('ipld-dag-pb');
 
@@ -347,7 +348,7 @@ module.exports = function(knex) {
             targetHash: null
           });
         });
-        return btree.MerkleBTree.fromSortedList(msgs, 100, p.ipfsStorage);
+        return btree.MerkleBTree.fromSortedList(msgs, ipfsIndexWidth, p.ipfsStorage);
       })
       .then(function(receivedIndex) {
         identityProfile.received = receivedIndex.rootNode.hash;
@@ -368,7 +369,7 @@ module.exports = function(knex) {
             targetHash: null
           });
         });
-        return btree.MerkleBTree.fromSortedList(msgs, 100, p.ipfsStorage);
+        return btree.MerkleBTree.fromSortedList(msgs, ipfsIndexWidth, p.ipfsStorage);
       })
       .then(function(sentIndex) {
         identityProfile.sent = sentIndex.rootNode.hash;
@@ -422,7 +423,7 @@ module.exports = function(knex) {
         }
         return iterate(0).then(function() {
           console.log('building index identities_by_distance');
-          return btree.MerkleBTree.fromSortedList(identityEntriesToAdd.sort(sortByKey).slice(), 100, p.ipfsStorage);
+          return btree.MerkleBTree.fromSortedList(identityEntriesToAdd.sort(sortByKey).slice(), ipfsIndexWidth, p.ipfsStorage);
         })
         .then(function(index) {
           p.ipfsIdentitiesByDistance = index;
@@ -430,7 +431,7 @@ module.exports = function(knex) {
             entry.key = entry.key.substr(entry.key.indexOf(':') + 1);
           });
           console.log('building index identities_by_searchkey');
-          return btree.MerkleBTree.fromSortedList(identityEntriesToAdd.sort(sortByKey), 100, p.ipfsStorage);
+          return btree.MerkleBTree.fromSortedList(identityEntriesToAdd.sort(sortByKey), ipfsIndexWidth, p.ipfsStorage);
         })
         .then(function(index) {
           p.ipfsIdentitiesBySearchKey = index;
@@ -496,7 +497,7 @@ module.exports = function(knex) {
       .then(function(res) {
         console.log('res', res);
         console.log('adding messages_by_distance index to ipfs');
-        return btree.MerkleBTree.fromSortedList(msgsToIndex.slice(), 100, p.ipfsStorage);
+        return btree.MerkleBTree.fromSortedList(msgsToIndex.slice(), ipfsIndexWidth, p.ipfsStorage);
       })
       .then(function(index) {
         p.ipfsMessagesByDistance = index;
@@ -507,7 +508,7 @@ module.exports = function(knex) {
         });
         msgsToIndex = msgsToIndex.sort(sortByKey);
         console.log('adding messages_by_timestamp index to ipfs');
-        return btree.MerkleBTree.fromSortedList(msgsToIndex, 100, p.ipfsStorage);
+        return btree.MerkleBTree.fromSortedList(msgsToIndex, ipfsIndexWidth, p.ipfsStorage);
       })
       .then(function(index) {
         p.ipfsMessagesByTimestamp = index;
@@ -567,7 +568,7 @@ module.exports = function(knex) {
           throw new Error('No messages index found at', ipnsName);
         }
         console.log('Looking up index');
-        return btree.MerkleBTree.getByHash(path, p.ipfsStorage, 100);
+        return btree.MerkleBTree.getByHash(path, p.ipfsStorage, ipfsIndexWidth);
       })
       .then(function(index) {
         return index.searchText('', 100000);
