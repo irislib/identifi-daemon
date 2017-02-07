@@ -158,18 +158,26 @@ module.exports = function(knex) {
         if (messages.length) {
           console.log('', messages.length, 'new messages to index');
         }
-        var q = Promise.resolve();
-        messages.forEach(function(message) {
-          message = Message.decode(message);
-          var d = new Date(message.saved_at).toISOString();
-          if (d > lastIpfsIndexedMessageSavedAt) {
-            lastIpfsIndexedMessageSavedAt = d;
-          }
-          q = q.then(function() {
-            return pub.addMessageToIpfsIndex(message);
+        // rebuilding the indexes is more efficient than inserting large number of entries individually
+        if (messages.length < 10) {
+          var q = Promise.resolve();
+          messages.forEach(function(message) {
+            message = Message.decode(message);
+            var d = new Date(message.saved_at).toISOString();
+            if (d > lastIpfsIndexedMessageSavedAt) {
+              lastIpfsIndexedMessageSavedAt = d;
+            }
+            q = q.then(function() {
+              return pub.addMessageToIpfsIndex(message);
+            });
           });
-        });
-        return q.return(messages.length);
+          return q.return(messages.length);
+        } else {
+          return pub.addMessageIndexToIpfs()
+          .then(function() {
+            return pub.addIdentityIndexToIpfs();
+          });
+        }
       })
       .then(function(messagesAdded) {
         if (messagesAdded) {
