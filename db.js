@@ -468,7 +468,7 @@ module.exports = function(knex) {
         })
         .then(function(msgs) {
           if (msgs.length === 0 && offset === 0) {
-            return;
+            return msgs.length;
           }
           if (msgs.length < limit) {
             distance += 1;
@@ -483,9 +483,10 @@ module.exports = function(knex) {
             var key = pub.getMsgIndexKey(msg);
             msgsToIndex.push({ key: key, value: msg, targetHash: null });
           });
+          return msgs.length;
         })
-        .then(function(res) {
-          if (msgsToIndex.length < maxMsgCount) {
+        .then(function(msgsLength) {
+          if (msgsToIndex.length < maxMsgCount && !(msgsLength === 0 && offset === 0)) {
             return iterate(limit, offset, distance);
           }
           return msgsToIndex.length;
