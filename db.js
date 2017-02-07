@@ -1786,7 +1786,10 @@ module.exports = function(knex) {
     },
 
     getIndexesFromIpfsRoot: function() {
-      return knex('TrustIndexedAttributes').where({ name: myId[0], value: myId[1] }).select('ipfs_index_root')
+      return knex('TrustIndexedAttributes')
+        .where({ name: myId[0], value: myId[1] })
+        .whereNotNull('ipfs_index_root')
+        .select('ipfs_index_root')
       .then(function(res) {
         var q = Promise.resolve();
         if (res.length) {
