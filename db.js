@@ -233,21 +233,30 @@ module.exports = function(knex) {
       var hash;
 
       function getReindexQuery() {
-        return knex('Messages').whereNull('ipfs_hash').select('jws', 'hash').limit(1)
+        var msgs = {};
+        return knex('Messages').whereNull('ipfs_hash').select('jws', 'hash').limit(100)
         .then(function(res) {
           if (res.length && p.ipfs) {
-            hash = res[0].hash;
-            return pub.addMessageToIpfs(res[0]);
+            res.forEach(function(msg) {
+              msgs[msg.hash] = new Buffer(msg.jws, 'utf8');
+            });
+            return p.ipfs.files.add(Object.values(msgs));
           }
           return [];
         })
         .then(function(res) {
-          if (res.length) {
-            return knex('Messages').where({ hash: hash }).update({ ipfs_hash: res[0].hash });
-          }
+          console.log('added', res.length, 'msgs to ipfs');
+          var queries = [];
+          Object.keys(msgs).forEach(function(hash, index) {
+            queries.push(
+              knex('Messages').where({ hash: hash }).update({ ipfs_hash: res[index].hash }).return()
+            );
+          });
+          return Promise.all(queries);
         })
         .then(function(res) {
-          if (parseInt(res)) {
+          console.log('updated', res.length, 'db entries')
+          if (res.length) {
             counter += 1;
             return getReindexQuery();
           }
