@@ -4,6 +4,7 @@ var Promise = require("bluebird");
 var util = require('./util.js');
 var schema = require('./schema.js');
 
+var crypto = require('crypto');
 var moment = require('moment');
 var btree = require('merkle-btree');
 
@@ -51,7 +52,7 @@ module.exports = function(knex) {
       // Unobtrusively store msg to ipfs
       addToIpfs = (p.ipfs && !message.ipfs_hash) && addToIpfs;
       if (addToIpfs) {
-        var identityEntriesToAdd;
+        var identityIndexEntriesToAdd;
         q = pub.addMessageToIpfs(message)
         .then(function(res) {
           message.ipfs_hash = res[0].hash;
@@ -188,7 +189,7 @@ module.exports = function(knex) {
     },
 
     addMessageToIpfsIndex: function(message) {
-      var identityEntriesToAdd = [], msgIndexKey = pub.getMsgIndexKey(message); // TODO: should have distance
+      var identityIndexEntriesToAdd = [], msgIndexKey = pub.getMsgIndexKey(message); // TODO: should have distance
       return p.ipfsMessagesByDistance.put(msgIndexKey, message)
       .then(function(res) {
         return p.ipfsMessagesByTimestamp.put(msgIndexKey.substr(msgIndexKey.indexOf(':') + 1), message);
@@ -198,7 +199,7 @@ module.exports = function(knex) {
       })
       .then(function(authorAttrs) {
         var attrs = authorAttrs.length ? authorAttrs[0] : [];
-        return pub.addIdentityToIpfs(attrs, identityEntriesToAdd);
+        return pub.getIdentityProfile(attrs);
       })
       .then(function() {
         return pub.getIdentityAttributes({ limit: 10, id: message.signedData.recipient[0] }); // TODO: make sure this is unique type - and get distance
@@ -214,11 +215,11 @@ module.exports = function(knex) {
         if (shortestDistance < 99) {
           message.distance = shortestDistance;
         }
-        return pub.addIdentityToIpfs(attrs, identityEntriesToAdd);
+        return pub.getIdentityProfile(attrs);
       })
       .then(function() {
         var q = Promise.resolve();
-        identityEntriesToAdd.forEach(function(entry, i) {
+        identityIndexEntriesToAdd.forEach(function(entry, i) {
           // console.log('start', i);
           q = q.then(function() {
             return p.ipfsIdentitiesByDistance.put(entry.key, entry.value);
@@ -336,11 +337,42 @@ module.exports = function(knex) {
       });
     },
 
-    addIdentityToIpfs: function(attrs, identityEntriesToAdd) {
+    getIdentityProfileIndexKeys: function(identityProfile, hash) {
+      var indexKeys = [];
+      var attrs = identityProfile.attrs;
+      for (var j = 0; j < attrs.length; j++) {
+        var distance = parseInt(attrs[j].dist);
+        distance = isNaN(distance) ? 99 : distance;
+        distance = ('00'+distance).substring(distance.toString().length); // pad with zeros
+        var value = encodeURIComponent(attrs[j].val);
+        var name = encodeURIComponent(attrs[j].name);
+        var key = distance + ':' + value + ':' + name + ':' + hash.substr(0, 9);
+        indexKeys.push(key);
+        var lowerCaseKey = key.toLowerCase(); // TODO: lowercase only value
+        if (key !== lowerCaseKey) {
+          indexKeys.push(lowerCaseKey);
+        }
+        if (attrs[j].val.indexOf(' ') > -1) {
+          var words = attrs[j].val.toLowerCase().split(' ');
+          for (var l = 0; l < words.length; l++) {
+            var k = distance + ':' + encodeURIComponent(words[l]) + ':' + name + ':' + hash.substr(0, 9);
+            indexKeys.push(k);
+          }
+        }
+        if (key.match(/^http(s)?:\/\/.+\/[a-zA-Z0-9_]+$/)) {
+          var split = key.split('/');
+          indexKeys.push(split[split.length - 1]);
+        }
+      }
+      return indexKeys;
+    },
+
+    getIdentityProfile: function(attrs) {
       var identityProfile = { attrs: attrs };
       if (!attrs.length) {
         return [];
       }
+      var d1 = new Date();
       return pub.getMessages({
         recipient: [attrs[0].name, attrs[0].val], // TODO: make sure this attr is unique
         limit: 10000,
@@ -349,6 +381,7 @@ module.exports = function(knex) {
         viewpoint: myId
       })
       .then(function(received) {
+        console.log('getMessages by recipient took', d1 - new Date(), 'ms');
         var msgs = [];
         received.forEach(function(msg) {
           msgs.push({
@@ -357,9 +390,11 @@ module.exports = function(knex) {
             targetHash: null
           });
         });
+        d1 = new Date();
         return btree.MerkleBTree.fromSortedList(msgs, ipfsIndexWidth, p.ipfsStorage);
       })
       .then(function(receivedIndex) {
+        console.log('recipient msgs btree building took', d1 - new Date(), 'ms'); d1 = new Date();
         identityProfile.received = receivedIndex.rootNode.hash;
         return pub.getMessages({
           author: [attrs[0].name, attrs[0].val], // TODO: make sure this attr is unique
@@ -370,6 +405,7 @@ module.exports = function(knex) {
         });
       })
       .then(function(sent) {
+        console.log('getMessages by author took', d1 - new Date(), 'ms');
         var msgs = [];
         sent.forEach(function(msg) {
           msgs.push({
@@ -378,45 +414,21 @@ module.exports = function(knex) {
             targetHash: null
           });
         });
+        d1 = new Date();
         return btree.MerkleBTree.fromSortedList(msgs, ipfsIndexWidth, p.ipfsStorage);
       })
       .then(function(sentIndex) {
+        console.log('author msgs btree building took', d1 - new Date(), 'ms'); d1 = new Date();
         identityProfile.sent = sentIndex.rootNode.hash;
-        return p.ipfs.files.add(new Buffer(JSON.stringify(identityProfile)));
-      })
-      .then(function(r) {
-        var hash = r[0].hash;
-        for (var j = 0; j < attrs.length; j++) {
-          var distance = parseInt(attrs[j].dist);
-          distance = isNaN(distance) ? 99 : distance;
-          distance = ('00'+distance).substring(distance.toString().length); // pad with zeros
-          var value = encodeURIComponent(attrs[j].val);
-          var name = encodeURIComponent(attrs[j].name);
-          var key = distance + ':' + value + ':' + name + ':' + hash.substr(0, 9);
-          identityEntriesToAdd.push({ key: key, value: hash, targetHash: null });
-          var lowerCaseKey = key.toLowerCase(); // TODO: lowercase only value
-          if (key !== lowerCaseKey) {
-            identityEntriesToAdd.push({ key: lowerCaseKey, value: hash, targetHash: null });
-          }
-          if (attrs[j].val.indexOf(' ') > -1) {
-            var words = attrs[j].val.toLowerCase().split(' ');
-            for (var l = 0; l < words.length; l++) {
-              var k = distance + ':' + encodeURIComponent(words[l]) + ':' + name + ':' + hash.substr(0, 9);
-              identityEntriesToAdd.push({ key: k, value: hash, targetHash: null });
-            }
-          }
-          if (key.match(/^http(s)?:\/\/.+\/[a-zA-Z0-9_]+$/)) {
-            var split = key.split('/');
-            identityEntriesToAdd.push({ key: split[split.length - 1], value: hash, targetHash: null });
-          }
-        }
+        return identityProfile;
       })
       .catch(function(e) { console.log('adding', attrs, 'failed:', e); });
     },
 
     addIdentityIndexToIpfs: function() {
       var maxIndexSize = 100000;
-      var identityEntriesToAdd = [];
+      var identityIndexEntriesToAdd = [];
+      var identityProfilesByHash = {};
       return this.getIdentityAttributes({ limit: maxIndexSize })
       .then(function(res) {
         console.log('adding to ipfs', res.length);
@@ -425,22 +437,54 @@ module.exports = function(knex) {
           if (i >= res.length) {
             return;
           }
-          return pub.addIdentityToIpfs(res[i], identityEntriesToAdd)
-          .then(function() {
+          return pub.getIdentityProfile(res[i])
+          .then(function(identityProfile) {
+            var hash = crypto.createHash('md5').update(JSON.stringify(identityProfile)).digest('base64');
+            identityProfilesByHash[hash] = identityProfile;
+            pub.getIdentityProfileIndexKeys(identityProfile, hash).forEach(function(key) {
+              identityIndexEntriesToAdd.push({ key: key, value: hash, targetHash: null });
+            });
             return iterate(i + 1);
           });
         }
-        return iterate(0).then(function() {
+        return iterate(0)
+        .then(function() {
+          var orderedKeys = Object.keys(identityProfilesByHash);
+          function addIdentityProfilesToIpfs() {
+            if (!orderedKeys.length) {
+              return;
+            }
+            var keys = orderedKeys.splice(0, 100);
+            var values = [];
+            keys.forEach(function(key) {
+              values.push(new Buffer(JSON.stringify(identityProfilesByHash[key]), 'utf8'));
+            });
+            return p.ipfs.files.add(values)
+            .then(function(res) {
+              keys.forEach(function(key, i) {
+                if (i < res.length && res[i].hash) {
+                  identityProfilesByHash[key] = res[i].hash;
+                }
+              });
+              return addIdentityProfilesToIpfs();
+            });
+          }
+          return addIdentityProfilesToIpfs();
+        })
+        .then(function() {
+          identityIndexEntriesToAdd.forEach(function(entry) {
+            entry.value = identityProfilesByHash[entry.value];
+          });
           console.log('building index identities_by_distance');
-          return btree.MerkleBTree.fromSortedList(identityEntriesToAdd.sort(sortByKey).slice(), ipfsIndexWidth, p.ipfsStorage);
+          return btree.MerkleBTree.fromSortedList(identityIndexEntriesToAdd.sort(sortByKey).slice(), ipfsIndexWidth, p.ipfsStorage);
         })
         .then(function(index) {
           p.ipfsIdentitiesByDistance = index;
-          identityEntriesToAdd.forEach(function(entry) {
+          identityIndexEntriesToAdd.forEach(function(entry) {
             entry.key = entry.key.substr(entry.key.indexOf(':') + 1);
           });
           console.log('building index identities_by_searchkey');
-          return btree.MerkleBTree.fromSortedList(identityEntriesToAdd.sort(sortByKey), ipfsIndexWidth, p.ipfsStorage);
+          return btree.MerkleBTree.fromSortedList(identityIndexEntriesToAdd.sort(sortByKey), ipfsIndexWidth, p.ipfsStorage);
         })
         .then(function(index) {
           p.ipfsIdentitiesBySearchKey = index;
