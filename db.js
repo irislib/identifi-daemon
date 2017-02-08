@@ -354,10 +354,11 @@ module.exports = function(knex) {
         distance = isNaN(distance) ? 99 : distance;
         distance = ('00'+distance).substring(distance.toString().length); // pad with zeros
         var value = encodeURIComponent(attrs[j].val);
+        var lowerCaseValue = encodeURIComponent(attrs[j].val.toLowerCase());
         var name = encodeURIComponent(attrs[j].name);
         var key = distance + ':' + value + ':' + name + ':' + hash.substr(0, 9);
+        var lowerCaseKey = distance + ':' + lowerCaseValue + ':' + name + ':' + hash.substr(0, 9);
         indexKeys.push(key);
-        var lowerCaseKey = key.toLowerCase(); // TODO: lowercase only value
         if (key !== lowerCaseKey) {
           indexKeys.push(lowerCaseKey);
         }
@@ -436,10 +437,8 @@ module.exports = function(knex) {
 
     addIdentityToIpfsIndex: function(attrs) {
       var ip;
-      console.log('getting identity profile');
       return pub.getIdentityProfile(attrs)
       .then(function(identityProfile) {
-        console.log('got identity profile');
         ip = identityProfile;
         return p.ipfs.files.add(new Buffer(JSON.stringify(identityProfile), 'utf8'));
       })
@@ -447,8 +446,8 @@ module.exports = function(knex) {
         if (res.length) {
           var hash = crypto.createHash('md5').update(JSON.stringify(ip)).digest('base64');
           var q = Promise.resolve(), q2 = Promise.resolve();
-          pub.getIdentityProfileIndexKeys(ip, hash).forEach(function(key) {
-            console.log('puttin key', key);
+          pub.getIdentityProfileIndexKeys(ip, hash).forEach(function(key) { // TODO: why this failing?
+            //console.log('adding key to index:', key);
             q = q.then(function() {
               return timeoutPromise(p.ipfsIdentitiesByDistance.put(key, res[0].hash), 1000);
             });
