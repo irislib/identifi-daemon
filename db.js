@@ -33,6 +33,15 @@ function sortByKey(a, b) {
   return 0;
 }
 
+function timeoutPromise(promise, timeout) {
+  return Promise.race([
+    promise,
+    new Promise(function(resolve) {
+      setTimeout(function() { resolve(); }, timeout);
+    })
+  ]);
+}
+
 module.exports = function(knex) {
   var p; // Private methods
 
@@ -199,7 +208,7 @@ module.exports = function(knex) {
       })
       .then(function(authorAttrs) {
         var attrs = authorAttrs.length ? authorAttrs[0] : [];
-        return pub.getIdentityProfile(attrs);
+        return pub.addIdentityToIpfsIndex(attrs);
       })
       .then(function() {
         return pub.getIdentityAttributes({ limit: 10, id: message.signedData.recipient[0] }); // TODO: make sure this is unique type - and get distance
@@ -215,7 +224,7 @@ module.exports = function(knex) {
         if (shortestDistance < 99) {
           message.distance = shortestDistance;
         }
-        return pub.getIdentityProfile(attrs);
+        return pub.addIdentityToIpfsIndex(attrs);
       })
       .then(function() {
         var q = Promise.resolve();
@@ -381,7 +390,7 @@ module.exports = function(knex) {
         viewpoint: myId
       })
       .then(function(received) {
-        console.log('getMessages by recipient took', d1 - new Date(), 'ms');
+        //console.log('getMessages by recipient took', d1 - new Date(), 'ms');
         var msgs = [];
         received.forEach(function(msg) {
           msgs.push({
@@ -394,7 +403,7 @@ module.exports = function(knex) {
         return btree.MerkleBTree.fromSortedList(msgs, ipfsIndexWidth, p.ipfsStorage);
       })
       .then(function(receivedIndex) {
-        console.log('recipient msgs btree building took', d1 - new Date(), 'ms'); d1 = new Date();
+        //console.log('recipient msgs btree building took', d1 - new Date(), 'ms'); d1 = new Date();
         identityProfile.received = receivedIndex.rootNode.hash;
         return pub.getMessages({
           author: [attrs[0].name, attrs[0].val], // TODO: make sure this attr is unique
@@ -405,7 +414,7 @@ module.exports = function(knex) {
         });
       })
       .then(function(sent) {
-        console.log('getMessages by author took', d1 - new Date(), 'ms');
+        //console.log('getMessages by author took', d1 - new Date(), 'ms');
         var msgs = [];
         sent.forEach(function(msg) {
           msgs.push({
@@ -418,11 +427,38 @@ module.exports = function(knex) {
         return btree.MerkleBTree.fromSortedList(msgs, ipfsIndexWidth, p.ipfsStorage);
       })
       .then(function(sentIndex) {
-        console.log('author msgs btree building took', d1 - new Date(), 'ms'); d1 = new Date();
+        //console.log('author msgs btree building took', d1 - new Date(), 'ms'); d1 = new Date();
         identityProfile.sent = sentIndex.rootNode.hash;
         return identityProfile;
       })
       .catch(function(e) { console.log('adding', attrs, 'failed:', e); });
+    },
+
+    addIdentityToIpfsIndex: function(attrs) {
+      var ip;
+      console.log('getting identity profile');
+      return pub.getIdentityProfile(attrs)
+      .then(function(identityProfile) {
+        console.log('got identity profile');
+        ip = identityProfile;
+        return p.ipfs.files.add(new Buffer(JSON.stringify(identityProfile), 'utf8'));
+      })
+      .then(function(res) {
+        if (res.length) {
+          var hash = crypto.createHash('md5').update(JSON.stringify(ip)).digest('base64');
+          var q = Promise.resolve(), q2 = Promise.resolve();
+          pub.getIdentityProfileIndexKeys(ip, hash).forEach(function(key) {
+            console.log('puttin key', key);
+            q = q.then(function() {
+              return timeoutPromise(p.ipfsIdentitiesByDistance.put(key, res[0].hash), 1000);
+            });
+            q2 = q2.then(function() {
+              return timeoutPromise(p.ipfsIdentitiesBySearchKey.put(key.substr(key.indexOf(':') + 1), res[0].hash), 1000);
+            })
+          });
+          return Promise.all([q, q2]);
+        }
+      });
     },
 
     addIdentityIndexToIpfs: function() {
@@ -576,12 +612,7 @@ module.exports = function(knex) {
       return knex('Messages').where('ipfs_hash', path).count('* as count')
       .then(function(res) {
         if (parseInt(res[0].count) === 0) {
-          return Promise.race([
-            p.ipfs.files.cat(path, { buffer: true }),
-            new Promise(function(resolve) {
-              setTimeout(function() { resolve(); }, 5000); // timeout after 5s
-            })
-          ])
+          return timeoutPromise(p.ipfs.files.cat(path, { buffer: true }), 5000)
           .then(function(buffer) {
             if (buffer) {
               var msg = { jws: buffer.toString('utf8'), ipfs_hash: path };
