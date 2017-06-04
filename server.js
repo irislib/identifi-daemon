@@ -131,6 +131,9 @@ try {
   server.ready = getIpfs
   .then(function(ipfs) {
     return db.init(config, ipfs).return();
+  })
+  .then(function() {
+    return ipfs.pubsub.subscribe('identifi', ipfsMsgHandler);
   });
 } catch (ex) {
   log(ex);
@@ -374,6 +377,7 @@ router.route('/messages')
           res.status(201).json(r);
         });
         emitMsg(m);
+        ipfs.pubsub.publish('identifi', new Buffer(m.jws));
       } else {
         db.saveMessage(m)
         .then(function(r) {
@@ -689,6 +693,10 @@ function requestMessages(url, qs) {
   .catch(function(e) {
     log('caught error requesting messages from ' + url + ' : ' + e);
   });
+}
+
+function ipfsMsgHandler(msg) {
+  handleMsgEvent({ jws: msg.toString() });
 }
 
 function getNewMessages(url, since) {
