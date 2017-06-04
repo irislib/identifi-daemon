@@ -696,7 +696,7 @@ function requestMessages(url, qs) {
 }
 
 function ipfsMsgHandler(msg) {
-  handleMsgEvent({ jws: msg.toString() });
+  handleMsgEvent({ jws: msg.data.toString() });
 }
 
 function getNewMessages(url, since) {
