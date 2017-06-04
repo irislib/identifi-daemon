@@ -60,7 +60,7 @@ function log(msg) {
 }
 
 var ipfsAPI = require('ipfs-api');
-var ipfs = ipfsAPI();
+var ipfs = ipfsAPI(config.get('ipfsHost'), config.get('ipfsPort').toString());
 var getIpfs = ipfs.id()
   .then(function() {
     log("Connected to local IPFS API");
@@ -157,8 +157,6 @@ app.use(function(req, res, next) {
   res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
   next();
 });
-
-var port = config.get('port');
 
 // Routes
 // =============================================================================
@@ -636,6 +634,7 @@ function handleMsgEvent(data) {
       db.saveMessage(m).then(function() {
         emitMsg(m);
       }).catch(function(e) {
+        console.log(e.stack);
         log('error handling msg', m.hash, e);
       });
     }
@@ -722,8 +721,8 @@ function makeConnectHandler(url, lastSeen, socket) {
 
 // Start the http server
 server.ready.then(function() {
-  server.listen(port, 'localhost');
-  log('Identifi server started on port ' + port);
+  server.listen(config.get('port'), config.get('host'));
+  log('Identifi server started on port ' + config.get('port'));
 });
 
 module.exports = server;

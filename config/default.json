@@ -29,6 +29,9 @@
       }
     },
     "port": 4944,
+    "host": "127.0.0.1",
+    "ipfsHost": "127.0.0.1",
+    "ipfsPort": 5001,
     "logfile": "identifi.log",
     "datadir": "~/.identifi",
     "maxConnectionsOut": 5,

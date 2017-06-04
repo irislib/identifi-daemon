@@ -644,7 +644,7 @@ module.exports = function(knex) {
         console.log('ipfs.name is not available');
         return;
       }
-      var getName = timeoutPromise(p.ipfs.name.resolve(ipnsName), 30000);
+      var getName = timeoutPromise(p.ipfs.name.resolve(ipnsName), 60000);
       return getName
       .then(function(res) {
         if (!res) { throw new Error('Ipfs index name was not resolved', ipnsName); }
