@@ -188,9 +188,9 @@ module.exports = function(knex) {
               return pub.addMessageToIpfsIndex(message);
             });
           });
-          return timeoutPromise(q.return(messages.length), 30000)
+          return timeoutPromise(q.return(messages.length), 100000)
             .then(function(res) {
-              if (!res) { return pub.addIndexesToIpfs(); }
+              if (typeof res === undefined) { return pub.addIndexesToIpfs(); }
               else { return res; }
             });
         } else {
