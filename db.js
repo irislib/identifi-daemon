@@ -153,7 +153,14 @@ module.exports = function(knex) {
             resolve(pub.keepAddingNewMessagesToIpfsIndex());
           }, 10000);
         });
-      })
+      });
+    },
+
+    addIndexesToIpfs: function() {
+      return pub.addMessageIndexToIpfs()
+      .then(function() {
+        return pub.addIdentityIndexToIpfs();
+      });
     },
 
     addNewMessagesToIpfsIndex: function() {
@@ -181,12 +188,13 @@ module.exports = function(knex) {
               return pub.addMessageToIpfsIndex(message);
             });
           });
-          return q.return(messages.length);
+          return timeoutPromise(q.return(messages.length), 30000)
+            .then(function(res) {
+              if (!res) { return pub.addIndexesToIpfs(); }
+              else { return res; }
+            });
         } else {
-          return pub.addMessageIndexToIpfs()
-          .then(function() {
-            return pub.addIdentityIndexToIpfs();
-          });
+          return pub.addIndexesToIpfs();
         }
       })
       .then(function(messagesAdded) {
@@ -275,7 +283,7 @@ module.exports = function(knex) {
           return Promise.all(queries);
         })
         .then(function(res) {
-          console.log('updated', res.length, 'db entries')
+          console.log('updated', res.length, 'db entries');
           if (res.length) {
             counter += 1;
             return getReindexQuery();
@@ -633,13 +641,16 @@ module.exports = function(knex) {
         console.log('ipfs.name is not available');
         return;
       }
-      return p.ipfs.name.resolve(ipnsName)
+      var getName = timeoutPromise(p.ipfs.name.resolve(ipnsName), 30000);
+      return getName
       .then(function(res) {
+        if (!res) { throw new Error('Ipfs index name was not resolved', ipnsName); }
         var path = res['Path'].replace('/ipfs/', '');
         console.log('resolved name', path);
-        return p.ipfs.object.links(path);
+        return timeoutPromise(p.ipfs.object.links(path), 30000);
       })
       .then(function(links) {
+        if (!links) { throw new Error('Ipfs index was not resolved', ipnsName); }
         var path;
         for (var i = 0; i < links.length; i++) {
           if (links[i]._name === 'messages_by_distance') {
