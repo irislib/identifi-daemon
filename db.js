@@ -37,7 +37,7 @@ function timeoutPromise(promise, timeout) {
   return Promise.race([
     promise,
     new Promise(function(resolve) {
-      setTimeout(function() { resolve(); }, timeout);
+      setTimeout(function() { console.log('promise timed out'); resolve(); }, timeout);
     })
   ]);
 }
@@ -440,6 +440,7 @@ module.exports = function(knex) {
       return pub.getIdentityProfile(attrs)
       .then(function(identityProfile) {
         ip = identityProfile;
+        console.log('adding identityProfile', identityProfile);
         return p.ipfs.files.add(new Buffer(JSON.stringify(identityProfile), 'utf8'));
       })
       .then(function(res) {
@@ -448,14 +449,10 @@ module.exports = function(knex) {
           var q = Promise.resolve(), q2 = Promise.resolve();
           pub.getIdentityProfileIndexKeys(ip, hash).forEach(function(key) { // TODO: why this failing?
             //console.log('adding key to index:', key);
-            q = q.then(function() {
-              return timeoutPromise(p.ipfsIdentitiesByDistance.put(key, res[0].hash), 1000);
-            });
-            q2 = q2.then(function() {
-              return timeoutPromise(p.ipfsIdentitiesBySearchKey.put(key.substr(key.indexOf(':') + 1), res[0].hash), 1000);
-            })
+            q = q.then(p.ipfsIdentitiesByDistance.put(key, res[0].hash));
+            q2 = q2.then(p.ipfsIdentitiesBySearchKey.put(key.substr(key.indexOf(':') + 1), res[0].hash));
           });
-          return Promise.all([q, q2]);
+          return timeoutPromise(Promise.all([q, q2]), 30000);
         }
       });
     },
@@ -1180,20 +1177,6 @@ module.exports = function(knex) {
       });
     },
 
-    getConnectingMessages: function(options) {
-      return knex.select('Messages.*').from('Messages')
-        .innerJoin('MessageAttributes as attr1', 'Messages.hash', 'attr1.message_hash')
-        .innerJoin('MessageAttributes as attr2', 'attr1.message_hash', 'attr2.message_hash')
-        .where({
-          'attr1.name': options.attr1[0],
-          'attr1.value': options.attr1[1],
-          'attr1.is_recipient': true,
-          'attr2.name': options.attr2[0],
-          'attr2.value': options.attr2[1],
-          'attr2.is_recipient': true
-        });
-    },
-
     /*
       1. build a web of trust consisting of keyIDs only
       2. build a web of trust consisting of all kinds of unique attributes, sourcing from messages
@@ -1909,6 +1892,7 @@ module.exports = function(knex) {
             });
           });
         }
+        q = timeoutPromise(q, 15000);
         return q = q.then(function() {
           p.ipfsIdentitiesBySearchKey = p.ipfsIdentitiesBySearchKey || new btree.MerkleBTree(p.ipfsStorage, 100);
           p.ipfsIdentitiesByDistance = p.ipfsIdentitiesByDistance || new btree.MerkleBTree(p.ipfsStorage, 100);

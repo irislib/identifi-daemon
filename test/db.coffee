@@ -107,12 +107,6 @@ describe 'Database', ->
         type: 'verify_identity'
       Message.sign message, privKey, pubKey
       db.saveMessage(message)
-    it 'should return connecting messages', ->
-      db.getConnectingMessages({
-        attr1: ['email', 'bob@example.com']
-        attr2: ['url', 'http://www.example.com/bob']
-      }).then (res) ->
-        res.length.should.equal 1
     ### it 'should return connections', ->
       db.mapIdentityAttributes({
         id: ['email','bob@example.com']

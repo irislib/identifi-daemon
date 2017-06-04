@@ -552,25 +552,6 @@ router.get('/identities/:attr_name/:attr_value/received', function(req, res) {
 });
 
 
-/**
- * @api {get} /identities/:pointer_type/:pointer_value/connecting_msgs Connecting messages
- * @apiGroup Identities
- */
-router.get('/identities/:attr_name/:attr_value/connecting_msgs', function(req, res) {
-  if (!(req.query.target_name && req.query.target_value)) {
-    res.status(400).json('target_name and target_value must be specified');
-    return;
-  }
-  var options = {
-    attr1: [req.params.attr_name, req.params.attr_value],
-    attr2: [req.query.target_name, req.query.target_value]
-  };
-  db.getConnectingMessages(options).then(function(dbRes) {
-    res.json(dbRes);
-  }).catch(function(err) { handleError(err, req, res); });
-});
-
-
 router.get('/identities/:attr_name/:attr_value/trustpaths', function(req, res) {
   if (!(req.query.target_name && req.query.target_value)) {
     res.status(400).json('target_name and target_value must be specified');
