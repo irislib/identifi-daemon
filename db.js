@@ -37,7 +37,10 @@ function timeoutPromise(promise, timeout) {
   return Promise.race([
     promise,
     new Promise(function(resolve) {
-      setTimeout(function() { console.log('promise timed out'); resolve(); }, timeout);
+      setTimeout(function() {
+        //console.log('promise timed out');
+        resolve();
+      }, timeout);
     })
   ]);
 }
@@ -448,7 +451,7 @@ module.exports = function(knex) {
       return pub.getIdentityProfile(attrs)
       .then(function(identityProfile) {
         ip = identityProfile;
-        console.log('adding identityProfile', identityProfile);
+        //console.log('adding identityProfile', identityProfile);
         return p.ipfs.files.add(new Buffer(JSON.stringify(identityProfile), 'utf8'));
       })
       .then(function(res) {
