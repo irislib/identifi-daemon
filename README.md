@@ -4,6 +4,10 @@
 
 https://www.npmjs.com/package/identifi-daemon
 
+Identifi daemon maintains identity and message indexes on IPFS.
+
+Note: Using [identifi-angular](https://github.com/identifi/identifi-angular) is probably sufficient, unless you want to maintain your own indexes.
+
 ## Install
 
 ```sh
