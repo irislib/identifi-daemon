@@ -4,7 +4,7 @@
 
 https://www.npmjs.com/package/identifi-daemon
 
-Identifi daemon maintains identity and message indexes on IPFS.
+Identifi daemon maintains identity and message indexes on IPFS. [Merkle-btree](https://github.com/mmalmi/merkle-btree) is used for indexing.
 
 Note: Using [identifi-angular](https://github.com/identifi/identifi-angular) is probably sufficient, unless you want to maintain your own indexes.
 
