@@ -474,7 +474,7 @@ module.exports = function(knex) {
       var identityProfilesByHash = {};
       return this.getIdentityAttributes({ limit: maxIndexSize })
       .then(function(res) {
-        console.log('adding to ipfs', res.length);
+        console.log('Adding identity index of', res.length, 'entries to ipfs');
         function iterate(i) {
           console.log(i + '/' + res.length);
           if (i >= res.length) {
@@ -1323,6 +1323,42 @@ module.exports = function(knex) {
               return parseInt(res[0].wot_size);
             });
         });
+      });
+    },
+
+    generateIdentityIndex: function(viewpoint, trustedKeyID) {
+      console.log('Generating identity index (SQL)');
+      function mapNextIdentifier() {
+        return knex('TrustDistances')
+        .leftJoin('IdentityAttributes', function() {
+          this.on('IdentityAttributes.viewpoint_name', '=', 'TrustDistances.start_attr_name');
+          this.on('IdentityAttributes.viewpoint_value', '=', 'TrustDistances.start_attr_value');
+          this.on('IdentityAttributes.name', '=', 'TrustDistances.end_attr_name');
+          this.on('IdentityAttributes.value', '=', 'TrustDistances.end_attr_value');
+        })
+        .where({ start_attr_name: viewpoint[0], start_attr_value: viewpoint[1], identity_id: null })
+        .orderBy('distance', 'asc')
+        .limit(1)
+        .select('end_attr_name', 'end_attr_value')
+        .then(function(res) {
+          if (res.length) {
+            var id = [res[0].end_attr_name, res[0].end_attr_value];
+            process.stdout.write("*");
+            return pub.mapIdentityAttributes({ id: id, viewpoint: viewpoint })
+            .then(function() {
+              return mapNextIdentifier();
+            });
+          }
+        });
+      }
+
+      // for each identifier in WoT: map identity, unless identifier already belongs to an identity
+      return knex('IdentityAttributes').where({ viewpoint_name: viewpoint[0], viewpoint_value: viewpoint[1] }).del()
+      .then(function() {
+        return knex('IdentityStats').where({ viewpoint_name: viewpoint[0], viewpoint_value: viewpoint[1] }).del();
+      })
+      .then(function() {
+        return mapNextIdentifier();
       });
     },
 
