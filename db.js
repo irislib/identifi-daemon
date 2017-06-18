@@ -1163,6 +1163,12 @@ module.exports = function(knex) {
               .where('identity_id', identityId)
               .orderByRaw('confirmations - refutations DESC');
           });
+      })
+      .then(function(res) {
+        return pub.getStats(options.id, { viewpoint: options.viewpoint, maxDistance: 0 })
+        .then(function() {
+          return res;
+        });
       });
     },
 
@@ -1356,6 +1362,9 @@ module.exports = function(knex) {
       return knex('IdentityAttributes').where({ viewpoint_name: viewpoint[0], viewpoint_value: viewpoint[1] }).del()
       .then(function() {
         return knex('IdentityStats').where({ viewpoint_name: viewpoint[0], viewpoint_value: viewpoint[1] }).del();
+      })
+      .then(function() {
+        return pub.mapIdentityAttributes({ id: viewpoint, viewpoint: viewpoint });
       })
       .then(function() {
         return mapNextIdentifier();
