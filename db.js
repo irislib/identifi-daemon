@@ -412,11 +412,15 @@ module.exports = function(knex) {
           });
         });
         d1 = new Date();
-        return btree.MerkleBTree.fromSortedList(msgs, ipfsIndexWidth, p.ipfsStorage);
+        if (msgs.length) {
+          return btree.MerkleBTree.fromSortedList(msgs, ipfsIndexWidth, p.ipfsStorage);
+        }
       })
       .then(function(receivedIndex) {
+        if (receivedIndex) {
+          identityProfile.received = receivedIndex.rootNode.hash;
+        }
         //console.log('recipient msgs btree building took', d1 - new Date(), 'ms'); d1 = new Date();
-        identityProfile.received = receivedIndex.rootNode.hash;
         return pub.getMessages({
           author: [attrs[0].name, attrs[0].val], // TODO: make sure this attr is unique
           limit: 10000,
@@ -436,11 +440,15 @@ module.exports = function(knex) {
           });
         });
         d1 = new Date();
-        return btree.MerkleBTree.fromSortedList(msgs, ipfsIndexWidth, p.ipfsStorage);
+        if (msgs.length) {
+          return btree.MerkleBTree.fromSortedList(msgs, ipfsIndexWidth, p.ipfsStorage);
+        }
       })
       .then(function(sentIndex) {
         //console.log('author msgs btree building took', d1 - new Date(), 'ms'); d1 = new Date();
-        identityProfile.sent = sentIndex.rootNode.hash;
+        if (sentIndex) {
+          identityProfile.sent = sentIndex.rootNode.hash;
+        }
         return identityProfile;
       })
       .catch(function(e) { console.log('adding', attrs, 'failed:', e); });
