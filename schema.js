@@ -99,6 +99,8 @@ var init = function(db, config) {
     t.integer('distance').notNullable().default(-1);
     t.integer('positive_score').unsigned().notNullable().default(0);
     t.integer('negative_score').unsigned().notNullable().default(0);
+    t.integer('sent_positive').unsigned().notNullable().default(0);
+    t.integer('sent_negative').unsigned().notNullable().default(0);
     t.index(['viewpoint_name', 'viewpoint_value', 'distance']);
   }).catch(catcher));
 
