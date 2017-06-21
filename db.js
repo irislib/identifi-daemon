@@ -167,6 +167,7 @@ module.exports = function(knex) {
     },
 
     addNewMessagesToIpfsIndex: function() {
+      var msgCount;
       return pub.getMessages({
         limit: 10000,
         orderBy: 'timestamp',
@@ -175,6 +176,7 @@ module.exports = function(knex) {
         savedAtGt: lastIpfsIndexedMessageSavedAt
       })
       .then(function(messages) {
+        msgCount = messages.length;
         if (messages.length) {
           console.log('', messages.length, 'new messages to index');
         }
@@ -200,8 +202,8 @@ module.exports = function(knex) {
           return pub.addIndexesToIpfs();
         }
       })
-      .then(function(messagesAdded) {
-        if (messagesAdded) {
+      .then(function() {
+        if (msgCount) {
           return pub.addIndexRootToIpfs();
         }
       })
@@ -236,21 +238,6 @@ module.exports = function(knex) {
           message.distance = shortestDistance;
         }
         return pub.addIdentityToIpfsIndex(attrs);
-      })
-      .then(function() {
-        var q = Promise.resolve();
-        identityIndexEntriesToAdd.forEach(function(entry, i) {
-          // console.log('start', i);
-          q = q.then(function() {
-            return p.ipfsIdentitiesByDistance.put(entry.key, entry.value);
-          })
-          .then(function() {
-            return p.ipfsIdentitiesBySearchKey.put(entry.key.substr(entry.key.indexOf(':') + 1), entry.value);
-          }).then(function() {
-            // console.log('done', i)
-          });
-        });
-        return q; // TODO: it aint returning
       })
       .catch(function(e) { console.log('adding to ipfs failed:', e); });
     },
@@ -391,7 +378,7 @@ module.exports = function(knex) {
     getIdentityProfile: function(attrs) {
       var identityProfile = { attrs: attrs };
       if (!attrs.length) {
-        return [];
+        return Promise.resolve(identityProfile);
       }
       var d1 = new Date();
       return pub.getMessages({
