@@ -1,5 +1,4 @@
-/*jshint unused: false */
-/*eslint no-use-before-define: ["error", { "functions": false }]*/
+/*jshint latedef:nofunc*/
 var Promise = require("bluebird");
 var moment = require('moment');
 var fs = require('fs');
@@ -588,7 +587,7 @@ router.get('/identities/:attr_name/:attr_value/generatewotindex', authRequired, 
   }
   var maintain = parseInt(req.query.maintain) === 1;
   db.generateWebOfTrustIndex([req.params.attr_name, req.params.attr_value], depth, maintain, trustedKeyID)
-  .then(function(dbRes) {
+  .then(function() {
     return db.generateIdentityIndex([req.params.attr_name, req.params.attr_value], trustedKeyID);
   })
   .then(function(dbRes) {
@@ -610,7 +609,7 @@ app.get('/ipfs/:hash', function(req, res) {
   .then(function(stream) {
     stream.pipe(res);
   })
-  .catch(function(e) {
+  .catch(function() {
     res.status(404).json("not found");
   });
 });
@@ -660,68 +659,6 @@ function handleIncomingWebsocket(socket) {
 
 // Handle incoming websockets
 io.on('connection', handleIncomingWebsocket);
-
-/* TODO: prevent infinite loops & peer misbehavior. Should maybe request by trust distance. */
-function requestMessages(url, qs) {
-  return identifiClient.request({
-    uri: url,
-    apiMethod: 'messages',
-    qs: qs
-  }).then(function(res) {
-    var p = Promise.resolve();
-    function bufferToJws(m) {
-      return function(buffer) {
-        m.jws = buffer.toString();
-      };
-    }
-
-    function verifyAndSaveMsg(m) {
-      return function() {
-        Message.verify(m);
-        return db.saveMessage(m).return();
-      };
-    }
-
-    for (var i = 0; i < res.length; i++) {
-      var m = res[i];
-      if (ipfs && m.ipfs_hash && !m.jws) { // new peer version that stores msg jws in ipfs
-        p.then(ipfs.files.cat(m.hash, { buffer: true }))
-        .then(bufferToJws(m));
-      }
-      p.then(verifyAndSaveMsg(m));
-    }
-    if (res.length === qs.limit) {
-      qs.offset += qs.limit;
-      return p.then(function() {
-        requestMessages(url, qs);
-      });
-    }
-  })
-  .catch(function(e) {
-    log('caught error requesting messages from ' + url + ' : ' + e);
-  });
-}
-
-function getNewMessages(url, since) {
-  var sinceStr = since ? ('since ' + since) : '';
-  log('asking ' + url + ' for new messages ' + sinceStr);
-  var qs = {
-    timestamp_gte: since,
-    limit: 100,
-    offset: 0,
-    order_by: 'priority',
-    direction: 'desc'
-  };
-  return requestMessages(url, qs);
-}
-
-function makeConnectHandler(url, lastSeen, socket) {
-  return function() {
-    log('Connected to ' + url);
-    socket.on('msg', handleMsgEvent);
-    getNewMessages(url, lastSeen);
-  };
-}
 
 // Start the http server
 server.ready.then(function() {
