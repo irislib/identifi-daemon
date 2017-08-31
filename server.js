@@ -1,4 +1,5 @@
 /*jshint unused: false */
+/*eslint no-use-before-define: ["error", { "functions": false }]*/
 var Promise = require("bluebird");
 var moment = require('moment');
 var fs = require('fs');
@@ -644,6 +645,10 @@ function handleMsgEvent(data) {
   });
 }
 
+function ipfsMsgHandler(msg) {
+  handleMsgEvent({ jws: msg.data.toString() });
+}
+
 function handleIncomingWebsocket(socket) {
   log('connection from ' + socket.client.conn.remoteAddress);
 
@@ -695,10 +700,6 @@ function requestMessages(url, qs) {
   .catch(function(e) {
     log('caught error requesting messages from ' + url + ' : ' + e);
   });
-}
-
-function ipfsMsgHandler(msg) {
-  handleMsgEvent({ jws: msg.data.toString() });
 }
 
 function getNewMessages(url, since) {
