@@ -586,12 +586,14 @@ router.get('/identities/:attr_name/:attr_value/generatewotindex', authRequired, 
     trustedKeyID = myKey.hash;
   }
   var maintain = parseInt(req.query.maintain) === 1;
+  var wotSize = 0;
   db.generateWebOfTrustIndex([req.params.attr_name, req.params.attr_value], depth, maintain, trustedKeyID)
-  .then(function() {
+  .then(function(res) {
+    wotSize = res;
     return db.generateIdentityIndex([req.params.attr_name, req.params.attr_value], trustedKeyID);
   })
-  .then(function(dbRes) {
-    res.json(dbRes);
+  .then(function() {
+    res.json(wotSize);
     if (req.params.attr_name === 'keyID' && req.params.attr_value === myKey.hash && process.env.NODE_ENV !== 'test') {
       db.addIndexesToIpfs();
     }

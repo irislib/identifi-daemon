@@ -65,7 +65,9 @@ module.exports = function(knex) {
       // Unobtrusively store msg to ipfs
       addToIpfs = (p.ipfs && !message.ipfs_hash) && addToIpfs;
       if (addToIpfs) {
-        q.then(pub.addMessageToIpfs(message))
+        q.then(function() {
+          return pub.addMessageToIpfs(message);
+        })
         .then(function(res) {
           message.ipfs_hash = res[0].hash;
         });
@@ -86,17 +88,28 @@ module.exports = function(knex) {
           if (Object.keys(ipfsIdentityIndexKeysToRemove).length < REBUILD_INDEXES_IF_NEW_MSGS_GT) {
             // Mark for deletion the index references to expiring identity profiles
             ipfsIdentityIndexKeysToRemove[message.hash] = [];
-            q.then(pub.getIndexKeysByIdentity(message.signedData.author))
+            q.then(function() {
+              return pub.getIdentityAttributesByAuthorOrRecipient(message, true);
+            })
+            .then(function(attrs) {
+              return pub.getIndexKeysByIdentity(attrs);
+            })
             .then(function(keys) {
-              ipfsIdentityIndexKeysToRemove[message.hash].concat(keys);
-              return pub.getIndexKeysByIdentity(message.signedData.recipient);
-            }).then(function(keys) {
-              ipfsIdentityIndexKeysToRemove[message.hash].concat(keys);
+              ipfsIdentityIndexKeysToRemove[message.hash] = ipfsIdentityIndexKeysToRemove[message.hash].concat(keys);
+              return pub.getIdentityAttributesByAuthorOrRecipient(message, false);
+            })
+            .then(function(attrs) {
+              return pub.getIndexKeysByIdentity(attrs);
+            })
+            .then(function(keys) {
+              ipfsIdentityIndexKeysToRemove[message.hash] = ipfsIdentityIndexKeysToRemove[message.hash].concat(keys);
             });
           }
 
           var isPublic = typeof message.signedData.public === 'undefined' ? true : message.signedData.public;
-          return q.then(p.deletePreviousMessage(message))
+          return q.then(function() {
+            return p.deletePreviousMessage(message);
+          })
           .then(function() {
             return p.getPriority(message);
           })
@@ -204,9 +217,9 @@ module.exports = function(knex) {
                 var q3 = p.ipfsIdentitiesBySearchKey.delete(key.substr(key.indexOf(':') + 1));
                 return timeoutPromise(Promise.all([q2, q3]), 30000);
               });
+              delete ipfsIdentityIndexKeysToRemove[msg];
             });
           });
-          ipfsIdentityIndexKeysToRemove = {};
           messages.forEach(function(message) {
             message = Message.decode(message);
             var d = new Date(message.saved_at).toISOString();
@@ -223,8 +236,10 @@ module.exports = function(knex) {
               else { return res; }
             });
         } else {
-          ipfsIdentityIndexKeysToRemove = {};
-          return pub.addIndexesToIpfs();
+          return pub.addIndexesToIpfs()
+          .then(function() {
+            ipfsIdentityIndexKeysToRemove = {};
+          });
         }
       })
       .then(function() {
@@ -241,7 +256,10 @@ module.exports = function(knex) {
       var attributes = getByAuthor ? message.signedData.author : message.signedData.recipient;
       for (var i = 0; i < attributes.length; i++) {
         if (pub.isUniqueType(attributes[i][0])) {
-          return pub.getIdentityAttributes({ limit: limit || 10, id: attributes[i] });
+          return pub.getIdentityAttributes({ limit: limit || 10, id: attributes[i] })
+          .then(function(attrs) {
+            return attrs.length ? attrs[0] : [];
+          });
         }
       }
       return [];
@@ -257,18 +275,14 @@ module.exports = function(knex) {
         return pub.getIdentityAttributesByAuthorOrRecipient(message, true);
       })
       .then(function(authorAttrs) {
-        console.log('adding authorAttrs', authorAttrs);
-        var attrs = authorAttrs.length ? authorAttrs[0] : [];
-        return pub.addIdentityToIpfsIndex(attrs);
+        return pub.addIdentityToIpfsIndex(authorAttrs);
       })
       .then(function() {
         return pub.getIdentityAttributesByAuthorOrRecipient(message, false);
       })
       .then(function(recipientAttrs) {
-        console.log('adding recipientAttrs', recipientAttrs);
-        var attrs = recipientAttrs.length ? recipientAttrs[0] : [];
         var shortestDistance = 99;
-        attrs.forEach(function(attr) {
+        recipientAttrs.forEach(function(attr) {
           if (typeof attr.dist === 'number' && attr.dist < shortestDistance) {
             shortestDistance = attr.dist;
           }
@@ -276,7 +290,7 @@ module.exports = function(knex) {
         if (shortestDistance < 99) {
           message.distance = shortestDistance;
         }
-        return pub.addIdentityToIpfsIndex(attrs);
+        return pub.addIdentityToIpfsIndex(recipientAttrs);
       })
       .catch(function(e) { console.log('adding to ipfs failed:', e); });
     },
@@ -422,12 +436,13 @@ module.exports = function(knex) {
       var d1 = new Date();
       var uniqueAttr = attrs[0];
       for (var i = 0; i < attrs.length; i++) {
-        if (pub.isUniqueType(attrs[i][0])) {
+        if (pub.isUniqueType(attrs[i].name)) {
           uniqueAttr = attrs[i];
         }
       }
+
       return pub.getMessages({
-        recipient: uniqueAttr,
+        recipient: [uniqueAttr.name, uniqueAttr.val],
         limit: 10000,
         orderBy: 'timestamp',
         direction: 'asc',
@@ -454,7 +469,7 @@ module.exports = function(knex) {
         }
         //console.log('recipient msgs btree building took', d1 - new Date(), 'ms'); d1 = new Date();
         return pub.getMessages({
-          author: uniqueAttr,
+          author: [uniqueAttr.name, uniqueAttr.val],
           limit: 10000,
           orderBy: 'timestamp',
           direction: 'asc',
@@ -503,7 +518,6 @@ module.exports = function(knex) {
       var ip;
       return pub.getIdentityProfile(attrs)
       .then(function(identityProfile) {
-        console.log('got identityProfile', identityProfile);
         ip = identityProfile;
         return p.ipfs.files.add(new Buffer(JSON.stringify(identityProfile), 'utf8'));
       })
@@ -512,7 +526,6 @@ module.exports = function(knex) {
           var hash = crypto.createHash('md5').update(JSON.stringify(ip)).digest('base64');
           var q = Promise.resolve(), q2 = Promise.resolve();
           pub.getIdentityProfileIndexKeys(ip, hash).forEach(function(key) {
-            console.log('adding key and value to index:', key, hash);
             q = q.then(p.ipfsIdentitiesByDistance.put(key, res[0].hash));
             q2 = q2.then(p.ipfsIdentitiesBySearchKey.put(key.substr(key.indexOf(':') + 1), res[0].hash));
           });
