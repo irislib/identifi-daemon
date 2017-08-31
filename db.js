@@ -22,6 +22,8 @@ var SQL_INSERT_OR_REPLACE = 'INSERT OR REPLACE';
 var SQL_ON_CONFLICT = '';
 var SQL_PRINTF = 'PRINTF';
 
+var REBUILD_INDEXES_IF_NEW_MSGS_GT = 10;
+
 function sortByKey(a, b) {
   if (a.key < b.key) {
     return -1;
@@ -49,6 +51,8 @@ module.exports = function(knex) {
 
   var lastIpfsIndexedMessageSavedAt = new Date().toISOString();
 
+  var ipfsIdentityIndexKeysToRemove = {};
+
   var pub = {
     trustIndexedAttributes: null,
     saveMessage: function(message, updateTrustIndexes, addToIpfs) {
@@ -63,7 +67,7 @@ module.exports = function(knex) {
       // Unobtrusively store msg to ipfs
       addToIpfs = (p.ipfs && !message.ipfs_hash) && addToIpfs;
       if (addToIpfs) {
-        q = pub.addMessageToIpfs(message)
+        q.then(pub.addMessageToIpfs(message))
         .then(function(res) {
           message.ipfs_hash = res[0].hash;
         });
@@ -80,8 +84,21 @@ module.exports = function(knex) {
             return Promise.resolve(false);
           }
         } else {
+          q = Promise.resolve();
+          if (Object.keys(ipfsIdentityIndexKeysToRemove).length < REBUILD_INDEXES_IF_NEW_MSGS_GT) {
+            // Mark for deletion the index references to expiring identity profiles
+            ipfsIdentityIndexKeysToRemove[message.hash] = [];
+            q.then(pub.getIndexKeysByIdentity(message.signedData.author))
+            .then(function(keys) {
+              ipfsIdentityIndexKeysToRemove[message.hash].concat(keys);
+              return pub.getIndexKeysByIdentity(message.signedData.recipient);
+            }).then(function(keys) {
+              ipfsIdentityIndexKeysToRemove[message.hash].concat(keys);
+            });
+          }
+
           var isPublic = typeof message.signedData.public === 'undefined' ? true : message.signedData.public;
-          return p.deletePreviousMessage(message)
+          return q.then(p.deletePreviousMessage(message))
           .then(function() {
             return p.getPriority(message);
           })
@@ -179,8 +196,19 @@ module.exports = function(knex) {
           console.log('', messages.length, 'new messages to index');
         }
         // rebuilding the indexes is more efficient than inserting large number of entries individually
-        if (messages.length < 10) {
+        if (messages.length < REBUILD_INDEXES_IF_NEW_MSGS_GT) {
           var q = Promise.resolve();
+          // remove identity index entries that point to expired identity profiles
+          Object.keys(ipfsIdentityIndexKeysToRemove).forEach(function(msg) {
+            ipfsIdentityIndexKeysToRemove[msg].forEach(function(key) {
+              q.then(function() {
+                var q2 = p.ipfsIdentitiesByDistance.delete(key);
+                var q3 = p.ipfsIdentitiesBySearchKey.delete(key.substr(key.indexOf(':') + 1));
+                return timeoutPromise(Promise.all([q2, q3]), 30000);
+              });
+            });
+          });
+          ipfsIdentityIndexKeysToRemove = {};
           messages.forEach(function(message) {
             message = Message.decode(message);
             var d = new Date(message.saved_at).toISOString();
@@ -197,6 +225,7 @@ module.exports = function(knex) {
               else { return res; }
             });
         } else {
+          ipfsIdentityIndexKeysToRemove = {};
           return pub.addIndexesToIpfs();
         }
       })
@@ -220,11 +249,7 @@ module.exports = function(knex) {
       return [];
     },
 
-    removeMessageAuthorAndRecipientFromIpfsIndex: function(message) {
-
-    },
-
-    addMessageToIpfsIndex: function(message) { // this should be run after message is saved into db
+    addMessageToIpfsIndex: function(message) {
       var identityIndexEntriesToAdd = [], msgIndexKey = pub.getMsgIndexKey(message); // TODO: should have distance
       return p.ipfsMessagesByDistance.put(msgIndexKey, message)
       .then(function(res) {
@@ -398,8 +423,14 @@ module.exports = function(knex) {
         return Promise.resolve(identityProfile);
       }
       var d1 = new Date();
+      var uniqueAttr = [attrs[0].name, attrs[1].name];
+      for (var i = 0; i < attrs.length; i++) {
+        if (pub.isUniqueType(attrs[i][0])) {
+          uniqueAttr = attrs[i];
+        }
+      }
       return pub.getMessages({
-        recipient: [attrs[0].name, attrs[0].val], // TODO: make sure this attr is unique
+        recipient: uniqueAttr,
         limit: 10000,
         orderBy: 'timestamp',
         direction: 'asc',
@@ -426,7 +457,7 @@ module.exports = function(knex) {
         }
         //console.log('recipient msgs btree building took', d1 - new Date(), 'ms'); d1 = new Date();
         return pub.getMessages({
-          author: [attrs[0].name, attrs[0].val], // TODO: make sure this attr is unique
+          author: uniqueAttr,
           limit: 10000,
           orderBy: 'timestamp',
           direction: 'asc',
@@ -458,42 +489,38 @@ module.exports = function(knex) {
       .catch(function(e) { console.log('adding', attrs, 'failed:', e); });
     },
 
-    addOrDeleteIdentityFromIpfsIndex: function(attrs, del) {
+    getIndexKeysByIdentity: function(attrs) {
+      return pub.getIdentityProfile(attrs)
+      .then(function(identityProfile) {
+        var keys = [];
+        pub.getIdentityProfileIndexKeys(ip, hash).forEach(function(key) {
+          keys.push(key);
+          keys.push(key.substr(key.indexOf(':') + 1), res[0].hash);
+        });
+        return keys;
+      });
+    },
+
+    addIdentityToIpfsIndex: function(attrs) {
       var ip;
       return pub.getIdentityProfile(attrs)
       .then(function(identityProfile) {
         console.log('got identityProfile', identityProfile);
         ip = identityProfile;
-        if (!del) {
-          return p.ipfs.files.add(new Buffer(JSON.stringify(identityProfile), 'utf8'));
-        }
+        return p.ipfs.files.add(new Buffer(JSON.stringify(identityProfile), 'utf8'));
       })
       .then(function(res) {
         if (res.length) {
           var hash = crypto.createHash('md5').update(JSON.stringify(ip)).digest('base64');
           var q = Promise.resolve(), q2 = Promise.resolve();
           pub.getIdentityProfileIndexKeys(ip, hash).forEach(function(key) {
-            if (del) {
-              console.log('removing key and value from index:', key, hash);
-              q = q.then(p.ipfsIdentitiesByDistance.delete(key));
-              q2 = q2.then(p.ipfsIdentitiesBySearchKey.delete(key.substr(key.indexOf(':') + 1)));
-            } else {
-              console.log('adding key and value to index:', key, hash);
-              q = q.then(p.ipfsIdentitiesByDistance.put(key, res[0].hash));
-              q2 = q2.then(p.ipfsIdentitiesBySearchKey.put(key.substr(key.indexOf(':') + 1), res[0].hash));
-            }
+            console.log('adding key and value to index:', key, hash);
+            q = q.then(p.ipfsIdentitiesByDistance.put(key, res[0].hash));
+            q2 = q2.then(p.ipfsIdentitiesBySearchKey.put(key.substr(key.indexOf(':') + 1), res[0].hash));
           });
           return timeoutPromise(Promise.all([q, q2]), 30000);
         }
       });
-    },
-
-    addIdentityToIpfsIndex: function(attrs) {
-      return addOrDeleteIdentityFromIpfsIndex(attrs, false);
-    },
-
-    deleteIdentityFromIpfsIndex: function(attrs) {
-      return addOrDeleteIdentityFromIpfsIndex(attrs, true);
     },
 
     addIdentityIndexToIpfs: function() {
