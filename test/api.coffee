@@ -461,18 +461,6 @@ describe 'API', ->
           json_res.should.contain 'bob@example.net'
           # json_res.should.contain 'bob@example.org'
           # json_res.should.contain 'Bob the Builder' # TODO: fix
-    describe 'connecting_msgs', ->
-        it 'should return messages that connect id1 and id2 to the same identity', ->
-          r = identifi.request
-            apiMethod: 'identities'
-            apiIdType: 'email'
-            apiId: 'bob@example.com'
-            apiAction: 'connecting_msgs'
-            qs:
-              target_name: 'name'
-              target_value: 'Bob the Builder'
-          r.then (res) ->
-            res.should.not.be.empty
     describe 'stats', ->
       it 'should return the stats of an attribute, no viewpoint', ->
         r = identifi.request
@@ -555,8 +543,6 @@ describe 'API', ->
             viewpoint_value: 'alice@example.com'
         r.then (res) ->
           res.length.should.equal 5
-    describe 'getname', ->
-      it 'should return a cached common name for the attribute'
   describe 'websocket', ->
     it 'should be connected', ->
       socket.connected.should.be.true
