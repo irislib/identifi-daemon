@@ -130,10 +130,13 @@ try {
   db = require('./db.js')(knex);
   server.ready = getIpfs
   .then(function(ipfs) {
-    ipfs.id().then(function(res) {
+    return ipfs.id()
+    .then(function(res) {
       ipfs.myId = res.id;
+    })
+    .then(function() {
+      return db.init(config, ipfs).return();
     });
-    return db.init(config, ipfs).return();
   })
   .then(function() {
     return ipfs.pubsub.subscribe('identifi', ipfsMsgHandler);

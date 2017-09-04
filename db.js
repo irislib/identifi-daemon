@@ -60,8 +60,7 @@ module.exports = function(knex) {
       if (typeof message.signerKeyHash === 'undefined') {
         message.signerKeyHash = Message.getSignerKeyHash(message);
       }
-
-      var q = Promise.resolve();
+      var q = this.ensureFreeSpace();
       // Unobtrusively store msg to ipfs
       addToIpfs = (p.ipfs && !message.ipfs_hash) && addToIpfs;
       if (addToIpfs) {
@@ -72,7 +71,7 @@ module.exports = function(knex) {
           message.ipfs_hash = res[0].hash;
         });
       }
-      q.then(function() {
+      return q.then(function() {
         return pub.messageExists(message.hash);
       })
       .then(function(exists) {
@@ -84,11 +83,11 @@ module.exports = function(knex) {
             return Promise.resolve(false);
           }
         } else {
-          q = Promise.resolve();
+          var q2 = Promise.resolve();
           if (Object.keys(ipfsIdentityIndexKeysToRemove).length < REBUILD_INDEXES_IF_NEW_MSGS_GT) {
             // Mark for deletion the index references to expiring identity profiles
             ipfsIdentityIndexKeysToRemove[message.hash] = [];
-            q.then(function() {
+            q2.then(function() {
               return pub.getIdentityAttributesByAuthorOrRecipient(message, true);
             })
             .then(function(attrs) {
@@ -105,9 +104,8 @@ module.exports = function(knex) {
               ipfsIdentityIndexKeysToRemove[message.hash] = ipfsIdentityIndexKeysToRemove[message.hash].concat(keys);
             });
           }
-
           var isPublic = typeof message.signedData.public === 'undefined' ? true : message.signedData.public;
-          return q.then(function() {
+          return q2.then(function() {
             return p.deletePreviousMessage(message);
           })
           .then(function() {
@@ -167,10 +165,6 @@ module.exports = function(knex) {
       })
       .then(function() {
         return message;
-      });
-
-      return this.ensureFreeSpace().then(function() {
-        return q;
       });
     },
 
@@ -498,7 +492,10 @@ module.exports = function(knex) {
         }
         return identityProfile;
       })
-      .catch(function(e) { console.log('adding', attrs, 'failed:', e); });
+      .catch(function(e) {
+        console.log('adding', attrs, 'failed:', e);
+        return identityProfile;
+      });
     },
 
     getIndexKeysByIdentity: function(attrs) {
