@@ -130,6 +130,9 @@ try {
   db = require('./db.js')(knex);
   server.ready = getIpfs
   .then(function(ipfs) {
+    ipfs.id().then(function(res) {
+      ipfs.myId = res.id;
+    });
     return db.init(config, ipfs).return();
   })
   .then(function() {
@@ -647,7 +650,9 @@ function handleMsgEvent(data) {
 }
 
 function ipfsMsgHandler(msg) {
-  handleMsgEvent({ jws: msg.data.toString() });
+  if (msg.from !== ipfs.myId) {
+    handleMsgEvent({ jws: msg.data.toString() });
+  }
 }
 
 function handleIncomingWebsocket(socket) {

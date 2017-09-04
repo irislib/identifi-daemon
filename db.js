@@ -72,7 +72,7 @@ module.exports = function(knex) {
           message.ipfs_hash = res[0].hash;
         });
       }
-      q = q.then(function() {
+      q.then(function() {
         return pub.messageExists(message.hash);
       })
       .then(function(exists) {
