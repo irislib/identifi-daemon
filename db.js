@@ -21,7 +21,7 @@ var SQL_INSERT_OR_REPLACE = 'INSERT OR REPLACE';
 var SQL_ON_CONFLICT = '';
 var SQL_PRINTF = 'PRINTF';
 
-var REBUILD_INDEXES_IF_NEW_MSGS_GT = 10;
+var REBUILD_INDEXES_IF_NEW_MSGS_GT = 30;
 
 function sortByKey(a, b) {
   if (a.key < b.key) {
