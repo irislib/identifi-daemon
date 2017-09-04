@@ -62,7 +62,8 @@ function log(msg) {
 var ipfsAPI = require('ipfs-api');
 var ipfs = ipfsAPI(config.get('ipfsHost'), config.get('ipfsPort').toString());
 var getIpfs = ipfs.id()
-  .then(function() {
+  .then(function(res) {
+    ipfs.myId = res.id;
     log("Connected to local IPFS API");
     return ipfs;
   })
@@ -130,13 +131,7 @@ try {
   db = require('./db.js')(knex);
   server.ready = getIpfs
   .then(function(ipfs) {
-    return ipfs.id()
-    .then(function(res) {
-      ipfs.myId = res.id;
-    })
-    .then(function() {
-      return db.init(config, ipfs).return();
-    });
+    return db.init(config, ipfs).return();
   })
   .then(function() {
     return ipfs.pubsub.subscribe('identifi', ipfsMsgHandler);

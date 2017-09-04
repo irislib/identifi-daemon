@@ -453,7 +453,7 @@ module.exports = function(knex) {
           });
         });
         d1 = new Date();
-        if (msgs.length) {
+        if (msgs.length && p.ipfsStorage) {
           return btree.MerkleBTree.fromSortedList(msgs, ipfsIndexWidth, p.ipfsStorage);
         }
       })
@@ -481,7 +481,7 @@ module.exports = function(knex) {
           });
         });
         d1 = new Date();
-        if (msgs.length) {
+        if (msgs.length && p.ipfsStorage) {
           return btree.MerkleBTree.fromSortedList(msgs, ipfsIndexWidth, p.ipfsStorage);
         }
       })
@@ -493,6 +493,7 @@ module.exports = function(knex) {
         return identityProfile;
       })
       .catch(function(e) {
+        console.log('p.ipfs', p.ipfs);
         console.log('adding', attrs, 'failed:', e);
         return identityProfile;
       });
@@ -2035,8 +2036,10 @@ module.exports = function(knex) {
   };
 
   pub.init = function(conf, ipfs) {
-    p.ipfs = ipfs;
-    p.ipfsStorage = new btree.IPFSStorage(p.ipfs);
+    if (ipfs) {
+      p.ipfs = ipfs;
+      p.ipfsStorage = new btree.IPFSStorage(p.ipfs);
+    }
     config = conf;
     if (conf.db.client === 'pg') {
       SQL_IFNULL = 'COALESCE';
@@ -2059,9 +2062,14 @@ module.exports = function(knex) {
         return pub.checkDefaultTrustList();
       })
       .then(function() {
-        return p.getIndexesFromIpfsRoot();
+        if (p.ipfsStorage) {
+          return p.getIndexesFromIpfsRoot();
+        }
       })
       .then(function() {
+        if (!p.ipfsStorage) {
+          return;
+        }
         if (process.env.NODE_ENV !== 'test') {
           pub.saveMessagesFromIpfsIndexes(); // non-blocking
         }
