@@ -82,11 +82,11 @@ const getIpfs = ipfs.id()
           // Do not connect to peers
           return;
         }
-        ipfs.goOnline((err) => {
-          if (err) { throw err; }
+        ipfs.goOnline((err2) => {
+          if (err2) { throw err2; }
           // We have to do this manually as of ipfs 0.20.3
-          ipfs.bootstrap.list((err, res) => {
-            if (err) { return; }
+          ipfs.bootstrap.list((err3, res) => {
+            if (err3) { return; }
             let i;
             for (i = 0; i < res.length; i += 1) {
               console.log('connecting to peer', res[i]);
@@ -107,9 +107,9 @@ const getIpfs = ipfs.id()
         if (exists) {
           loadIpfs();
         } else {
-          ipfs.init({ emptyRepo: true, bits: 2048 }, (err) => {
+          ipfs.init({ emptyRepo: true, bits: 2048 }, (err2) => {
+            if (err2) { throw err2; }
             log('IPFS repo was initialized');
-            if (err) { throw err; }
             loadIpfs();
           });
         }
@@ -136,7 +136,7 @@ try {
   knex = require('knex')(dbConf);
   db = require('./db.js')(knex);
   server.ready = getIpfs
-    .then(ipfs => db.init(config, ipfs).return())
+    .then(newIpfs => db.init(config, newIpfs).return())
     .then(() => ipfs.pubsub.subscribe('identifi', ipfsMsgHandler));
 } catch (ex) {
   log(ex);
@@ -166,9 +166,9 @@ app.use((req, res, next) => {
 const router = express.Router();
 
 function issueToken(receivedToken1, receivedToken2, profile, done) {
-  const exp = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 365;
-  let idType,
-    idValue;
+  const exp = Math.floor(Date.now() / 1000) + (60 * 60 * 24 * 365);
+  let idType;
+  let idValue;
   if (profile.provider === 'facebook') {
     idType = 'url';
     idValue = profile.profileUrl || `https://www.facebook.com/${profile.id}`;
@@ -285,22 +285,21 @@ router.get('/', (req, res) => {
       keyID: myKey.hash,
       loginOptions,
     });
-  }).catch((err) => { handleError(err, req, res); });
+  }).catch(err => handleError(err, req, res));
 });
 
 router.route('/reindex')
   .get(authRequired, (req, res) => {
     db.addIdentityIndexToIpfs()
     // db.addDbMessagesToIpfs()
-      .then((dbRes) => {
-        res.json(dbRes);
-      }).catch((err) => { handleError(err, req, res); });
+      .then(dbRes => res.json(dbRes))
+      .catch(err => handleError(err, req, res));
   });
 
 
 // Helper method
-function getMessages(req, res, options) {
-  options = options || {};
+function getMessages(req, res, opts) {
+  const options = opts || {};
   options.where = options.where || {};
   options.where.public = true;
 
@@ -320,7 +319,7 @@ function getMessages(req, res, options) {
   if (req.query.timestamp_lte) { options.timestampLte = req.query.timestamp_lte; }
   db.getMessages(options).then((dbRes) => {
     res.json(dbRes);
-  }).catch((err) => { handleError(err, req, res); });
+  }).catch(err => handleError(err, req, res));
 }
 
 
@@ -330,7 +329,8 @@ router.route('/messages')
  * @apiName ListMessages
  * @apiGroup Messages
  *
- * @apiParam {String} [type] Message type. In case of rating; :positive, :neutral or :negative can be appended
+ * @apiParam {String} [type] Message type.
+  In case of rating; :positive, :neutral or :negative can be appended
  * @apiParam {Number} [offset=0] Offset
  * @apiParam {Number} [limit=100] Limit the number of results
  * @apiParam {String} [viewpoint_name] Trust viewpoint identity pointer type
@@ -371,7 +371,7 @@ router.route('/messages')
       }
     }
 
-    db.messageExists(m.hash)
+    return db.messageExists(m.hash)
       .then((exists) => {
         if (!exists) {
           Message.verify(m);
@@ -387,7 +387,7 @@ router.route('/messages')
               res.status(200).json(r);
             });
         }
-      }).catch((err) => { handleError(err, req, res); });
+      }).catch(err => handleError(err, req, res));
   });
 
 
@@ -400,14 +400,13 @@ router.route('/messages')
    *
    */
 router.route('/messages/:hash')
-  .get((req, res) => {
-    db.getMessages({ where: { public: true, hash: req.params.hash } }).then((dbRes) => {
+  .get((req, res) => db.getMessages({ where: { public: true, hash: req.params.hash } })
+    .then((dbRes) => {
       if (!dbRes.length) {
         return res.status(404).json('Message not found');
       }
-      res.json(dbRes[0]);
-    }).catch((err) => { handleError(err, req, res); });
-  })
+      return res.json(dbRes[0]);
+    }).catch(err => handleError(err, req, res)))
 
   /**
    * @api {delete} /messages/:hash Delete message
@@ -423,12 +422,12 @@ router.route('/messages/:hash')
     if (!req.user.admin) {
       return res.sendStatus(401);
     }
-    db.dropMessage(req.params.hash).then((dbRes) => {
+    return db.dropMessage(req.params.hash).then((dbRes) => {
       if (!dbRes) {
         return res.status(404).json('Message not found');
       }
-      res.json('OK');
-    }).catch((err) => { handleError(err, req, res); });
+      return res.json('OK');
+    }).catch(err => handleError(err, req, res));
   });
 
 
@@ -464,7 +463,7 @@ router.get('/identities', (req, res) => {
   if (req.query.offset) { options.offset = parseInt(req.query.offset); }
   db.getIdentityAttributes(options).then((dbRes) => {
     res.json(dbRes);
-  }).catch((err) => { handleError(err, req, res); });
+  }).catch(err => handleError(err, req, res));
 });
 
 
@@ -495,12 +494,11 @@ router.get('/identities/:attr_name/:attr_value', (req, res) => {
   }
   db.getIdentityAttributes(options).then((dbRes) => {
     if (dbRes.length && (dbRes[0].length > 1)) {
-      res.json(dbRes[0]);
-    } else {
-      db.mapIdentityAttributes(options).then((dbRes) => {
-        res.json(dbRes);
-      }).catch((err) => { handleError(err, req, res); });
+      return res.json(dbRes[0]);
     }
+    return db.mapIdentityAttributes(options)
+      .then(dbRes2 => res.json(dbRes2))
+      .catch(err => handleError(err, req, res));
   });
 });
 
@@ -527,9 +525,9 @@ router.get('/identities/:attr_name/:attr_value/stats', (req, res) => {
   }
   if (req.query.max_distance) { options.maxDistance = parseInt(req.query.max_distance); }
 
-  db.getStats([req.params.attr_name, req.params.attr_value], options).then((dbRes) => {
-    res.json(dbRes);
-  }).catch((err) => { handleError(err, req, res); });
+  db.getStats([req.params.attr_name, req.params.attr_value], options)
+    .then(dbRes => res.json(dbRes))
+    .catch(err => handleError(err, req, res));
 });
 
 
@@ -569,7 +567,7 @@ router.get('/identities/:attr_name/:attr_value/trustpaths', (req, res) => {
   const limit = req.query.limit || 50;
   db.getTrustPaths([req.params.attr_name, req.params.attr_value], [req.query.target_name, req.query.target_value], maxLength, shortestOnly, viewpoint, limit).then((dbRes) => {
     res.json(dbRes);
-  }).catch((err) => { handleError(err, req, res); });
+  }).catch(err => handleError(err, req, res));
 });
 
 
@@ -591,9 +589,9 @@ router.get('/identities/:attr_name/:attr_value/generatewotindex', authRequired, 
   }
   const maintain = parseInt(req.query.maintain) === 1;
   let wotSize = 0;
-  db.generateWebOfTrustIndex([req.params.attr_name, req.params.attr_value], depth, maintain, trustedKeyID)
-    .then((res) => {
-      wotSize = res;
+  return db.generateWebOfTrustIndex([req.params.attr_name, req.params.attr_value], depth, maintain, trustedKeyID)
+    .then((r) => {
+      wotSize = r;
       return db.generateIdentityIndex([req.params.attr_name, req.params.attr_value], trustedKeyID);
     })
     .then(() => {
@@ -601,7 +599,7 @@ router.get('/identities/:attr_name/:attr_value/generatewotindex', authRequired, 
       if (req.params.attr_name === 'keyID' && req.params.attr_value === myKey.hash && process.env.NODE_ENV !== 'test') {
         db.addIndexesToIpfs();
       }
-    }).catch((err) => { handleError(err, req, res); });
+    }).catch(err => handleError(err, req, res));
 });
 
 // Register the routes
@@ -611,13 +609,9 @@ app.get('/ipfs/:hash', (req, res) => {
   if (!ipfs) {
     return res.status(503).json('ipfs proxy not available');
   }
-  ipfs.files.cat(req.params.hash)
-    .then((stream) => {
-      stream.pipe(res);
-    })
-    .catch(() => {
-      res.status(404).json('not found');
-    });
+  return ipfs.files.cat(req.params.hash)
+    .then(stream => stream.pipe(res))
+    .catch(() => res.status(404).json('not found'));
 });
 
 app.use('/apidoc', express.static('./apidoc'));
