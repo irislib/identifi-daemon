@@ -1,35 +1,39 @@
-/*jshint latedef:nofunc*/
-var Promise = require("bluebird");
-var moment = require('moment');
-var fs = require('fs');
+/* jshint latedef:nofunc */
+const Promise = require('bluebird');
+const moment = require('moment');
+const fs = require('fs');
 
-var express    = require('express');
-var session = require('express-session');
-var app        = express();
-var server = require('http').Server(app);
-var io = require('socket.io')(server).of('/api');
-var bodyParser = require('body-parser');
+const express = require('express');
+const session = require('express-session');
 
-var identifi = require('identifi-lib');
-var Message = identifi.message;
-var identifiClient = identifi.client;
-var pkg = require('./package.json');
+const app = express();
+const server = require('http').Server(app);
+const io = require('socket.io')(server).of('/api');
+const bodyParser = require('body-parser');
 
-var osHomedir = require('os-homedir');
-var path = require('path');
-var util = require('util');
+const identifi = require('identifi-lib');
 
-var keyutil = require('identifi-lib/keyutil');
-var datadir = process.env.IDENTIFI_DATADIR || (osHomedir() + '/.identifi');
-var myKey = keyutil.getDefault(datadir);
+const Message = identifi.message;
+const identifiClient = identifi.client;
+const pkg = require('./package.json');
 
-var jwt = require('express-jwt');
-var authRequired = jwt({ secret: new Buffer(myKey.public.pem) });
-var authOptional = jwt({ secret: new Buffer(myKey.public.pem), credentialsRequired: false });
-var passport = require('passport');
+const osHomedir = require('os-homedir');
+const path = require('path');
+const util = require('util');
 
-process.env.NODE_CONFIG_DIR = __dirname + '/config';
-var config = require('config');
+const keyutil = require('identifi-lib/keyutil');
+
+const datadir = process.env.IDENTIFI_DATADIR || (`${osHomedir()}/.identifi`);
+const myKey = keyutil.getDefault(datadir);
+
+const jwt = require('express-jwt');
+
+const authRequired = jwt({ secret: Buffer.from(myKey.public.pem) });
+const authOptional = jwt({ secret: Buffer.from(myKey.public.pem), credentialsRequired: false });
+const passport = require('passport');
+
+process.env.NODE_CONFIG_DIR = `${__dirname}/config`;
+const config = require('config');
 
 if (process.env.NODE_ENV !== 'test') {
   // Extend default config from datadir/config.json and write the result back to it
@@ -37,56 +41,57 @@ if (process.env.NODE_ENV !== 'test') {
     if (!fs.existsSync(datadir)) {
       fs.mkdirSync(datadir);
     }
-    var cfgFile = datadir + '/config.json';
+    const cfgFile = `${datadir}/config.json`;
     if (fs.existsSync(cfgFile)) {
-      var cfgFromFile = require(cfgFile);
+      const cfgFromFile = require(cfgFile);
       Object.assign(config, cfgFromFile);
     }
     fs.writeFileSync(cfgFile, JSON.stringify(config, null, 4), 'utf8');
     // Set some paths
     if (config.db.connection.filename) {
-      config.db.connection.filename = datadir + '/' + config.db.connection.filename;
+      config.db.connection.filename = `${datadir}/${config.db.connection.filename}`;
     }
-    config.logfile = datadir + '/' + config.logfile;
-  })();
+    config.logfile = `${datadir}/${config.logfile}`;
+  }());
 }
 
-var logStream = fs.createWriteStream(config.get('logfile'), {flags: 'a', encoding: 'utf8'});
+const logStream = fs.createWriteStream(config.get('logfile'), { flags: 'a', encoding: 'utf8' });
 
 function log(msg) {
-  msg = moment.utc().format() + ": " + util.format(msg);
-  logStream.write(msg + '\n');
+  msg = `${moment.utc().format()}: ${util.format(msg)}`;
+  logStream.write(`${msg}\n`);
   console.log(msg);
 }
 
-var ipfsAPI = require('ipfs-api');
-var ipfs = ipfsAPI(config.get('ipfsHost'), config.get('ipfsPort').toString());
-var getIpfs = ipfs.id()
-  .then(function(res) {
+const ipfsAPI = require('ipfs-api');
+
+let ipfs = ipfsAPI(config.get('ipfsHost'), config.get('ipfsPort').toString());
+const getIpfs = ipfs.id()
+  .then((res) => {
     ipfs.myId = res.id;
-    log("Connected to local IPFS API");
+    log('Connected to local IPFS API');
     return ipfs;
   })
-  .catch(function() {
+  .catch(() => {
     log('No local IPFS API found, starting embedded IPFS node');
     function loadIpfs() {
-      ipfs.load(function(err) {
+      ipfs.load((err) => {
         if (err) { throw err; }
         console.log('IPFS repo was loaded');
         if (process.env.NODE_ENV === 'test') {
           // Do not connect to peers
           return;
         }
-        ipfs.goOnline(function(err) {
+        ipfs.goOnline((err) => {
           if (err) { throw err; }
           // We have to do this manually as of ipfs 0.20.3
-          ipfs.bootstrap.list(function(err, res) {
+          ipfs.bootstrap.list((err, res) => {
             if (err) { return; }
-            var i;
-            for (i = 0; i < res.length; i++) {
+            let i;
+            for (i = 0; i < res.length; i += 1) {
               console.log('connecting to peer', res[i]);
               ipfs.swarm.connect(res[i])
-              .catch(log);
+                .catch(log);
             }
           });
         });
@@ -94,48 +99,45 @@ var getIpfs = ipfs.id()
     }
 
     try {
-      var IpfsLib = require('ipfs');
+      const IpfsLib = require('ipfs');
       ipfs = new IpfsLib();
 
-      ipfs._repo.version.exists(function(err, exists) {
+      ipfs._repo.version.exists((err, exists) => {
         if (err) { throw err; }
         if (exists) {
           loadIpfs();
         } else {
-          ipfs.init({ emptyRepo: true, bits: 2048 }, function(err) {
+          ipfs.init({ emptyRepo: true, bits: 2048 }, (err) => {
             log('IPFS repo was initialized');
             if (err) { throw err; }
             loadIpfs();
           });
         }
       });
-    } catch(e) {
+    } catch (e) {
       log('instantiating ipfs node failed:', e);
       ipfs = null;
     }
     return ipfs;
   });
 
-var loginOptions = [];
-var outgoingConnections = {};
+const loginOptions = [];
+const outgoingConnections = {};
 
-process.on("uncaughtException", function(e) {
+process.on('uncaughtException', (e) => {
   log(e);
 });
 
 // Init DB
-var knex, db;
+let knex;
+let db;
 try {
-  var dbConf = config.get('db');
+  const dbConf = config.get('db');
   knex = require('knex')(dbConf);
   db = require('./db.js')(knex);
   server.ready = getIpfs
-  .then(function(ipfs) {
-    return db.init(config, ipfs).return();
-  })
-  .then(function() {
-    return ipfs.pubsub.subscribe('identifi', ipfsMsgHandler);
-  });
+    .then(ipfs => db.init(config, ipfs).return())
+    .then(() => ipfs.pubsub.subscribe('identifi', ipfsMsgHandler));
 } catch (ex) {
   log(ex);
   process.exit(0);
@@ -145,7 +147,7 @@ app.use(session({
   secret: require('crypto').randomBytes(16).toString('base64'),
   resave: false,
   saveUninitialized: true,
-  cookie: { secure: false }
+  cookie: { secure: false },
 }));
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
@@ -153,62 +155,63 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 // Enable CORS
-app.use(function(req, res, next) {
-  res.header("Access-Control-Allow-Origin", "*");
-  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
   next();
 });
 
 // Routes
 // =============================================================================
-var router = express.Router();
+const router = express.Router();
 
 function issueToken(receivedToken1, receivedToken2, profile, done) {
-  var exp = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 365;
-  var idType, idValue;
+  const exp = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 365;
+  let idType,
+    idValue;
   if (profile.provider === 'facebook') {
     idType = 'url';
-    idValue = profile.profileUrl || 'https://www.facebook.com/' + profile.id;
+    idValue = profile.profileUrl || `https://www.facebook.com/${profile.id}`;
   } else if (profile.provider === 'twitter') {
     idType = 'url';
-    idValue = 'https://twitter.com/' + profile._json.screen_name;
+    idValue = `https://twitter.com/${profile._json.screen_name}`;
   } else if (profile.provider === 'google') {
     idType = 'url';
-    idValue = 'https://plus.google.com/' + profile.id;
+    idValue = `https://plus.google.com/${profile.id}`;
   } else {
     idType = 'account';
-    idValue = profile.id + '@' + profile.provider;
+    idValue = `${profile.id}@${profile.provider}`;
   }
-  var payload = {
-    exp: exp,
+  const payload = {
+    exp,
     user: {
-      idType: idType,
-      idValue: idValue,
-      name: profile.displayName
-    }
+      idType,
+      idValue,
+      name: profile.displayName,
+    },
   };
-  var token = identifiClient.getJwt(myKey.private.pem, payload);
-  var user = { token: token };
+  const token = identifiClient.getJwt(myKey.private.pem, payload);
+  const user = { token };
   done(null, user);
 }
 
 function getAuthResponse(req, res) {
-  res.redirect('/#/?token=' + req.user.token);
+  res.redirect(`/#/?token=${req.user.token}`);
 }
 
 function initializePassportStrategies() {
-  passport.serializeUser(function(user, done) {
+  passport.serializeUser((user, done) => {
     done(null, user);
   });
 
-  passport.deserializeUser(function(user, done) {
+  passport.deserializeUser((user, done) => {
     done(null, user);
   });
 
   if (config.passport.facebook.clientID &&
     config.passport.facebook.clientSecret) {
     loginOptions.push('facebook');
-    var FacebookStrategy = require('passport-facebook').Strategy;
+    const FacebookStrategy = require('passport-facebook').Strategy;
     passport.use(new FacebookStrategy(config.passport.facebook, issueToken));
     router.get('/auth/facebook', passport.authenticate('facebook'));
     router.get('/auth/facebook/callback', passport.authenticate('facebook', { session: false }), getAuthResponse);
@@ -216,7 +219,7 @@ function initializePassportStrategies() {
   if (config.passport.twitter.consumerKey &&
     config.passport.twitter.consumerSecret) {
     loginOptions.push('twitter');
-    var TwitterStrategy = require('passport-twitter').Strategy;
+    const TwitterStrategy = require('passport-twitter').Strategy;
     passport.use(new TwitterStrategy(config.passport.twitter, issueToken));
     router.get('/auth/twitter', passport.authenticate('twitter'));
     router.get('/auth/twitter/callback', passport.authenticate('twitter'), getAuthResponse);
@@ -224,7 +227,7 @@ function initializePassportStrategies() {
   if (config.passport.google.clientID &&
     config.passport.google.clientSecret) {
     loginOptions.push('google');
-    var GoogleStrategy = require('passport-google-oauth2').Strategy;
+    const GoogleStrategy = require('passport-google-oauth2').Strategy;
     passport.use(new GoogleStrategy(config.passport.google, issueToken));
     router.get('/auth/google', passport.authenticate('google', { scope: 'profile' }));
     router.get('/auth/google/callback', passport.authenticate('google', { session: false }), getAuthResponse);
@@ -232,8 +235,8 @@ function initializePassportStrategies() {
 
   if (config.passport.persona.audience) {
     loginOptions.push('persona');
-    var PersonaStrategy = require('passport-persona').Strategy;
-    passport.use(new PersonaStrategy({ audience: config.passport.persona.audience}, issueToken));
+    const PersonaStrategy = require('passport-persona').Strategy;
+    passport.use(new PersonaStrategy({ audience: config.passport.persona.audience }, issueToken));
     router.post('/auth/browserid', passport.authenticate('persona', { session: false }), getAuthResponse);
   }
 }
@@ -252,7 +255,7 @@ function emitMsg(msg) {
     return;
   }
   io.emit('msg', { jws: msg.jws, hash: msg.hash });
-  Object.keys(outgoingConnections).forEach(function(key) {
+  Object.keys(outgoingConnections).forEach((key) => {
     outgoingConnections[key].emit('msg', { jws: msg.jws, hash: msg.hash });
   });
 }
@@ -270,53 +273,54 @@ function emitMsg(msg) {
  * @apiSuccess {String} keyID Base 64 encoded hash of the public key
  * @apiSuccess {Array} loginOptions Array of browser login options provided by the node
  */
-router.get('/', function(req, res) {
-  var queries = [db.getMessageCount()];
-  Promise.all(queries).then(function(results) {
-    res.json({ message: 'Identifi API',
-                version: pkg.version,
-                identifiLibVersion: identifi.VERSION,
-                msgCount: results[0],
-                publicKey: myKey.public.hex,
-                keyID: myKey.hash,
-                loginOptions: loginOptions
-              });
-  }).catch(function(err) { handleError(err, req, res); });
+router.get('/', (req, res) => {
+  const queries = [db.getMessageCount()];
+  Promise.all(queries).then((results) => {
+    res.json({
+      message: 'Identifi API',
+      version: pkg.version,
+      identifiLibVersion: identifi.VERSION,
+      msgCount: results[0],
+      publicKey: myKey.public.hex,
+      keyID: myKey.hash,
+      loginOptions,
+    });
+  }).catch((err) => { handleError(err, req, res); });
 });
 
 router.route('/reindex')
-  .get(authRequired, function(req, res) {
+  .get(authRequired, (req, res) => {
     db.addIdentityIndexToIpfs()
-    //db.addDbMessagesToIpfs()
-    .then(function(dbRes) {
-      res.json(dbRes);
-    }).catch(function(err) { handleError(err, req, res); });
+    // db.addDbMessagesToIpfs()
+      .then((dbRes) => {
+        res.json(dbRes);
+      }).catch((err) => { handleError(err, req, res); });
   });
 
 
 // Helper method
 function getMessages(req, res, options) {
-    options = options || {};
-    options.where = options.where || {};
-    options.where.public = true;
+  options = options || {};
+  options.where = options.where || {};
+  options.where.public = true;
 
-    if (req.query.viewpoint_name && req.query.viewpoint_value) {
-      options.viewpoint = [req.query.viewpoint_name, req.query.viewpoint_value];
-    }
-    if (req.query.max_distance) { options.maxDistance = parseInt(req.query.max_distance); }
-    if (req.query.type)     { options.where['Messages.type'] = req.query.type; }
-    if (req.query.order_by) { options.orderBy = req.query.order_by; }
-    if (req.query.distinct_author) { options.distinctAuthor = true; }
-    if (req.query.direction && (req.query.direction === 'asc' || req.query.direction === 'desc')) {
-       options.direction = req.query.direction;
-    }
-    if (req.query.limit)    { options.limit = parseInt(req.query.limit); }
-    if (req.query.offset)   { options.offset = parseInt(req.query.offset); }
-    if (req.query.timestamp_gte)   { options.timestampGte = req.query.timestamp_gte; }
-    if (req.query.timestamp_lte)   { options.timestampLte = req.query.timestamp_lte; }
-    db.getMessages(options).then(function(dbRes) {
-      res.json(dbRes);
-    }).catch(function(err) { handleError(err, req, res); });
+  if (req.query.viewpoint_name && req.query.viewpoint_value) {
+    options.viewpoint = [req.query.viewpoint_name, req.query.viewpoint_value];
+  }
+  if (req.query.max_distance) { options.maxDistance = parseInt(req.query.max_distance); }
+  if (req.query.type) { options.where['Messages.type'] = req.query.type; }
+  if (req.query.order_by) { options.orderBy = req.query.order_by; }
+  if (req.query.distinct_author) { options.distinctAuthor = true; }
+  if (req.query.direction && (req.query.direction === 'asc' || req.query.direction === 'desc')) {
+    options.direction = req.query.direction;
+  }
+  if (req.query.limit) { options.limit = parseInt(req.query.limit); }
+  if (req.query.offset) { options.offset = parseInt(req.query.offset); }
+  if (req.query.timestamp_gte) { options.timestampGte = req.query.timestamp_gte; }
+  if (req.query.timestamp_lte) { options.timestampLte = req.query.timestamp_lte; }
+  db.getMessages(options).then((dbRes) => {
+    res.json(dbRes);
+  }).catch((err) => { handleError(err, req, res); });
 }
 
 
@@ -339,7 +343,7 @@ router.route('/messages')
  *
  *
  */
-  .get(function(req, res) {
+  .get((req, res) => {
     getMessages(req, res);
   })
 
@@ -354,8 +358,8 @@ router.route('/messages')
  * Successfully posted messages are broadcast to other nodes via /api websocket.
  *
  */
-  .post(authOptional, function(req, res) {
-    var m = req.body;
+  .post(authOptional, (req, res) => {
+    let m = req.body;
 
     if (!m.hash) {
       if (req.user) {
@@ -368,26 +372,26 @@ router.route('/messages')
     }
 
     db.messageExists(m.hash)
-    .then(function(exists) {
-      if (!exists) {
-        Message.verify(m);
-        db.saveMessage(m)
-        .then(function(r) {
-          res.status(201).json(r);
-        });
-        emitMsg(m);
-        ipfs.pubsub.publish('identifi', new Buffer(m.jws));
-      } else {
-        db.saveMessage(m)
-        .then(function(r) {
-          res.status(200).json(r);
-        });
-      }
-    }).catch(function(err) { handleError(err, req, res); });
+      .then((exists) => {
+        if (!exists) {
+          Message.verify(m);
+          db.saveMessage(m)
+            .then((r) => {
+              res.status(201).json(r);
+            });
+          emitMsg(m);
+          ipfs.pubsub.publish('identifi', Buffer.from(m.jws));
+        } else {
+          db.saveMessage(m)
+            .then((r) => {
+              res.status(200).json(r);
+            });
+        }
+      }).catch((err) => { handleError(err, req, res); });
   });
 
 
-  /**
+/**
    * @api {get} /messages/:hash Get message
    * @apiName GetMessage
    * @apiGroup Messages
@@ -396,13 +400,13 @@ router.route('/messages')
    *
    */
 router.route('/messages/:hash')
-  .get(function(req, res) {
-    db.getMessages({ where: { public: true, hash: req.params.hash } }).then(function(dbRes) {
+  .get((req, res) => {
+    db.getMessages({ where: { public: true, hash: req.params.hash } }).then((dbRes) => {
       if (!dbRes.length) {
         return res.status(404).json('Message not found');
       }
       res.json(dbRes[0]);
-    }).catch(function(err) { handleError(err, req, res); });
+    }).catch((err) => { handleError(err, req, res); });
   })
 
   /**
@@ -415,20 +419,20 @@ router.route('/messages/:hash')
    * @apiDescription Get message by hash
    *
    */
-  .delete(authRequired, function(req, res) {
+  .delete(authRequired, (req, res) => {
     if (!req.user.admin) {
       return res.sendStatus(401);
     }
-    db.dropMessage(req.params.hash).then(function(dbRes) {
+    db.dropMessage(req.params.hash).then((dbRes) => {
       if (!dbRes) {
         return res.status(404).json('Message not found');
       }
       res.json('OK');
-    }).catch(function(err) { handleError(err, req, res); });
+    }).catch((err) => { handleError(err, req, res); });
   });
 
 
-  /**
+/**
    * @api {get} /identities List identities
    * @apiName ListIdentities
    * @apiGroup Identities
@@ -445,23 +449,22 @@ router.route('/messages/:hash')
    * Returns an array of attribute-arrays that form identities.
    *
    */
-router.get('/identities', function(req, res) {
-    var options = {
-      where: {},
-    };
-    if (req.query.viewpoint_name && req.query.viewpoint_value) {
-      options.viewpoint = [req.query.viewpoint_name, req.query.viewpoint_value];
-    }
-    if (req.query.attr_name)        { options.where['attr.name'] = req.query.attr_name; }
-    if (req.query.search_value)     { options.searchValue = req.query.search_value; }
-    if (req.query.order_by)         { options.orderBy = req.query.order_by; }
-    if (req.query.direction && (req.query.direction === 'asc' || req.query.direction === 'desc'))
-                                    { options.direction = req.query.order_by; }
-    if (req.query.limit)            { options.limit = parseInt(req.query.limit); }
-    if (req.query.offset)           { options.offset = parseInt(req.query.offset); }
-    db.getIdentityAttributes(options).then(function(dbRes) {
-      res.json(dbRes);
-    }).catch(function(err) { handleError(err, req, res); });
+router.get('/identities', (req, res) => {
+  const options = {
+    where: {},
+  };
+  if (req.query.viewpoint_name && req.query.viewpoint_value) {
+    options.viewpoint = [req.query.viewpoint_name, req.query.viewpoint_value];
+  }
+  if (req.query.attr_name) { options.where['attr.name'] = req.query.attr_name; }
+  if (req.query.search_value) { options.searchValue = req.query.search_value; }
+  if (req.query.order_by) { options.orderBy = req.query.order_by; }
+  if (req.query.direction && (req.query.direction === 'asc' || req.query.direction === 'desc')) { options.direction = req.query.order_by; }
+  if (req.query.limit) { options.limit = parseInt(req.query.limit); }
+  if (req.query.offset) { options.offset = parseInt(req.query.offset); }
+  db.getIdentityAttributes(options).then((dbRes) => {
+    res.json(dbRes);
+  }).catch((err) => { handleError(err, req, res); });
 });
 
 
@@ -477,8 +480,8 @@ router.get('/identities', function(req, res) {
  * This method returns other identifiers and attributes that are connected to the pointer.
  *
  */
-router.get('/identities/:attr_name/:attr_value', function(req, res) {
-  var options = {
+router.get('/identities/:attr_name/:attr_value', (req, res) => {
+  const options = {
     id: [req.params.attr_name, req.params.attr_value],
   };
 
@@ -490,13 +493,13 @@ router.get('/identities/:attr_name/:attr_value', function(req, res) {
   if (req.query.type) {
     options.searchedAttributes = [req.query.type];
   }
-  db.getIdentityAttributes(options).then(function(dbRes) {
+  db.getIdentityAttributes(options).then((dbRes) => {
     if (dbRes.length && (dbRes[0].length > 1)) {
       res.json(dbRes[0]);
     } else {
-      db.mapIdentityAttributes(options).then(function(dbRes) {
+      db.mapIdentityAttributes(options).then((dbRes) => {
         res.json(dbRes);
-      }).catch(function(err) { handleError(err, req, res); });
+      }).catch((err) => { handleError(err, req, res); });
     }
   });
 });
@@ -516,17 +519,17 @@ router.get('/identities/:attr_name/:attr_value', function(req, res) {
  * @apiSuccess {String} last_seen ISO timestamp of the earliest message the identity was seen in
  *
  */
-router.get('/identities/:attr_name/:attr_value/stats', function(req, res) {
-  var options = {};
+router.get('/identities/:attr_name/:attr_value/stats', (req, res) => {
+  const options = {};
 
   if (req.query.viewpoint_name && req.query.viewpoint_value) {
     options.viewpoint = [req.query.viewpoint_name, req.query.viewpoint_value];
   }
   if (req.query.max_distance) { options.maxDistance = parseInt(req.query.max_distance); }
 
-  db.getStats([req.params.attr_name, req.params.attr_value], options).then(function(dbRes) {
+  db.getStats([req.params.attr_name, req.params.attr_value], options).then((dbRes) => {
     res.json(dbRes);
-  }).catch(function(err) { handleError(err, req, res); });
+  }).catch((err) => { handleError(err, req, res); });
 });
 
 
@@ -535,8 +538,8 @@ router.get('/identities/:attr_name/:attr_value/stats', function(req, res) {
  * @apiGroup Identities
  *
  */
-router.get('/identities/:attr_name/:attr_value/sent', function(req, res) {
-  var options = {
+router.get('/identities/:attr_name/:attr_value/sent', (req, res) => {
+  const options = {
     author: [req.params.attr_name, req.params.attr_value],
   };
   getMessages(req, res, options);
@@ -547,26 +550,26 @@ router.get('/identities/:attr_name/:attr_value/sent', function(req, res) {
  * @api {get} /identities/:pointer_type/:pointer_value/received Messages received by
  * @apiGroup Identities
  */
-router.get('/identities/:attr_name/:attr_value/received', function(req, res) {
-  var options = {
+router.get('/identities/:attr_name/:attr_value/received', (req, res) => {
+  const options = {
     recipient: [req.params.attr_name, req.params.attr_value],
   };
   getMessages(req, res, options);
 });
 
 
-router.get('/identities/:attr_name/:attr_value/trustpaths', function(req, res) {
+router.get('/identities/:attr_name/:attr_value/trustpaths', (req, res) => {
   if (!(req.query.target_name && req.query.target_value)) {
     res.status(400).json('target_name and target_value must be specified');
     return;
   }
-  var maxLength = req.query.max_length || 4;
-  var shortestOnly = req.query.max_length !== undefined;
-  var viewpoint = ['keyID', myKey.hash];
-  var limit = req.query.limit || 50;
-  db.getTrustPaths([req.params.attr_name, req.params.attr_value], [req.query.target_name, req.query.target_value], maxLength, shortestOnly, viewpoint, limit).then(function(dbRes) {
+  const maxLength = req.query.max_length || 4;
+  const shortestOnly = req.query.max_length !== undefined;
+  const viewpoint = ['keyID', myKey.hash];
+  const limit = req.query.limit || 50;
+  db.getTrustPaths([req.params.attr_name, req.params.attr_value], [req.query.target_name, req.query.target_value], maxLength, shortestOnly, viewpoint, limit).then((dbRes) => {
     res.json(dbRes);
-  }).catch(function(err) { handleError(err, req, res); });
+  }).catch((err) => { handleError(err, req, res); });
 });
 
 
@@ -575,59 +578,59 @@ router.get('/identities/:attr_name/:attr_value/trustpaths', function(req, res) {
  * @api {get} /identities/:pointer_type/:pointer_value/stats Generatewotindex
  * @apiGroup Identities
  */
-router.get('/identities/:attr_name/:attr_value/generatewotindex', authRequired, function(req, res) {
+router.get('/identities/:attr_name/:attr_value/generatewotindex', authRequired, (req, res) => {
   if (!req.user.admin) {
     return res.sendStatus(401);
   }
-  var depth = parseInt(req.query.depth) || 3;
-  var trustedKeyID = null;
+  const depth = parseInt(req.query.depth) || 3;
+  let trustedKeyID = null;
   if (req.query.trusted_keyid) {
     trustedKeyID = req.params.trusted_keyid;
   } else if (req.params.attr_name !== 'keyID') {
     trustedKeyID = myKey.hash;
   }
-  var maintain = parseInt(req.query.maintain) === 1;
-  var wotSize = 0;
+  const maintain = parseInt(req.query.maintain) === 1;
+  let wotSize = 0;
   db.generateWebOfTrustIndex([req.params.attr_name, req.params.attr_value], depth, maintain, trustedKeyID)
-  .then(function(res) {
-    wotSize = res;
-    return db.generateIdentityIndex([req.params.attr_name, req.params.attr_value], trustedKeyID);
-  })
-  .then(function() {
-    res.json(wotSize);
-    if (req.params.attr_name === 'keyID' && req.params.attr_value === myKey.hash && process.env.NODE_ENV !== 'test') {
-      db.addIndexesToIpfs();
-    }
-  }).catch(function(err) { handleError(err, req, res); });
+    .then((res) => {
+      wotSize = res;
+      return db.generateIdentityIndex([req.params.attr_name, req.params.attr_value], trustedKeyID);
+    })
+    .then(() => {
+      res.json(wotSize);
+      if (req.params.attr_name === 'keyID' && req.params.attr_value === myKey.hash && process.env.NODE_ENV !== 'test') {
+        db.addIndexesToIpfs();
+      }
+    }).catch((err) => { handleError(err, req, res); });
 });
 
 // Register the routes
 app.use('/api', router);
 
-app.get('/ipfs/:hash', function(req, res) {
+app.get('/ipfs/:hash', (req, res) => {
   if (!ipfs) {
-    return res.status(503).json("ipfs proxy not available");
+    return res.status(503).json('ipfs proxy not available');
   }
   ipfs.files.cat(req.params.hash)
-  .then(function(stream) {
-    stream.pipe(res);
-  })
-  .catch(function() {
-    res.status(404).json("not found");
-  });
+    .then((stream) => {
+      stream.pipe(res);
+    })
+    .catch(() => {
+      res.status(404).json('not found');
+    });
 });
 
 app.use('/apidoc', express.static('./apidoc'));
 // Serve identifi-angular if the node module is available
 try {
-  var angular = path.dirname(require.resolve('identifi-angular'));
-  app.use('/', express.static(angular + '/dist'));
+  const angular = path.dirname(require.resolve('identifi-angular'));
+  app.use('/', express.static(`${angular}/dist`));
 } catch (e) {
   // console.log(e);
 }
 
 function handleMsgEvent(data) {
-  var m = data;
+  const m = data;
   try {
     Message.verify(m);
   } catch (e) {
@@ -635,16 +638,16 @@ function handleMsgEvent(data) {
     return;
   }
   db.messageExists(m.hash)
-  .then(function(exists) {
-    if (!exists) {
-      db.saveMessage(m).then(function() {
-        emitMsg(m);
-      }).catch(function(e) {
-        console.log(e.stack);
-        log('error handling msg', m.hash, e);
-      });
-    }
-  });
+    .then((exists) => {
+      if (!exists) {
+        db.saveMessage(m).then(() => {
+          emitMsg(m);
+        }).catch((e) => {
+          console.log(e.stack);
+          log('error handling msg', m.hash, e);
+        });
+      }
+    });
 }
 
 function ipfsMsgHandler(msg) {
@@ -654,10 +657,10 @@ function ipfsMsgHandler(msg) {
 }
 
 function handleIncomingWebsocket(socket) {
-  log('connection from ' + socket.client.conn.remoteAddress);
+  log(`connection from ${socket.client.conn.remoteAddress}`);
 
-  socket.on('msg', function (data) {
-    log('msg received from ' + socket.client.conn.remoteAddress + ': ' + (data.hash || data.ipfs_hash));
+  socket.on('msg', (data) => {
+    log(`msg received from ${socket.client.conn.remoteAddress}: ${data.hash || data.ipfs_hash}`);
     handleMsgEvent(data);
   });
 }
@@ -666,9 +669,9 @@ function handleIncomingWebsocket(socket) {
 io.on('connection', handleIncomingWebsocket);
 
 // Start the http server
-server.ready.then(function() {
+server.ready.then(() => {
   server.listen(config.get('port'), config.get('host'));
-  log('Identifi server started on port ' + config.get('port'));
+  log(`Identifi server started on port ${config.get('port')}`);
 });
 
 module.exports = server;

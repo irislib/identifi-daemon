@@ -19,10 +19,10 @@ module.exports = (grunt) ->
         src: watchFiles.gruntfile
       options:
         configFile: 'coffeelint.json'
-    jshint:
+    eslint:
       options:
-        jshintrc: ".jshintrc"
-        reporter: require("jshint-stylish")
+        eslintrc: ".eslintrc"
+        reporter: require("eslint-stylish")
       js:
         src: watchFiles.js
     mochaTest:
@@ -52,13 +52,13 @@ module.exports = (grunt) ->
       js:
         files: watchFiles.js
         tasks: [
-          "jshint"
+          "eslint"
           "mochaTest"
         ]
       apidoc:
         files: ['server.js', 'package.json']
         tasks: [
-          "jshint"
+          "eslint"
           "apidoc"
         ]
       tests:
@@ -68,5 +68,5 @@ module.exports = (grunt) ->
         files: watchFiles.gruntfile
         tasks: ["coffeelint", "mochaTest"]
 
-  grunt.registerTask "test", ["coffeelint", "jshint", "mochaTest"]
-  grunt.registerTask "default", ["coffeelint", "jshint", "apidoc", "mochaTest", "concurrent"]
+  grunt.registerTask "test", ["coffeelint", "eslint", "mochaTest"]
+  grunt.registerTask "default", ["coffeelint", "eslint", "apidoc", "mochaTest", "concurrent"]

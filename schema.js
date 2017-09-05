@@ -1,21 +1,20 @@
-/*jshint unused:false*/
-'use strict';
-var P = require("bluebird");
+/* jshint unused:false */
+
+
+const P = require('bluebird');
 
 function addDefaultUniqueIdentifierTypes(db) {
-  return db.table('UniqueIdentifierTypes').insert(
-    [
-      { name: 'email' },
-      { name: 'account' },
-      { name: 'url' },
-      { name: 'tel' },
-      { name: 'keyID' },
-      { name: 'bitcoin' },
-      { name: 'identifiNode' },
-      { name: 'gpg_fingerprint'},
-      { name: 'gpg_keyid'}
-    ]
-  );
+  return db.table('UniqueIdentifierTypes').insert([
+    { name: 'email' },
+    { name: 'account' },
+    { name: 'url' },
+    { name: 'tel' },
+    { name: 'keyID' },
+    { name: 'bitcoin' },
+    { name: 'identifiNode' },
+    { name: 'gpg_fingerprint' },
+    { name: 'gpg_keyid' },
+  ]);
 }
 
 function catcher(e) {
@@ -25,15 +24,13 @@ function catcher(e) {
   }
 }
 
-var init = function(db, config) {
-  var queries = [];
-  queries.push(db.schema.createTableIfNotExists('UniqueIdentifierTypes', function(t) {
+const init = function (db, config) {
+  const queries = [];
+  queries.push(db.schema.createTableIfNotExists('UniqueIdentifierTypes', (t) => {
     t.string('name').primary();
-  }).then(function() {
-    return addDefaultUniqueIdentifierTypes(db).catch(catcher);
-  }).catch(catcher));
+  }).then(() => addDefaultUniqueIdentifierTypes(db).catch(catcher)).catch(catcher));
 
-  queries.push(db.schema.createTableIfNotExists('Messages', function(t) {
+  queries.push(db.schema.createTableIfNotExists('Messages', (t) => {
     t.string('hash').unique().primary();
     t.string('ipfs_hash', 50).unique();
     t.string('jws', 10000).notNullable();
@@ -51,23 +48,23 @@ var init = function(db, config) {
     t.index(['ipfs_hash']);
     t.index(['type']);
   }).catch(catcher)
-  .then(function() {
-    db.schema.createTableIfNotExists('MessageAttributes', function(t) {
-      t.string('message_hash').references('Messages.hash');
-      t.string('name').notNullable();
-      t.string('value').notNullable();
-      t.boolean('is_recipient');
-      t.index(['message_hash', 'name', 'value']);
-      t.index(['message_hash', 'is_recipient']);
-      t.index(['message_hash']);
-      t.index(['name', 'value']);
-      t.index(['value']);
-      //t.index(['lower("value")'], 'lowercase_value');
-      t.primary(['message_hash', 'is_recipient', 'name', 'value']);
-    }).catch(catcher);
-  }));
+    .then(() => {
+      db.schema.createTableIfNotExists('MessageAttributes', (t) => {
+        t.string('message_hash').references('Messages.hash');
+        t.string('name').notNullable();
+        t.string('value').notNullable();
+        t.boolean('is_recipient');
+        t.index(['message_hash', 'name', 'value']);
+        t.index(['message_hash', 'is_recipient']);
+        t.index(['message_hash']);
+        t.index(['name', 'value']);
+        t.index(['value']);
+        // t.index(['lower("value")'], 'lowercase_value');
+        t.primary(['message_hash', 'is_recipient', 'name', 'value']);
+      }).catch(catcher);
+    }));
 
-  queries.push(db.schema.createTableIfNotExists('TrustDistances', function(t) {
+  queries.push(db.schema.createTableIfNotExists('TrustDistances', (t) => {
     t.string('start_attr_name').notNullable();
     t.string('start_attr_value').notNullable();
     t.string('end_attr_name').notNullable();
@@ -76,7 +73,7 @@ var init = function(db, config) {
     t.primary(['start_attr_name', 'start_attr_value', 'end_attr_name', 'end_attr_value']);
   }).catch(catcher));
 
-  queries.push(db.schema.createTableIfNotExists('IdentityAttributes', function(t) {
+  queries.push(db.schema.createTableIfNotExists('IdentityAttributes', (t) => {
     t.integer('identity_id').unsigned();
     t.string('name').notNullable();
     t.string('value').notNullable();
@@ -92,7 +89,7 @@ var init = function(db, config) {
     t.primary(['identity_id', 'name', 'value', 'viewpoint_name', 'viewpoint_value']);
   }).catch(catcher));
 
-  queries.push(db.schema.createTableIfNotExists('IdentityStats', function(t) {
+  queries.push(db.schema.createTableIfNotExists('IdentityStats', (t) => {
     t.integer('identity_id').unsigned().primary();
     t.string('viewpoint_name').notNullable();
     t.string('viewpoint_value').notNullable();
@@ -104,7 +101,7 @@ var init = function(db, config) {
     t.index(['viewpoint_name', 'viewpoint_value', 'distance']);
   }).catch(catcher));
 
-  queries.push(db.schema.createTableIfNotExists('TrustIndexedAttributes', function(t) {
+  queries.push(db.schema.createTableIfNotExists('TrustIndexedAttributes', (t) => {
     t.string('name').notNullable();
     t.string('value').notNullable();
     t.string('ipfs_index_root');
@@ -115,4 +112,4 @@ var init = function(db, config) {
   return P.all(queries);
 };
 
-module.exports = { init: init };
+module.exports = { init };
