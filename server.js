@@ -137,7 +137,12 @@ try {
   db = require('./db.js')(knex);
   server.ready = getIpfs
     .then(newIpfs => db.init(config, newIpfs).return())
-    .then(() => ipfs.pubsub.subscribe('identifi', ipfsMsgHandler));
+    .then(() => {
+      if (ipfs && ipfs.pubsub) {
+        ipfs.pubsub.subscribe('identifi', ipfsMsgHandler)
+      }
+      return;
+    });
 } catch (ex) {
   log(ex);
   process.exit(0);

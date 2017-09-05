@@ -18,9 +18,6 @@ const ipfsIndexWidth = 200;
 const dagPB = require('ipld-dag-pb');
 
 let SQL_IFNULL = 'IFNULL';
-let SQL_INSERT_OR_REPLACE = 'INSERT OR REPLACE';
-let SQL_ON_CONFLICT = '';
-let SQL_PRINTF = 'PRINTF';
 
 const REBUILD_INDEXES_IF_NEW_MSGS_GT = 30;
 
@@ -49,11 +46,11 @@ function timeoutPromise(promise, timeout) {
 module.exports = function (knex) {
   let p; // Private methods
 
-  let lastIpfsIndexedMessageSavedAt = new Date().toISOString();
+  let lastIpfsIndexedMessageSavedAt = (new Date()).toISOString();
 
   let ipfsIdentityIndexKeysToRemove = {};
 
-  var pub = {
+  const pub = {
     trustIndexedAttributes: null,
     saveMessage(message, updateTrustIndexes, addToIpfs) {
       if (typeof updateTrustIndexes === 'undefined') { updateTrustIndexes = true; }
@@ -115,7 +112,7 @@ module.exports = function (knex) {
               .then(() => {
                 let i,
                   queries = [];
-                for (i = 0; i < message.signedData.author.length; i++) {
+                for (i = 0; i < message.signedData.author.length; i += 1) {
                   queries.push(trx('MessageAttributes').insert({
                     message_hash: message.hash,
                     name: message.signedData.author[i][0],
@@ -123,7 +120,7 @@ module.exports = function (knex) {
                     is_recipient: false,
                   }));
                 }
-                for (i = 0; i < message.signedData.recipient.length; i++) {
+                for (i = 0; i < message.signedData.recipient.length; i += 1) {
                   queries.push(trx('MessageAttributes').insert({
                     message_hash: message.hash,
                     name: message.signedData.recipient[i][0],
@@ -217,7 +214,7 @@ module.exports = function (knex) {
     getIdentityAttributesByAuthorOrRecipient(message, getByAuthor, limit) {
       // pick first unique author or recipient attribute from message
       const attributes = getByAuthor ? message.signedData.author : message.signedData.recipient;
-      for (let i = 0; i < attributes.length; i++) {
+      for (let i = 0; i < attributes.length; i += 1) {
         if (pub.isUniqueType(attributes[i][0])) {
           return pub.getIdentityAttributes({ limit: limit || 10, id: attributes[i] })
             .then(attrs => (attrs.length ? attrs[0] : []));
@@ -249,7 +246,7 @@ module.exports = function (knex) {
     },
 
     addMessageToIpfs(message) {
-      return p.ipfs.files.add(new Buffer(message.jws, 'utf8'));
+      return p.ipfs.files.add(Buffer.from(message.jws, 'utf8'));
     },
 
     addDbMessagesToIpfs() {
@@ -261,7 +258,7 @@ module.exports = function (knex) {
           .then((res) => {
             if (res.length && p.ipfs) {
               res.forEach((msg) => {
-                msgs[msg.hash] = new Buffer(msg.jws, 'utf8');
+                msgs[msg.hash] = Buffer.from(msg.jws, 'utf8');
               });
               return p.ipfs.files.add(Object.values(msgs));
             }
@@ -300,20 +297,20 @@ module.exports = function (knex) {
             attrs = [];
           }
           return p.ipfs.files.add([
-            { path: 'info', content: new Buffer(JSON.stringify({ keyID: myId[1], attrs })) },
-            { path: 'messages_by_distance', content: new Buffer(p.ipfsMessagesByDistance.rootNode.serialize()) },
-            { path: 'messages_by_timestamp', content: new Buffer(p.ipfsMessagesByTimestamp.rootNode.serialize()) },
-            { path: 'identities_by_searchkey', content: new Buffer(p.ipfsIdentitiesBySearchKey.rootNode.serialize()) },
-            { path: 'identities_by_distance', content: new Buffer(p.ipfsIdentitiesByDistance.rootNode.serialize()) },
+            { path: 'info', content: Buffer.from(JSON.stringify({ keyID: myId[1], attrs })) },
+            { path: 'messages_by_distance', content: Buffer.from(p.ipfsMessagesByDistance.rootNode.serialize()) },
+            { path: 'messages_by_timestamp', content: Buffer.from(p.ipfsMessagesByTimestamp.rootNode.serialize()) },
+            { path: 'identities_by_searchkey', content: Buffer.from(p.ipfsIdentitiesBySearchKey.rootNode.serialize()) },
+            { path: 'identities_by_distance', content: Buffer.from(p.ipfsIdentitiesByDistance.rootNode.serialize()) },
           ]);
         })
         .then((res) => {
           const links = [];
-          for (let i = 0; i < res.length; i++) {
+          for (let i = 0; i < res.length; i += 1) {
             links.push({ Name: res[i].path, Hash: res[i].hash, Size: res[i].size });
           }
           return new Promise(((resolve, reject) => {
-            dagPB.DAGNode.create(new Buffer('\u0008\u0001'), links, (err, dag) => {
+            dagPB.DAGNode.create(Buffer.from('\u0008\u0001'), links, (err, dag) => {
               if (err) {
                 reject(err);
               }
@@ -340,15 +337,13 @@ module.exports = function (knex) {
           }
           return indexRoot;
         })
-        .catch((e) => {
-          console.log('error publishing index', e);
-        });
+        .catch(e => console.log('error publishing index', e));
     },
 
     getIdentityProfileIndexKeys(identityProfile, hash) {
       const indexKeys = [];
       const attrs = identityProfile.attrs;
-      for (let j = 0; j < attrs.length; j++) {
+      for (let j = 0; j < attrs.length; j += 1) {
         let distance = parseInt(attrs[j].dist);
         distance = isNaN(distance) ? 99 : distance;
         distance = (`00${distance}`).substring(distance.toString().length); // pad with zeros
@@ -384,7 +379,7 @@ module.exports = function (knex) {
       }
       let d1 = new Date();
       let uniqueAttr = attrs[0];
-      for (let i = 0; i < attrs.length; i++) {
+      for (let i = 0; i < attrs.length; i += 1) {
         if (pub.isUniqueType(attrs[i].name)) {
           uniqueAttr = attrs[i];
         }
@@ -473,7 +468,7 @@ module.exports = function (knex) {
         .then((identityProfile) => {
           ip = identityProfile;
           console.log('adding identityprofile to ipfs', ip);
-          return p.ipfs.files.add(new Buffer(JSON.stringify(identityProfile), 'utf8'));
+          return p.ipfs.files.add(Buffer.from(JSON.stringify(identityProfile), 'utf8'));
         })
         .then((res) => {
           if (res.length) {
@@ -523,7 +518,7 @@ module.exports = function (knex) {
                 const keys = orderedKeys.splice(0, 100);
                 const values = [];
                 keys.forEach((key) => {
-                  values.push(new Buffer(JSON.stringify(identityProfilesByHash[key]), 'utf8'));
+                  values.push(Buffer.from(JSON.stringify(identityProfilesByHash[key]), 'utf8'));
                 });
                 return p.ipfs.files.add(values)
                   .then((res) => {
@@ -674,7 +669,7 @@ module.exports = function (knex) {
         .then((links) => {
           if (!links) { throw new Error('Ipfs index was not resolved', ipnsName); }
           let path;
-          for (let i = 0; i < links.length; i++) {
+          for (let i = 0; i < links.length; i += 1) {
             if (links[i]._name === 'messages_by_distance') {
               path = links[i]._multihash;
             }
@@ -709,19 +704,19 @@ module.exports = function (knex) {
 
     saveMessagesFromIpfsIndexes() {
       return knex('Messages')
-        .innerJoin('MessageAttributes as author', function () {
-          this.on('author.message_hash', '=', 'Messages.hash');
-          this.andOn('author.is_recipient', '=', knex.raw('?', false));
+        .innerJoin('MessageAttributes as author', (q) => {
+          q.on('author.message_hash', '=', 'Messages.hash');
+          q.andOn('author.is_recipient', '=', knex.raw('?', false));
         })
-        .innerJoin('MessageAttributes as recipient', function () {
-          this.on('recipient.message_hash', '=', 'Messages.hash');
-          this.andOn('recipient.is_recipient', '=', knex.raw('?', true));
+        .innerJoin('MessageAttributes as recipient', (q) => {
+          q.on('recipient.message_hash', '=', 'Messages.hash');
+          q.andOn('recipient.is_recipient', '=', knex.raw('?', true));
         })
-        .innerJoin('TrustDistances as td', function () {
-          this.on('td.start_attr_name', '=', knex.raw('?', myId[0]));
-          this.on('td.start_attr_value', '=', knex.raw('?', myId[1]));
-          this.on('td.end_attr_name', '=', 'author.name');
-          this.on('td.end_attr_value', '=', 'author.value');
+        .innerJoin('TrustDistances as td', (q) => {
+          q.on('td.start_attr_name', '=', knex.raw('?', myId[0]));
+          q.on('td.start_attr_value', '=', knex.raw('?', myId[1]));
+          q.on('td.end_attr_name', '=', 'author.name');
+          q.on('td.end_attr_value', '=', 'author.value');
         })
         .where('td.distance', '<=', 2)
         .andWhere('recipient.name', 'nodeID')
@@ -730,7 +725,7 @@ module.exports = function (knex) {
         .then((res) => {
           let i;
           let q = Promise.resolve();
-          for (i = 0; i < res.length; i++) {
+          for (i = 0; i < res.length; i += 1) {
             q = q.then(pub.saveMessagesFromIpfsIndex(res[i].value));
           }
           return q;
@@ -796,13 +791,13 @@ module.exports = function (knex) {
         const query = knex.select(select)
           .groupBy('Messages.hash')
           .from('Messages')
-          .innerJoin('MessageAttributes as author', function () {
-            this.on('Messages.hash', '=', 'author.message_hash');
-            this.on('author.is_recipient', '=', knex.raw('?', false));
+          .innerJoin('MessageAttributes as author', (q) => {
+            q.on('Messages.hash', '=', 'author.message_hash');
+            q.on('author.is_recipient', '=', knex.raw('?', false));
           })
-          .innerJoin('MessageAttributes as recipient', function () {
-            this.on('Messages.hash', '=', 'recipient.message_hash');
-            this.andOn('recipient.is_recipient', '=', knex.raw('?', true));
+          .innerJoin('MessageAttributes as recipient', (q) => {
+            q.on('Messages.hash', '=', 'recipient.message_hash');
+            q.andOn('recipient.is_recipient', '=', knex.raw('?', true));
           })
           .orderBy(options.orderBy, options.direction)
           .limit(options.limit)
@@ -847,35 +842,35 @@ module.exports = function (knex) {
 
         if (options.where.hash) {
           const hash = options.where.hash;
-          query.where(function () {
-            this.where('Messages.hash', hash);
-            this.orWhere('Messages.ipfs_hash', hash);
+          query.where((q) => {
+            q.where('Messages.hash', hash);
+            q.orWhere('Messages.ipfs_hash', hash);
           });
           delete options.where.hash;
         }
 
         if (options.viewpoint) {
           // Replace left joins with subquery for performance?
-          query.leftJoin('IdentityAttributes as author_attribute', function () {
-            this.on('author_attribute.name', '=', 'author.name');
-            this.on('author_attribute.value', '=', 'author.value');
-            this.on('author_attribute.viewpoint_name', '=', knex.raw('?', options.viewpoint[0]));
-            this.on('author_attribute.viewpoint_value', '=', knex.raw('?', options.viewpoint[1]));
+          query.leftJoin('IdentityAttributes as author_attribute', (q) => {
+            q.on('author_attribute.name', '=', 'author.name');
+            q.on('author_attribute.value', '=', 'author.value');
+            q.on('author_attribute.viewpoint_name', '=', knex.raw('?', options.viewpoint[0]));
+            q.on('author_attribute.viewpoint_value', '=', knex.raw('?', options.viewpoint[1]));
           });
           query.leftJoin('IdentityStats as st', 'st.identity_id', 'author_attribute.identity_id');
-          query.leftJoin('IdentityAttributes as recipient_attribute', function () {
-            this.on('recipient_attribute.name', '=', 'recipient.name');
-            this.on('recipient_attribute.value', '=', 'recipient.value');
-            this.on('recipient_attribute.viewpoint_name', '=', knex.raw('?', options.viewpoint[0]));
-            this.on('recipient_attribute.viewpoint_value', '=', knex.raw('?', options.viewpoint[1]));
+          query.leftJoin('IdentityAttributes as recipient_attribute', (q) => {
+            q.on('recipient_attribute.name', '=', 'recipient.name');
+            q.on('recipient_attribute.value', '=', 'recipient.value');
+            q.on('recipient_attribute.viewpoint_name', '=', knex.raw('?', options.viewpoint[0]));
+            q.on('recipient_attribute.viewpoint_value', '=', knex.raw('?', options.viewpoint[1]));
           });
-          query.innerJoin('TrustDistances as td', function () {
-            this.on('author_attribute.name', '=', 'td.end_attr_name')
+          query.innerJoin('TrustDistances as td', (q) => {
+            q.on('author_attribute.name', '=', 'td.end_attr_name')
               .andOn('author_attribute.value', '=', 'td.end_attr_value')
               .andOn('td.start_attr_name', '=', knex.raw('?', options.viewpoint[0]))
               .andOn('td.start_attr_value', '=', knex.raw('?', options.viewpoint[1]));
             if (options.maxDistance > 0) {
-              this.andOn('td.distance', '<=', knex.raw('?', options.maxDistance));
+              q.andOn('td.distance', '<=', knex.raw('?', options.maxDistance));
             }
           });
           if (options.maxDistance > 0) {
@@ -946,14 +941,14 @@ module.exports = function (knex) {
       const subquery = knex.from('IdentityAttributes AS attr2')
         .select(knex.raw('attr.identity_id'))
         .groupBy('attr.identity_id')
-        .innerJoin('IdentityAttributes AS attr', function () {
-          this.on('attr.identity_id', '=', 'attr2.identity_id');
+        .innerJoin('IdentityAttributes AS attr', (q) => {
+          q.on('attr.identity_id', '=', 'attr2.identity_id');
         })
-        .leftJoin('TrustDistances as td', function () {
-          this.on('td.start_attr_name', '=', 'attr.viewpoint_name');
-          this.andOn('td.start_attr_value', '=', 'attr.viewpoint_value');
-          this.andOn('td.end_attr_name', '=', 'attr.name');
-          this.andOn('td.end_attr_value', '=', 'attr.value');
+        .leftJoin('TrustDistances as td', (q) => {
+          q.on('td.start_attr_name', '=', 'attr.viewpoint_name');
+          q.andOn('td.start_attr_value', '=', 'attr.viewpoint_value');
+          q.andOn('td.end_attr_name', '=', 'attr.name');
+          q.andOn('td.end_attr_value', '=', 'attr.value');
         })
         .where(options.where)
         .orderBy(knex.raw(`MIN(${SQL_IFNULL}(td.distance, 100000))`), options.direction)
@@ -975,14 +970,14 @@ module.exports = function (knex) {
           'st.positive_score',
           'st.negative_score',
         ])
-        .leftJoin('TrustDistances as td', function () {
-          this.on('td.start_attr_name', '=', 'attr.viewpoint_name');
-          this.andOn('td.start_attr_value', '=', 'attr.viewpoint_value');
-          this.andOn('td.end_attr_name', '=', 'attr.name');
-          this.andOn('td.end_attr_value', '=', 'attr.value');
+        .leftJoin('TrustDistances as td', (qq) => {
+          qq.on('td.start_attr_name', '=', 'attr.viewpoint_name');
+          qq.andOn('td.start_attr_value', '=', 'attr.viewpoint_value');
+          qq.andOn('td.end_attr_name', '=', 'attr.name');
+          qq.andOn('td.end_attr_value', '=', 'attr.value');
         })
-        .leftJoin('IdentityStats as st', function () {
-          this.on('attr.identity_id', '=', 'st.identity_id');
+        .leftJoin('IdentityStats as st', (qq) => {
+          qq.on('attr.identity_id', '=', 'st.identity_id');
         })
         .where('attr.identity_id', 'in', subquery);
 
@@ -991,7 +986,7 @@ module.exports = function (knex) {
       return q = q.then((res) => {
         const identities = {};
         let i;
-        for (i = 0; i < res.length; i++) {
+        for (i = 0; i < res.length; i += 1) {
           const attr = res[i];
           identities[attr.identity_id] = identities[attr.identity_id] || [];
           identities[attr.identity_id].push({
@@ -1014,12 +1009,12 @@ module.exports = function (knex) {
         arr = arr.sort((identity1, identity2) => {
           let smallestDistance1 = 1000,
             smallestDistance2 = 1000;
-          for (i = 0; i < identity1.length; i++) {
+          for (i = 0; i < identity1.length; i += 1) {
             if (!isNaN(parseInt(identity1[i].dist)) && identity1[i].dist < smallestDistance1) {
               smallestDistance1 = identity1[i].dist;
             }
           }
-          for (i = 0; i < identity2.length; i++) {
+          for (i = 0; i < identity2.length; i += 1) {
             if (!isNaN(parseInt(identity2[i].dist)) && identity2[i].dist < smallestDistance2) {
               smallestDistance2 = identity2[i].dist;
             }
@@ -1078,24 +1073,24 @@ module.exports = function (knex) {
             function generateSubQuery() {
               return knex
                 .from('Messages as m')
-                .innerJoin('MessageAttributes as attr1', function () {
-                  this.on('m.hash', '=', 'attr1.message_hash');
+                .innerJoin('MessageAttributes as attr1', (q) => {
+                  q.on('m.hash', '=', 'attr1.message_hash');
                 })
-                .innerJoin('IdentityAttributes as ia', function () {
-                  this.on('ia.name', '=', 'attr1.name');
-                  this.on('ia.value', '=', 'attr1.value');
-                  this.on('ia.identity_id', '=', identityId);
+                .innerJoin('IdentityAttributes as ia', (q) => {
+                  q.on('ia.name', '=', 'attr1.name');
+                  q.on('ia.value', '=', 'attr1.value');
+                  q.on('ia.identity_id', '=', identityId);
                 })
-                .innerJoin('MessageAttributes as attr2', function () {
-                  this.on('m.hash', '=', 'attr2.message_hash');
-                  this.on('attr2.is_recipient', '=', 'attr1.is_recipient');
+                .innerJoin('MessageAttributes as attr2', (q) => {
+                  q.on('m.hash', '=', 'attr2.message_hash');
+                  q.on('attr2.is_recipient', '=', 'attr1.is_recipient');
                 })
                 .innerJoin('UniqueIdentifierTypes as uidt', 'uidt.name', 'attr1.name')
-                .innerJoin('TrustDistances as td_signer', function () {
-                  this.on('td_signer.start_attr_name', '=', knex.raw('?', options.viewpoint[0]));
-                  this.on('td_signer.start_attr_value', '=', knex.raw('?', options.viewpoint[1]));
-                  this.on('td_signer.end_attr_name', '=', knex.raw('?', 'keyID'));
-                  this.on('td_signer.end_attr_value', '=', 'm.signer_keyid');
+                .innerJoin('TrustDistances as td_signer', (q) => {
+                  q.on('td_signer.start_attr_name', '=', knex.raw('?', options.viewpoint[0]));
+                  q.on('td_signer.start_attr_value', '=', knex.raw('?', options.viewpoint[1]));
+                  q.on('td_signer.end_attr_name', '=', knex.raw('?', 'keyID'));
+                  q.on('td_signer.end_attr_value', '=', 'm.signer_keyid');
                 });
             }
 
@@ -1103,12 +1098,12 @@ module.exports = function (knex) {
               return generateSubQuery()
                 // Select for deletion the related identity attributes that were previously inserted
                 // with a different identity_id
-                .innerJoin('IdentityAttributes as existing', function () {
-                  this.on('existing.identity_id', '!=', identityId);
-                  this.on('existing.name', '=', 'attr2.name');
-                  this.on('existing.value', '=', 'attr2.value');
-                  this.on('existing.viewpoint_name', '=', knex.raw('?', options.viewpoint[0]));
-                  this.on('existing.viewpoint_value', '=', knex.raw('?', options.viewpoint[1]));
+                .innerJoin('IdentityAttributes as existing', (q) => {
+                  q.on('existing.identity_id', '!=', identityId);
+                  q.on('existing.name', '=', 'attr2.name');
+                  q.on('existing.value', '=', 'attr2.value');
+                  q.on('existing.viewpoint_name', '=', knex.raw('?', options.viewpoint[0]));
+                  q.on('existing.viewpoint_value', '=', knex.raw('?', options.viewpoint[1]));
                 })
                 .innerJoin('UniqueIdentifierTypes as uidt2', 'uidt2.name', 'existing.name')
                 .select('existing.identity_id');
@@ -1118,12 +1113,12 @@ module.exports = function (knex) {
               return generateSubQuery()
                 // Select for insertion the related identity attributes that do not already exist
                 // on the identity_id
-                .leftJoin('IdentityAttributes as existing', function () {
-                  this.on('existing.identity_id', '=', identityId);
-                  this.on('existing.name', '=', 'attr2.name');
-                  this.on('existing.value', '=', 'attr2.value');
-                  this.on('existing.viewpoint_name', '=', knex.raw('?', options.viewpoint[0]));
-                  this.on('existing.viewpoint_value', '=', knex.raw('?', options.viewpoint[1]));
+                .leftJoin('IdentityAttributes as existing', (q) => {
+                  q.on('existing.identity_id', '=', identityId);
+                  q.on('existing.name', '=', 'attr2.name');
+                  q.on('existing.value', '=', 'attr2.value');
+                  q.on('existing.viewpoint_name', '=', knex.raw('?', options.viewpoint[0]));
+                  q.on('existing.viewpoint_value', '=', knex.raw('?', options.viewpoint[1]));
                 })
                 .whereNull('existing.identity_id')
                 .select(
@@ -1133,7 +1128,7 @@ module.exports = function (knex) {
                   knex.raw('?', options.viewpoint[0]),
                   knex.raw('?', options.viewpoint[1]),
                   knex.raw('SUM(CASE WHEN m.type = \'verify_identity\' THEN 1 ELSE 0 END)'),
-                  knex.raw('SUM(CASE WHEN m.type = \'unverify_identity\' THEN 1 ELSE 0 END)')
+                  knex.raw('SUM(CASE WHEN m.type = \'unverify_identity\' THEN 1 ELSE 0 END)'),
                 ).groupBy('attr2.name', 'attr2.value');
             }
 
@@ -1151,7 +1146,8 @@ module.exports = function (knex) {
             return iterateSearch();
           })
           .then(() => {
-            const hasSearchedAttributes = options.searchedAttributes && options.searchedAttributes.length > 0;
+            const hasSearchedAttributes = options.searchedAttributes &&
+              options.searchedAttributes.length > 0;
 
             if (hasSearchedAttributes) {
               return knex('IdentityAttributes')
@@ -1218,56 +1214,56 @@ module.exports = function (knex) {
           trx.raw('?', startId[1]),
           'attr2.name',
           'attr2.value',
-          depth
+          depth,
         )
           .select()
           .from('Messages as m')
-          .innerJoin('MessageAttributes as attr1', function () {
-            this.on('m.hash', '=', 'attr1.message_hash');
+          .innerJoin('MessageAttributes as attr1', (q) => {
+            q.on('m.hash', '=', 'attr1.message_hash');
             if (depth === 1) {
-              this.on('attr1.name', '=', trx.raw('?', startId[0]));
-              this.on('attr1.value', '=', trx.raw('?', startId[1]));
+              q.on('attr1.name', '=', trx.raw('?', startId[0]));
+              q.on('attr1.value', '=', trx.raw('?', startId[1]));
             }
-            this.on('attr1.is_recipient', '=', trx.raw('?', false));
+            q.on('attr1.is_recipient', '=', trx.raw('?', false));
           })
-          .innerJoin('MessageAttributes as attr2', function () {
-            this.on('m.hash', '=', 'attr2.message_hash');
+          .innerJoin('MessageAttributes as attr2', (q) => {
+            q.on('m.hash', '=', 'attr2.message_hash');
             if (betweenKeyIDsOnly) {
-              this.on('attr2.name', '=', trx.raw('?', 'keyID'));
+              q.on('attr2.name', '=', trx.raw('?', 'keyID'));
             }
-            this.on('attr2.is_recipient', '=', trx.raw('?', true));
+            q.on('attr2.is_recipient', '=', trx.raw('?', true));
           });
 
         if (depth > 1) {
-          subQuery.innerJoin('TrustDistances as td_author', function () {
-            this.on('td_author.start_attr_name', '=', trx.raw('?', startId[0]));
-            this.on('td_author.start_attr_value', '=', trx.raw('?', startId[1]));
-            this.on('td_author.end_attr_name', '=', 'attr1.name');
-            this.on('td_author.end_attr_value', '=', 'attr1.value');
-            this.on('td_author.distance', '=', trx.raw('?', depth - 1));
+          subQuery.innerJoin('TrustDistances as td_author', (q) => {
+            q.on('td_author.start_attr_name', '=', trx.raw('?', startId[0]));
+            q.on('td_author.start_attr_value', '=', trx.raw('?', startId[1]));
+            q.on('td_author.end_attr_name', '=', 'attr1.name');
+            q.on('td_author.end_attr_value', '=', 'attr1.value');
+            q.on('td_author.distance', '=', trx.raw('?', depth - 1));
           });
         }
 
         // Where not exists
-        subQuery.leftJoin('TrustDistances as td_recipient', function () {
-          this.on('td_recipient.start_attr_name', '=', trx.raw('?', startId[0]));
-          this.on('td_recipient.start_attr_value', '=', trx.raw('?', startId[1]));
-          this.on('td_recipient.end_attr_name', '=', 'attr2.name');
-          this.on('td_recipient.end_attr_value', '=', 'attr2.value');
+        subQuery.leftJoin('TrustDistances as td_recipient', (q) => {
+          q.on('td_recipient.start_attr_name', '=', trx.raw('?', startId[0]));
+          q.on('td_recipient.start_attr_value', '=', trx.raw('?', startId[1]));
+          q.on('td_recipient.end_attr_name', '=', 'attr2.name');
+          q.on('td_recipient.end_attr_value', '=', 'attr2.value');
         });
         subQuery.whereNull('td_recipient.distance');
 
         if (!betweenKeyIDsOnly) {
           subQuery.innerJoin('UniqueIdentifierTypes as uidt1', 'uidt1.name', 'attr1.name');
           subQuery.innerJoin('UniqueIdentifierTypes as uidt2', 'uidt2.name', 'attr2.name');
-          subQuery.leftJoin('TrustDistances as td_signer', function () {
-            this.on('td_signer.start_attr_name', '=', trx.raw('?', trustedKey[0]));
-            this.on('td_signer.start_attr_value', '=', trx.raw('?', trustedKey[1]));
-            this.on('td_signer.end_attr_name', '=', trx.raw('?', 'keyID'));
-            this.on('td_signer.end_attr_value', '=', 'm.signer_keyid');
+          subQuery.leftJoin('TrustDistances as td_signer', (q) => {
+            q.on('td_signer.start_attr_name', '=', trx.raw('?', trustedKey[0]));
+            q.on('td_signer.start_attr_value', '=', trx.raw('?', trustedKey[1]));
+            q.on('td_signer.end_attr_name', '=', trx.raw('?', 'keyID'));
+            q.on('td_signer.end_attr_value', '=', 'm.signer_keyid');
           });
-          subQuery.where(function () {
-            this.whereNotNull('td_signer.distance').orWhere('m.signer_keyid', trustedKey[1]);
+          subQuery.where((q) => {
+            q.whereNotNull('td_signer.distance').orWhere('m.signer_keyid', trustedKey[1]);
           });
         }
         subQuery.where('m.is_latest', true)
@@ -1276,8 +1272,8 @@ module.exports = function (knex) {
         return trx('TrustDistances').insert(subQuery).return();
       }
 
-      let q,
-        q2;
+      let q;
+      let q2;
       if (maintain) {
         q = this.addTrustIndexedAttribute(id, maxDepth);
       } else {
@@ -1298,21 +1294,25 @@ module.exports = function (knex) {
               if (trustedKey[0] !== id[0] && trustedKey[1] !== id[1]) {
                 return trx('TrustDistances')
                   .insert({
-                    start_attr_name: trustedKey[0], start_attr_value: trustedKey[1], end_attr_name: trustedKey[0], end_attr_value: trustedKey[1], distance: 0,
+                    start_attr_name: trustedKey[0],
+                    start_attr_value: trustedKey[1],
+                    end_attr_name: trustedKey[0],
+                    end_attr_value: trustedKey[1],
+                    distance: 0,
                   })
                   .return();
               }
             }))
         .then(() => {
           q2 = Promise.resolve();
-          for (i = 1; i <= maxDepth; i++) {
+          for (i = 1; i <= maxDepth; i += 1) {
             q2.then(buildQuery(true, trx, i));
           }
           return q2;
         })
         .then(() => {
           q2 = Promise.resolve();
-          for (i = 1; i <= maxDepth; i++) {
+          for (i = 1; i <= maxDepth; i += 1) {
             q2.then(buildQuery(false, trx, i));
           }
           return q2;
@@ -1327,13 +1327,17 @@ module.exports = function (knex) {
       console.log('Generating identity index (SQL)');
       function mapNextIdentifier() {
         return knex('TrustDistances')
-          .leftJoin('IdentityAttributes', function () {
-            this.on('IdentityAttributes.viewpoint_name', '=', 'TrustDistances.start_attr_name');
-            this.on('IdentityAttributes.viewpoint_value', '=', 'TrustDistances.start_attr_value');
-            this.on('IdentityAttributes.name', '=', 'TrustDistances.end_attr_name');
-            this.on('IdentityAttributes.value', '=', 'TrustDistances.end_attr_value');
+          .leftJoin('IdentityAttributes', (q) => {
+            q.on('IdentityAttributes.viewpoint_name', '=', 'TrustDistances.start_attr_name');
+            q.on('IdentityAttributes.viewpoint_value', '=', 'TrustDistances.start_attr_value');
+            q.on('IdentityAttributes.name', '=', 'TrustDistances.end_attr_name');
+            q.on('IdentityAttributes.value', '=', 'TrustDistances.end_attr_value');
           })
-          .where({ start_attr_name: viewpoint[0], start_attr_value: viewpoint[1], identity_id: null })
+          .where({
+            start_attr_name: viewpoint[0],
+            start_attr_value: viewpoint[1],
+            identity_id: null,
+          })
           .orderBy('distance', 'asc')
           .limit(1)
           .select('end_attr_name', 'end_attr_value')
@@ -1367,7 +1371,10 @@ module.exports = function (knex) {
           pub.trustIndexedAttributes = res;
           return knex('TrustDistances')
             .where({
-              start_attr_name: id[0], start_attr_value: id[1], end_attr_name: id[0], end_attr_value: id[1],
+              start_attr_name: id[0],
+              start_attr_value: id[1],
+              end_attr_name: id[0],
+              end_attr_value: id[1],
             })
             .count('* as c');
         })
@@ -1376,7 +1383,11 @@ module.exports = function (knex) {
           // Add trust distance to self = 0
             return knex('TrustDistances')
               .insert({
-                start_attr_name: id[0], start_attr_value: id[1], end_attr_name: id[0], end_attr_value: id[1], distance: 0,
+                start_attr_name: id[0],
+                start_attr_value: id[1],
+                end_attr_name: id[0],
+                end_attr_value: id[1],
+                distance: 0,
               }).return();
           }
         });
@@ -1421,17 +1432,17 @@ module.exports = function (knex) {
       sentSql += 'SUM(CASE WHEN m.rating = (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS sent_neutral, ';
       sentSql += 'SUM(CASE WHEN m.rating < (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS sent_negative ';
 
-      let dbTrue = true,
-        dbFalse = false;
+      let dbTrue = true;
+      let dbFalse = false;
       if (config.db.dialect === 'sqlite3') { // sqlite in test env fails otherwise, for some reason
         dbTrue = 1;
         dbFalse = 0;
       }
 
       let sent = knex('Messages as m')
-        .innerJoin('MessageAttributes as author', function () {
-          this.on('author.message_hash', '=', 'm.hash');
-          this.on('author.is_recipient', '=', knex.raw('?', dbFalse));
+        .innerJoin('MessageAttributes as author', (q) => {
+          q.on('author.message_hash', '=', 'm.hash');
+          q.on('author.is_recipient', '=', knex.raw('?', dbFalse));
         })
         .where('m.type', 'rating')
         .where('m.public', dbTrue);
@@ -1443,15 +1454,15 @@ module.exports = function (knex) {
       receivedSql += 'MIN(m.timestamp) AS first_seen ';
 
       let received = knex('Messages as m')
-        .innerJoin('MessageAttributes as recipient', function () {
-          this.on('recipient.message_hash', '=', 'm.hash');
-          this.on('recipient.is_recipient', '=', knex.raw('?', dbTrue));
+        .innerJoin('MessageAttributes as recipient', (q) => {
+          q.on('recipient.message_hash', '=', 'm.hash');
+          q.on('recipient.is_recipient', '=', knex.raw('?', dbTrue));
         })
         .where('m.type', 'rating')
         .where('m.public', dbTrue);
 
-      let identityId,
-        identityIdQuery = Promise.resolve();
+      let identityId;
+      let identityIdQuery = Promise.resolve();
       if (options.viewpoint && options.maxDistance > -1) {
         identityIdQuery = knex('IdentityAttributes')
           .where({
@@ -1467,9 +1478,9 @@ module.exports = function (knex) {
             identityId = res[0].identity_id;
 
             sent.select('ia.identity_id as identity_id', 'm.hash');
-            sent.innerJoin('IdentityAttributes as ia', function () {
-              this.on('author.name', '=', 'ia.name');
-              this.on('author.value', '=', 'ia.value');
+            sent.innerJoin('IdentityAttributes as ia', (q) => {
+              q.on('author.name', '=', 'ia.name');
+              q.on('author.value', '=', 'ia.value');
             });
             sent.where('ia.identity_id', identityId);
             sent.where('m.priority', '>', 0);
@@ -1482,20 +1493,20 @@ module.exports = function (knex) {
               .groupBy('s.identity_id');
 
             received.select('ia.identity_id as identity_id', 'm.hash as hash');
-            received.innerJoin('IdentityAttributes as ia', function () {
-              this.on('recipient.name', '=', 'ia.name');
-              this.on('recipient.value', '=', 'ia.value');
+            received.innerJoin('IdentityAttributes as ia', (q) => {
+              q.on('recipient.name', '=', 'ia.name');
+              q.on('recipient.value', '=', 'ia.value');
             });
             received.where('ia.identity_id', identityId);
             received.groupBy('m.hash', 'ia.identity_id');
 
-            received.innerJoin('TrustDistances as td', function () {
-              this.on('td.start_attr_name', '=', knex.raw('?', options.viewpoint[0]));
-              this.andOn('td.start_attr_value', '=', knex.raw('?', options.viewpoint[1]));
-              this.andOn('td.end_attr_name', '=', 'ia.name');
-              this.andOn('td.end_attr_value', '=', 'ia.value');
+            received.innerJoin('TrustDistances as td', (q) => {
+              q.on('td.start_attr_name', '=', knex.raw('?', options.viewpoint[0]));
+              q.andOn('td.start_attr_value', '=', knex.raw('?', options.viewpoint[1]));
+              q.andOn('td.end_attr_name', '=', 'ia.name');
+              q.andOn('td.end_attr_value', '=', 'ia.value');
               if (options.maxDistance > 0) {
-                this.andOn('td.distance', '<=', options.maxDistance);
+                q.andOn('td.distance', '<=', options.maxDistance);
               }
             });
 
@@ -1588,9 +1599,18 @@ module.exports = function (knex) {
         .then((res) => {
           if (res > config.maxMessageCount) {
             const nMessagesToDelete = Math.min(100, Math.ceil(config.maxMessageCount / 10));
-            const messagesToDelete = knex('Messages').select('hash').limit(nMessagesToDelete).orderBy('priority', 'asc').orderBy('created', 'asc');
-            return knex('Messages').whereIn('hash', messagesToDelete).del()
-              .then(() => knex('MessageAttributes').whereIn('message_hash', messagesToDelete).del());
+            const messagesToDelete = knex('Messages')
+              .select('hash')
+              .limit(nMessagesToDelete)
+              .orderBy('priority', 'asc')
+              .orderBy('created', 'asc');
+            return knex('Messages')
+              .whereIn('hash', messagesToDelete).del()
+              .then(() => {
+                knex('MessageAttributes')
+                  .whereIn('message_hash', messagesToDelete)
+                  .del();
+              });
           }
         });
     },
@@ -1618,36 +1638,35 @@ module.exports = function (knex) {
           if (distanceToSigner === -1) { // Unknown signer
             return Promise.resolve(0);
           }
-          let i,
-            queries = [];
+          let i;
+          const queries = [];
           // Get distances to message authors
-          for (i = 0; i < message.signedData.author.length; i++) {
+          for (i = 0; i < message.signedData.author.length; i += 1) {
             const q = pub.getTrustDistance(myId, message.signedData.author[i]);
             queries.push(q);
           }
 
           return Promise.all(queries).then((authorDistances) => {
             let shortestDistanceToAuthor = 10000000;
-            for (let j = 0; j < authorDistances.length; j++) {
+            for (let j = 0; j < authorDistances.length; j += 1) {
               if (authorDistances[j] > -1 && authorDistances[j] < shortestDistanceToAuthor) {
                 shortestDistanceToAuthor = authorDistances[j];
               }
             }
 
             priority = maxPriority / (distanceToSigner + 1);
-            priority = priority / 2 + priority / (shortestDistanceToAuthor + 2);
+            priority = (priority / 2) + (priority / (shortestDistanceToAuthor + 2));
             priority = Math.round(priority);
 
-            let hasAuthorKeyID,
-              hasRecipientKeyID,
-              i;
-            for (i = 0; i < message.signedData.author.length; i++) {
+            let hasAuthorKeyID;
+            let hasRecipientKeyID;
+            for (i = 0; i < message.signedData.author.length; i += 1) {
               if (message.signedData.author[i][0] === 'keyID') {
                 hasAuthorKeyID = true;
                 break;
               }
             }
-            for (i = 0; i < message.signedData.recipient.length; i++) {
+            for (i = 0; i < message.signedData.recipient.length; i += 1) {
               if (message.signedData.recipient[i][0] === 'keyID') {
                 hasRecipientKeyID = true;
                 break;
@@ -1716,10 +1735,11 @@ module.exports = function (knex) {
 
       // TODO: make this faster
       return pub.getTrustIndexedAttributes().then((viewpoints) => {
-        for (let j = 0; j < viewpoints.length; j++) {
+        for (let j = 0; j < viewpoints.length; j += 1) {
           const viewpoint = [viewpoints[j].name, viewpoints[j].value];
-          for (let i = 0; i < message.signedData.recipient.length; i++) {
-            queries.push(pub.mapIdentityAttributes({ id: message.signedData.recipient[i], viewpoint }));
+          for (let i = 0; i < message.signedData.recipient.length; i += 1) {
+            const m = pub.mapIdentityAttributes({ id: message.signedData.recipient[i], viewpoint });
+            queries.push(m);
           }
         }
         return Promise.all(queries);
@@ -1734,29 +1754,29 @@ module.exports = function (knex) {
     },
 
     deletePreviousMessage(message, deleteFromIpfsIndexes) {
-      let i,
-        j;
-      let verifyTypes = ['verify_identity', 'unverify_identity'],
-        t = message.signedData.type;
+      let i;
+      let j;
+      const verifyTypes = ['verify_identity', 'unverify_identity'];
+      const t = message.signedData.type;
       const isVerifyMsg = verifyTypes.indexOf(t) > -1;
 
       function getHashesQuery(author, recipient) {
         const q = knex('Messages as m')
           .distinct('m.hash as hash', 'm.ipfs_hash as ipfs_hash', 'm.timestamp as timestamp', 'td.distance as distance')
-          .innerJoin('MessageAttributes as author', function () {
-            this.on('author.message_hash', '=', 'm.hash');
-            this.andOn('author.is_recipient', '=', knex.raw('?', false));
+          .innerJoin('MessageAttributes as author', (qq) => {
+            qq.on('author.message_hash', '=', 'm.hash');
+            qq.andOn('author.is_recipient', '=', knex.raw('?', false));
           })
-          .innerJoin('MessageAttributes as recipient', function () {
-            this.on('recipient.message_hash', '=', 'm.hash');
-            this.andOn('recipient.is_recipient', '=', knex.raw('?', true));
+          .innerJoin('MessageAttributes as recipient', (qq) => {
+            qq.on('recipient.message_hash', '=', 'm.hash');
+            qq.andOn('recipient.is_recipient', '=', knex.raw('?', true));
           })
           .innerJoin('UniqueIdentifierTypes as ia1', 'ia1.name', 'author.name')
-          .leftJoin('TrustDistances as td', function () {
-            this.on('td.start_attr_name', '=', knex.raw('?', myId[0]));
-            this.andOn('td.start_attr_value', '=', knex.raw('?', myId[1]));
-            this.andOn('td.end_attr_name', '=', 'author.name');
-            this.andOn('td.end_attr_value', '=', 'author.value');
+          .leftJoin('TrustDistances as td', (qq) => {
+            qq.on('td.start_attr_name', '=', knex.raw('?', myId[0]));
+            qq.andOn('td.start_attr_value', '=', knex.raw('?', myId[1]));
+            qq.andOn('td.end_attr_name', '=', 'author.name');
+            qq.andOn('td.end_attr_value', '=', 'author.value');
           })
           .where({
             'm.signer_keyid': message.signerKeyHash,
@@ -1789,7 +1809,7 @@ module.exports = function (knex) {
       let ipfsIndexKeys = [];
 
       function addHashes(res) {
-        for (let i = 0; i < res.length; i++) {
+        for (i = 0; i < res.length; i += 1) {
           hashes.push(res[i].hash);
           if (deleteFromIpfsIndexes && res[i].ipfs_hash && res[i].ipfs_hash.length) {
             const msg = res[i];
@@ -1805,11 +1825,11 @@ module.exports = function (knex) {
 
       function addInnerJoinMessageRecipient(query, recipient, n) {
         const as = `recipient${n}`;
-        query.innerJoin(`MessageAttributes as ${as}`, function () {
-          this.on(`${as}.message_hash`, '=', 'm.hash');
-          this.on(`${as}.is_recipient`, '=', knex.raw('?', true));
-          this.on(`${as}.name`, '=', knex.raw('?', recipient[0]));
-          this.on(`${as}.value`, '=', knex.raw('?', recipient[1]));
+        query.innerJoin(`MessageAttributes as ${as}`, (q) => {
+          q.on(`${as}.message_hash`, '=', 'm.hash');
+          q.on(`${as}.is_recipient`, '=', knex.raw('?', true));
+          q.on(`${as}.name`, '=', knex.raw('?', recipient[0]));
+          q.on(`${as}.value`, '=', knex.raw('?', recipient[1]));
         });
       }
 
@@ -1817,9 +1837,9 @@ module.exports = function (knex) {
 
       // Delete previous verify or unverify with the exact same recipient attributes
       if (isVerifyMsg) {
-        for (i = 0; i < message.signedData.author.length; i++) {
+        for (i = 0; i < message.signedData.author.length; i += 1) {
           let q = getHashesQuery(message.signedData.author[i]);
-          for (j = 0; j < message.signedData.recipient.length; j++) {
+          for (j = 0; j < message.signedData.recipient.length; j += 1) {
             addInnerJoinMessageRecipient(q, message.signedData.recipient[j], j);
           }
           queries.push(q = q.then(addHashes));
@@ -1827,20 +1847,21 @@ module.exports = function (knex) {
       }
 
       // Delete possible previous msg from A->B (created less than minMessageInterval ago?)
-      for (i = 0; i < message.signedData.author.length; i++) {
-        for (j = 0; j < message.signedData.recipient.length; j++) {
-          queries.push(getAndAddHashes(message.signedData.author[i], message.signedData.recipient[j]));
+      for (i = 0; i < message.signedData.author.length; i += 1) {
+        for (j = 0; j < message.signedData.recipient.length; j += 1) {
+          const h = getAndAddHashes(message.signedData.author[i], message.signedData.recipient[j]);
+          queries.push(h);
         }
       }
 
       return Promise.all(queries).then(() => {
         queries = [];
         hashes = util.removeDuplicates(hashes);
-        for (i = 0; i < hashes.length; i++) {
+        for (i = 0; i < hashes.length; i += 1) {
           queries.push(pub.dropMessage(hashes[i]));
         }
         ipfsIndexKeys = util.removeDuplicates(ipfsIndexKeys);
-        for (i = 0; i < ipfsIndexKeys.length; i++) {
+        for (i = 0; i < ipfsIndexKeys.length; i += 1) {
           console.log('deleting from index', ipfsIndexKeys[i], ipfsIndexKeys[i].substr(ipfsIndexKeys[i].indexOf(':') + 1));
           queries.push(p.ipfsMessagesByDistance.delete(ipfsIndexKeys[i]));
           queries.push(p.ipfsMessagesByTimestamp.delete(ipfsIndexKeys[i].substr(ipfsIndexKeys[i].indexOf(':') + 1)));
@@ -1858,14 +1879,14 @@ module.exports = function (knex) {
         return knex
           .from('TrustIndexedAttributes AS viewpoint')
           .innerJoin('UniqueIdentifierTypes as ia', 'ia.name', knex.raw('?', recipient[0]))
-          .innerJoin('TrustDistances AS td', function () {
-            this.on('td.start_attr_name', '=', 'viewpoint.name')
+          .innerJoin('TrustDistances AS td', (q) => {
+            q.on('td.start_attr_name', '=', 'viewpoint.name')
               .andOn('td.start_attr_value', '=', 'viewpoint.value')
               .andOn('td.end_attr_name', '=', knex.raw('?', author[0]))
               .andOn('td.end_attr_value', '=', knex.raw('?', author[1]));
           })
-          .leftJoin('TrustDistances AS existing', function () { // TODO: update existing if new distance is shorter
-            this.on('existing.start_attr_name', '=', 'viewpoint.name')
+          .leftJoin('TrustDistances AS existing', (q) => { // TODO: update existing if new distance is shorter
+            q.on('existing.start_attr_name', '=', 'viewpoint.name')
               .andOn('existing.start_attr_value', '=', 'viewpoint.value')
               .andOn('existing.end_attr_name', '=', knex.raw('?', recipient[0]))
               .andOn('existing.end_attr_value', '=', knex.raw('?', recipient[1]));
@@ -1876,12 +1897,12 @@ module.exports = function (knex) {
             'viewpoint.value as start_attr_value',
             knex.raw('? as end_attr_name', recipient[0]),
             knex.raw('? as end_attr_value', recipient[1]),
-            knex.raw(`${SQL_IFNULL}(td.distance, 0) + 1 as distance`)
+            knex.raw(`${SQL_IFNULL}(td.distance, 0) + 1 as distance`),
           );
       }
 
       function getSaveFunction(author, recipient) {
-        return function (distance) {
+        return (distance) => {
           if (distance > -1) {
             return knex('TrustDistances').insert(makeSubquery(author, recipient));
           }
@@ -1889,12 +1910,12 @@ module.exports = function (knex) {
       }
 
       if (Message.isPositive(message)) {
-        let i,
-          j;
-        for (i = 0; i < message.signedData.author.length; i++) {
+        let i;
+        let j;
+        for (i = 0; i < message.signedData.author.length; i += 1) {
           const author = message.signedData.author[i];
           const t = author[0] === 'keyID' ? author[1] : myKey.hash; // trusted key
-          for (j = 0; j < message.signedData.recipient.length; j++) {
+          for (j = 0; j < message.signedData.recipient.length; j += 1) {
             const recipient = message.signedData.recipient[j];
             const q = pub.getTrustDistance(['keyID', t], ['keyID', message.signerKeyHash])
               .then(getSaveFunction(author, recipient));
@@ -1920,24 +1941,30 @@ module.exports = function (knex) {
                 links.forEach((link) => {
                   switch (link._name) {
                     case 'messages_by_distance':
-                      queries.push(btree.MerkleBTree.getByHash(link._multihash, p.ipfsStorage).then((index) => {
-                        p.ipfsMessagesByDistance = index;
-                      }));
+                      queries.push(btree.MerkleBTree.getByHash(link._multihash, p.ipfsStorage)
+                        .then((index) => {
+                          p.ipfsMessagesByDistance = index;
+                        }));
                       break;
                     case 'messages_by_timestamp':
-                      queries.push(btree.MerkleBTree.getByHash(link._multihash, p.ipfsStorage).then((index) => {
-                        p.ipfsMessagesByTimestamp = index;
-                      }));
+                      queries.push(btree.MerkleBTree.getByHash(link._multihash, p.ipfsStorage)
+                        .then((index) => {
+                          p.ipfsMessagesByTimestamp = index;
+                        }));
                       break;
                     case 'identities_by_distance':
-                      queries.push(btree.MerkleBTree.getByHash(link._multihash, p.ipfsStorage).then((index) => {
-                        p.ipfsIdentitiesByDistance = index;
-                      }));
+                      queries.push(btree.MerkleBTree.getByHash(link._multihash, p.ipfsStorage)
+                        .then((index) => {
+                          p.ipfsIdentitiesByDistance = index;
+                        }));
                       break;
                     case 'identities_by_searchkey':
-                      queries.push(btree.MerkleBTree.getByHash(link._multihash, p.ipfsStorage).then((index) => {
-                        p.ipfsIdentitiesBySearchKey = index;
-                      }));
+                      queries.push(btree.MerkleBTree.getByHash(link._multihash, p.ipfsStorage)
+                        .then((index) => {
+                          p.ipfsIdentitiesBySearchKey = index;
+                        }));
+                      break;
+                    default:
                       break;
                   }
                 });
@@ -1945,17 +1972,21 @@ module.exports = function (knex) {
               }));
           }
           q = timeoutPromise(q, 15000);
-          return q = q.then(() => {
-            p.ipfsIdentitiesBySearchKey = p.ipfsIdentitiesBySearchKey || new btree.MerkleBTree(p.ipfsStorage, 100);
-            p.ipfsIdentitiesByDistance = p.ipfsIdentitiesByDistance || new btree.MerkleBTree(p.ipfsStorage, 100);
-            p.ipfsMessagesByDistance = p.ipfsMessagesByDistance || new btree.MerkleBTree(p.ipfsStorage, 100);
-            p.ipfsMessagesByTimestamp = p.ipfsMessagesByTimestamp || new btree.MerkleBTree(p.ipfsStorage, 100);
+          return q.then(() => {
+            p.ipfsIdentitiesBySearchKey = p.ipfsIdentitiesBySearchKey ||
+              new btree.MerkleBTree(p.ipfsStorage, 100);
+            p.ipfsIdentitiesByDistance = p.ipfsIdentitiesByDistance ||
+              new btree.MerkleBTree(p.ipfsStorage, 100);
+            p.ipfsMessagesByDistance = p.ipfsMessagesByDistance ||
+              new btree.MerkleBTree(p.ipfsStorage, 100);
+            p.ipfsMessagesByTimestamp = p.ipfsMessagesByTimestamp ||
+              new btree.MerkleBTree(p.ipfsStorage, 100);
           });
         });
     },
   };
 
-  pub.init = function (conf, ipfs) {
+  pub.init = (conf, ipfs) => {
     if (ipfs) {
       p.ipfs = ipfs;
       p.ipfsStorage = new btree.IPFSStorage(p.ipfs);
@@ -1963,15 +1994,11 @@ module.exports = function (knex) {
     config = conf;
     if (conf.db.client === 'pg') {
       SQL_IFNULL = 'COALESCE';
-      SQL_INSERT_OR_REPLACE = 'INSERT';
-      SQL_ON_CONFLICT = 'ON CONFLICT DO NOTHING ';
-      SQL_PRINTF = 'format';
     }
     return schema.init(knex, config)
       .then(() => pub.getUniqueIdentifierTypes())
-      .then(() =>
-        // TODO: if myId is changed, the old one should be removed from TrustIndexedAttributes
-        pub.addTrustIndexedAttribute(myId, myTrustIndexDepth))
+      .then(() => pub.addTrustIndexedAttribute(myId, myTrustIndexDepth))
+    // TODO: if myId is changed, the old one should be removed from TrustIndexedAttributes
       .then(() => pub.mapIdentityAttributes({ id: myId }))
       .then(() => pub.checkDefaultTrustList())
       .then(() => {
