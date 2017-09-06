@@ -139,9 +139,8 @@ try {
     .then(newIpfs => db.init(config, newIpfs).return())
     .then(() => {
       if (ipfs && ipfs.pubsub) {
-        ipfs.pubsub.subscribe('identifi', ipfsMsgHandler)
+        ipfs.pubsub.subscribe('identifi', ipfsMsgHandler);
       }
-      return;
     });
 } catch (ex) {
   log(ex);
@@ -442,7 +441,8 @@ router.route('/messages/:hash')
    * @apiGroup Identities
    *
    * @apiParam {String} [viewpoint_name="node viewpoint type"] Trust viewpoint identity pointer type
-   * @apiParam {String} [viewpoint_value="node viewpoint value"] Trust viewpoint identity pointer value
+   * @apiParam {String} [viewpoint_value="node viewpoint value"] Trust viewpoint
+      identity pointer value
    * @apiParam {Number} [limit=100] Limit the number of results
    * @apiParam {Number} [offset=0] Offset
    * @apiParam {String} [search_value] Search identities by attribute value
@@ -570,9 +570,12 @@ router.get('/identities/:attr_name/:attr_value/trustpaths', (req, res) => {
   const shortestOnly = req.query.max_length !== undefined;
   const viewpoint = ['keyID', myKey.hash];
   const limit = req.query.limit || 50;
-  db.getTrustPaths([req.params.attr_name, req.params.attr_value], [req.query.target_name, req.query.target_value], maxLength, shortestOnly, viewpoint, limit).then((dbRes) => {
-    res.json(dbRes);
-  }).catch(err => handleError(err, req, res));
+  return db.getTrustPaths(
+    [req.params.attr_name, req.params.attr_value],
+    [req.query.target_name, req.query.target_value], maxLength, shortestOnly, viewpoint, limit,
+  )
+    .then(dbRes => res.json(dbRes))
+    .catch(err => handleError(err, req, res));
 });
 
 
@@ -594,7 +597,10 @@ router.get('/identities/:attr_name/:attr_value/generatewotindex', authRequired, 
   }
   const maintain = parseInt(req.query.maintain) === 1;
   let wotSize = 0;
-  return db.generateWebOfTrustIndex([req.params.attr_name, req.params.attr_value], depth, maintain, trustedKeyID)
+  return db.generateWebOfTrustIndex(
+    [req.params.attr_name, req.params.attr_value], depth,
+    maintain, trustedKeyID,
+  )
     .then((r) => {
       wotSize = r;
       return db.generateIdentityIndex([req.params.attr_name, req.params.attr_value], trustedKeyID);
@@ -604,7 +610,8 @@ router.get('/identities/:attr_name/:attr_value/generatewotindex', authRequired, 
       if (req.params.attr_name === 'keyID' && req.params.attr_value === myKey.hash && process.env.NODE_ENV !== 'test') {
         db.addIndexesToIpfs();
       }
-    }).catch(err => handleError(err, req, res));
+    })
+    .catch(err => handleError(err, req, res));
 });
 
 // Register the routes

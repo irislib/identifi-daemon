@@ -43,7 +43,7 @@ function timeoutPromise(promise, timeout) {
   ]);
 }
 
-module.exports = function (knex) {
+module.exports = (knex) => {
   let p; // Private methods
 
   let lastIpfsIndexedMessageSavedAt = (new Date()).toISOString();
@@ -345,7 +345,7 @@ module.exports = function (knex) {
       const attrs = identityProfile.attrs;
       for (let j = 0; j < attrs.length; j += 1) {
         let distance = parseInt(attrs[j].dist);
-        distance = isNaN(distance) ? 99 : distance;
+        distance = Number.isNaN(distance) ? 99 : distance;
         distance = (`00${distance}`).substring(distance.toString().length); // pad with zeros
         const value = encodeURIComponent(attrs[j].val);
         const lowerCaseValue = encodeURIComponent(attrs[j].val.toLowerCase());
@@ -556,7 +556,7 @@ module.exports = function (knex) {
 
     getMsgIndexKey(msg) {
       let distance = parseInt(msg.distance);
-      distance = isNaN(distance) ? 99 : distance;
+      distance = Number.isNaN(distance) ? 99 : distance;
       distance = (`00${distance}`).substring(distance.toString().length); // pad with zeros
       const key = `${distance}:${Math.floor(Date.parse(msg.timestamp || msg.signedData.timestamp) / 1000)}:${(msg.ipfs_hash || msg.hash).substr(0, 9)}`;
       return key;
@@ -1010,12 +1010,12 @@ module.exports = function (knex) {
           let smallestDistance1 = 1000,
             smallestDistance2 = 1000;
           for (i = 0; i < identity1.length; i += 1) {
-            if (!isNaN(parseInt(identity1[i].dist)) && identity1[i].dist < smallestDistance1) {
+            if (!Number.isNaN(parseInt(identity1[i].dist)) && identity1[i].dist < smallestDistance1) {
               smallestDistance1 = identity1[i].dist;
             }
           }
           for (i = 0; i < identity2.length; i += 1) {
-            if (!isNaN(parseInt(identity2[i].dist)) && identity2[i].dist < smallestDistance2) {
+            if (!Number.isNaN(parseInt(identity2[i].dist)) && identity2[i].dist < smallestDistance2) {
               smallestDistance2 = identity2[i].dist;
             }
           }
@@ -1204,8 +1204,9 @@ module.exports = function (knex) {
       const trustedKey = trustedKeyID ? ['keyID', trustedKeyID] : id;
 
       /*
-        Can create TrustDistances based on messages authored by startId, or transitively, from messages
-        authored by identities that have a TrustDistance from startId (when depth > 1)
+        Can create TrustDistances based on messages authored by startId, or transitively,
+        from messages authored by identities that have a TrustDistance from startId
+        (when depth > 1)
       */
       function buildQuery(betweenKeyIDsOnly, trx, depth) {
         const startId = betweenKeyIDsOnly ? trustedKey : id;
@@ -1281,17 +1282,26 @@ module.exports = function (knex) {
       }
       q = q.then(() => pub.mapIdentityAttributes({ id, viewpoint: id }));
       let i;
-      return q = q.then(() => knex.transaction(trx => trx('TrustDistances')
+      return q.then(() => knex.transaction(trx => trx('TrustDistances')
         .where({ start_attr_name: id[0], start_attr_value: id[1] }).del()
-        .then(() => trx('TrustDistances').where({ start_attr_name: trustedKey[0], start_attr_value: trustedKey[1] }).del())
+        .then(() =>
+          trx('TrustDistances')
+            .where({
+              start_attr_name: trustedKey[0],
+              start_attr_value: trustedKey[1],
+            }).del())
         .then(() =>
           // Add trust distance to self = 0
           trx('TrustDistances')
             .insert({
-              start_attr_name: id[0], start_attr_value: id[1], end_attr_name: id[0], end_attr_value: id[1], distance: 0,
+              start_attr_name: id[0],
+              start_attr_value: id[1],
+              end_attr_name: id[0],
+              end_attr_value: id[1],
+              distance: 0,
             })
             .then(() => {
-              if (trustedKey[0] !== id[0] && trustedKey[1] !== id[1]) {
+              if (trustedKey[0] !== id[0] && trustedKey[1] !== id[1]) {
                 return trx('TrustDistances')
                   .insert({
                     start_attr_name: trustedKey[0],
@@ -1530,11 +1540,11 @@ module.exports = function (knex) {
 
         return Promise.all([sent, received]).then((response) => {
           const res = Object.assign({}, response[0][0], response[1][0]);
-          for (const key in res) {
+          Object.values(res).forEach((key) => {
             if (key.indexOf('sent_') === 0 || key.indexOf('received_') === 0) {
               res[key] = parseInt(res[key]);
             }
-          }
+          });
 
           if (options.viewpoint && !options.maxDistance) {
             const identityIds = [];
@@ -1627,8 +1637,9 @@ module.exports = function (knex) {
       Messages authored or received by attributes of type keyID have slightly
       higher priority.
     */
-    getPriority(message) {
+    getPriority(m) {
       const maxPriority = 100;
+      const message = m;
       let priority;
 
       message.signerKeyHash = Message.getSignerKeyHash(message);

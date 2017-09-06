@@ -24,7 +24,7 @@ function catcher(e) {
   }
 }
 
-const init = function (db, config) {
+function init(db) {
   const queries = [];
   queries.push(db.schema.createTableIfNotExists('UniqueIdentifierTypes', (t) => {
     t.string('name').primary();
@@ -110,6 +110,6 @@ const init = function (db, config) {
   }).catch(catcher));
 
   return P.all(queries);
-};
+}
 
 module.exports = { init };
