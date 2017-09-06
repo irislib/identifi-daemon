@@ -1,4 +1,3 @@
-
 const Promise = require('bluebird');
 const util = require('./util.js');
 const schema = require('./schema.js');
@@ -9,17 +8,16 @@ const btree = require('merkle-btree');
 const Message = require('identifi-lib/message');
 const keyutil = require('identifi-lib/keyutil');
 
-const myKey = keyutil.getDefault();
-const myId = ['keyID', myKey.hash];
-const myTrustIndexDepth = 4;
-let config;
-const ipfsIndexWidth = 200;
-
 const dagPB = require('ipld-dag-pb');
 
-let SQL_IFNULL = 'IFNULL';
-
+const MY_KEY = keyutil.getDefault();
+const MY_ID = ['keyID', MY_KEY.hash];
+const MY_TRUST_INDEX_DEPTH = 4;
+const IPFS_INDEX_WIDTH = 200;
 const REBUILD_INDEXES_IF_NEW_MSGS_GT = 30;
+
+let config;
+let SQL_IFNULL = 'IFNULL';
 
 function sortByKey(a, b) {
   if (a.key < b.key) {
@@ -45,9 +43,7 @@ function timeoutPromise(promise, timeout) {
 
 module.exports = (knex) => {
   let p; // Private methods
-
   let lastIpfsIndexedMessageSavedAt = (new Date()).toISOString();
-
   let ipfsIdentityIndexKeysToRemove = {};
 
   const pub = {
@@ -161,7 +157,7 @@ module.exports = (knex) => {
         limit: 10000,
         orderBy: 'timestamp',
         direction: 'desc',
-        viewpoint: myId,
+        viewpoint: MY_ID,
         savedAtGt: lastIpfsIndexedMessageSavedAt,
       })
         .then((messages) => {
@@ -291,7 +287,7 @@ module.exports = (knex) => {
       // saves indexes as an IPFS directory
       // TODO: if info already exists, don't rewrite
       let indexRoot;
-      return pub.getIdentityAttributes({ id: myId })
+      return pub.getIdentityAttributes({ id: MY_ID })
         .then((a) => {
           let attrs = a;
           if (attrs.length) {
@@ -300,7 +296,7 @@ module.exports = (knex) => {
             attrs = [];
           }
           return p.ipfs.files.add([
-            { path: 'info', content: Buffer.from(JSON.stringify({ keyID: myId[1], attrs })) },
+            { path: 'info', content: Buffer.from(JSON.stringify({ keyID: MY_ID[1], attrs })) },
             { path: 'messages_by_distance', content: Buffer.from(p.ipfsMessagesByDistance.rootNode.serialize()) },
             { path: 'messages_by_timestamp', content: Buffer.from(p.ipfsMessagesByTimestamp.rootNode.serialize()) },
             { path: 'identities_by_searchkey', content: Buffer.from(p.ipfsIdentitiesBySearchKey.rootNode.serialize()) },
@@ -325,7 +321,7 @@ module.exports = (knex) => {
           if (res._json.multihash) {
             indexRoot = res._json.multihash;
             return knex('TrustIndexedAttributes')
-              .where({ name: myId[0], value: myId[1] })
+              .where({ name: MY_ID[0], value: MY_ID[1] })
               .update('ipfs_index_root', res._json.multihash)
               .return(res);
           }
@@ -393,7 +389,7 @@ module.exports = (knex) => {
         limit: 10000,
         orderBy: 'timestamp',
         direction: 'asc',
-        viewpoint: myId,
+        viewpoint: MY_ID,
       })
         .then((received) => {
         // console.log('getMessages by recipient took', d1 - new Date(), 'ms');
@@ -407,7 +403,7 @@ module.exports = (knex) => {
           });
           // d1 = new Date();
           if (msgs.length && p.ipfsStorage) {
-            return btree.MerkleBTree.fromSortedList(msgs, ipfsIndexWidth, p.ipfsStorage);
+            return btree.MerkleBTree.fromSortedList(msgs, IPFS_INDEX_WIDTH, p.ipfsStorage);
           }
         })
         .then((receivedIndex) => {
@@ -421,7 +417,7 @@ module.exports = (knex) => {
             limit: 10000,
             orderBy: 'timestamp',
             direction: 'asc',
-            viewpoint: myId,
+            viewpoint: MY_ID,
           });
         })
         .then((sent) => {
@@ -436,7 +432,7 @@ module.exports = (knex) => {
           });
           // d1 = new Date();
           if (msgs.length && p.ipfsStorage) {
-            return btree.MerkleBTree.fromSortedList(msgs, ipfsIndexWidth, p.ipfsStorage);
+            return btree.MerkleBTree.fromSortedList(msgs, IPFS_INDEX_WIDTH, p.ipfsStorage);
           }
         })
         .then((sentIndex) => {
@@ -544,7 +540,7 @@ module.exports = (knex) => {
               console.log('building index identities_by_distance');
               return btree.MerkleBTree.fromSortedList(
                 identityIndexEntriesToAdd.sort(sortByKey).slice(),
-                ipfsIndexWidth,
+                IPFS_INDEX_WIDTH,
                 p.ipfsStorage,
               );
             })
@@ -556,7 +552,7 @@ module.exports = (knex) => {
               console.log('building index identities_by_searchkey');
               return btree.MerkleBTree.fromSortedList(
                 identityIndexEntriesToAdd.sort(sortByKey),
-                ipfsIndexWidth,
+                IPFS_INDEX_WIDTH,
                 p.ipfsStorage,
               );
             })
@@ -586,7 +582,7 @@ module.exports = (knex) => {
           offset,
           orderBy: 'timestamp',
           direction: 'asc',
-          viewpoint: myId,
+          viewpoint: MY_ID,
           where: { 'td.distance': distance },
         })
           .then((msgs) => {
@@ -624,7 +620,7 @@ module.exports = (knex) => {
           console.log('adding messages_by_distance index to ipfs');
           return btree.MerkleBTree.fromSortedList(
             msgsToIndex.slice(),
-            ipfsIndexWidth,
+            IPFS_INDEX_WIDTH,
             p.ipfsStorage,
           );
         })
@@ -637,7 +633,7 @@ module.exports = (knex) => {
           });
           msgsToIndex = msgsToIndex.sort(sortByKey);
           console.log('adding messages_by_timestamp index to ipfs');
-          return btree.MerkleBTree.fromSortedList(msgsToIndex, ipfsIndexWidth, p.ipfsStorage);
+          return btree.MerkleBTree.fromSortedList(msgsToIndex, IPFS_INDEX_WIDTH, p.ipfsStorage);
         })
         .then((index) => {
           p.ipfsMessagesByTimestamp = index;
@@ -694,7 +690,7 @@ module.exports = (knex) => {
             throw new Error('No messages index found at', ipnsName);
           }
           console.log('Looking up index');
-          return btree.MerkleBTree.getByHash(path, p.ipfsStorage, ipfsIndexWidth);
+          return btree.MerkleBTree.getByHash(path, p.ipfsStorage, IPFS_INDEX_WIDTH);
         })
         .then(index => index.searchText('', 100000))
         .then((msgs) => {
@@ -729,8 +725,8 @@ module.exports = (knex) => {
           q.andOn('recipient.is_recipient', '=', knex.raw('?', true));
         })
         .innerJoin('TrustDistances as td', (q) => {
-          q.on('td.start_attr_name', '=', knex.raw('?', myId[0]));
-          q.on('td.start_attr_value', '=', knex.raw('?', myId[1]));
+          q.on('td.start_attr_name', '=', knex.raw('?', MY_ID[0]));
+          q.on('td.start_attr_value', '=', knex.raw('?', MY_ID[1]));
           q.on('td.end_attr_name', '=', 'author.name');
           q.on('td.end_attr_value', '=', 'author.value');
         })
@@ -751,9 +747,9 @@ module.exports = (knex) => {
         });
     },
 
-    messageExists(hash) {
-      return knex('Messages').where('hash', hash).count('* as exists')
-        .then(res => Promise.resolve(!!parseInt(res[0].exists)));
+    async messageExists(hash) {
+      const r = await knex('Messages').where('hash', hash).count('* as exists');
+      return !!parseInt(r[0].exists);
     },
 
     getMessages(opts) {
@@ -925,9 +921,11 @@ module.exports = (knex) => {
     },
 
     dropMessage(messageHash) {
-      return knex.transaction(trx => trx('MessageAttributes').where({ message_hash: messageHash }).del()
-        .then(() => trx('Messages').where({ hash: messageHash }).del())
-        .then(res => !!res));
+      return knex.transaction(async (trx) => {
+        const r = await trx('MessageAttributes').where({ message_hash: messageHash }).del();
+        await trx('Messages').where({ hash: messageHash }).del();
+        return !!parseInt(r);
+      });
     },
 
     getIdentityAttributes(opts) {
@@ -938,7 +936,7 @@ module.exports = (knex) => {
         offset: 0,
         where: {},
         having: {},
-        viewpoint: myId,
+        viewpoint: MY_ID,
       };
       const options = Object.assign(defaultOptions, opts);
 
@@ -1036,7 +1034,7 @@ module.exports = (knex) => {
     mapIdentityAttributes(opts) {
       let identityId;
       const options = opts;
-      options.viewpoint = options.viewpoint || myId;
+      options.viewpoint = options.viewpoint || MY_ID;
       // Find out existing identity_id for the identifier
       const getExistingId = knex.from('IdentityAttributes as ia')
         .select('identity_id')
@@ -1176,22 +1174,17 @@ module.exports = (knex) => {
           .then(() => res));
     },
 
-    getTrustDistance(from, to) {
+    async getTrustDistance(from, to) {
       if (from[0] === to[0] && from[1] === to[1]) {
-        return Promise.resolve(0);
+        return 0;
       }
-      return knex.select('distance').from('TrustDistances').where({
+      const r = await knex.select('distance').from('TrustDistances').where({
         start_attr_name: from[0],
         start_attr_value: from[1],
         end_attr_name: to[0],
         end_attr_value: to[1],
-      }).then((res) => {
-        let distance = -1;
-        if (res.length) {
-          distance = res[0].distance;
-        }
-        return Promise.resolve(distance);
       });
+      return r.length ? r[0].distance : -1;
     },
 
     getTrustDistances(from) {
@@ -1342,10 +1335,10 @@ module.exports = (knex) => {
         .then(res => parseInt(res[0].wot_size))));
     },
 
-    generateIdentityIndex(viewpoint) { // possible param: trustedkeyid
+    async generateIdentityIndex(viewpoint) { // possible param: trustedkeyid
       console.log('Generating identity index (SQL)');
-      function mapNextIdentifier() {
-        return knex('TrustDistances')
+      async function mapNextIdentifier() {
+        const r = await knex('TrustDistances')
           .leftJoin('IdentityAttributes', (q) => {
             q.on('IdentityAttributes.viewpoint_name', '=', 'TrustDistances.start_attr_name');
             q.on('IdentityAttributes.viewpoint_value', '=', 'TrustDistances.start_attr_value');
@@ -1359,22 +1352,20 @@ module.exports = (knex) => {
           })
           .orderBy('distance', 'asc')
           .limit(1)
-          .select('end_attr_name', 'end_attr_value')
-          .then((res) => {
-            if (res.length) {
-              const id = [res[0].end_attr_name, res[0].end_attr_value];
-              process.stdout.write('*');
-              return pub.mapIdentityAttributes({ id, viewpoint })
-                .then(() => mapNextIdentifier());
-            }
-          });
+          .select('end_attr_name', 'end_attr_value');
+        if (r.length) {
+          const id = [r[0].end_attr_name, r[0].end_attr_value];
+          process.stdout.write('*');
+          await pub.mapIdentityAttributes({ id, viewpoint });
+          return mapNextIdentifier();
+        }
       }
 
       // for each identifier in WoT: map identity, unless identifier already belongs to an identity
-      return knex('IdentityAttributes').where({ viewpoint_name: viewpoint[0], viewpoint_value: viewpoint[1] }).del()
-        .then(() => knex('IdentityStats').where({ viewpoint_name: viewpoint[0], viewpoint_value: viewpoint[1] }).del())
-        .then(() => pub.mapIdentityAttributes({ id: viewpoint, viewpoint }))
-        .then(() => mapNextIdentifier());
+      await knex('IdentityAttributes').where({ viewpoint_name: viewpoint[0], viewpoint_value: viewpoint[1] }).del();
+      await knex('IdentityStats').where({ viewpoint_name: viewpoint[0], viewpoint_value: viewpoint[1] }).del();
+      await pub.mapIdentityAttributes({ id: viewpoint, viewpoint });
+      return mapNextIdentifier();
     },
 
     addTrustIndexedAttribute(id, depth) {
@@ -1434,10 +1425,6 @@ module.exports = (knex) => {
 
     isUniqueType(type) {
       return pub.uniqueIdentifierTypes.indexOf(type) > -1;
-    },
-
-    getTrustPaths() { // start, end, maxLength, shortestOnly, viewpoint, limit
-      return Promise.resolve([]); // Disabled until the performance is improved
     },
 
     getMessageCount() {
@@ -1589,7 +1576,7 @@ module.exports = (knex) => {
           if (parseInt(res[0].count) === 0) {
             const queries = [];
             const message = Message.createRating({
-              author: [myId],
+              author: [MY_ID],
               recipient: [['keyID', '/pbxjXjwEsojbSfdM3wGWfE24F4fX3GasmoHXY3yYPM=']],
               comment: 'Identifi seed node, trusted by default',
               rating: 10,
@@ -1597,15 +1584,15 @@ module.exports = (knex) => {
               public: false,
             });
             const message2 = Message.createRating({
-              author: [myId],
+              author: [MY_ID],
               recipient: [['nodeID', 'Qmbb1DRwd75rZk5TotTXJYzDSJL6BaNT1DAQ6VbKcKLhbs']],
               comment: 'Identifi IPFS seed node, trusted by default',
               rating: 10,
               context: 'identifi_network',
               public: false,
             });
-            Message.sign(message, myKey.private.pem, myKey.public.hex);
-            Message.sign(message2, myKey.private.pem, myKey.public.hex);
+            Message.sign(message, MY_KEY.private.pem, MY_KEY.public.hex);
+            Message.sign(message2, MY_KEY.private.pem, MY_KEY.public.hex);
             queries.push(_.saveMessage(message));
             queries.push(_.saveMessage(message2));
             return Promise.all(queries);
@@ -1653,7 +1640,7 @@ module.exports = (knex) => {
 
       message.signerKeyHash = Message.getSignerKeyHash(message);
 
-      return pub.getTrustDistance(myId, ['keyID', message.signerKeyHash])
+      return pub.getTrustDistance(MY_ID, ['keyID', message.signerKeyHash])
         .then((distanceToSigner) => {
           if (distanceToSigner === -1) { // Unknown signer
             return Promise.resolve(0);
@@ -1662,7 +1649,7 @@ module.exports = (knex) => {
           const queries = [];
           // Get distances to message authors
           for (i = 0; i < message.signedData.author.length; i += 1) {
-            const q = pub.getTrustDistance(myId, message.signedData.author[i]);
+            const q = pub.getTrustDistance(MY_ID, message.signedData.author[i]);
             queries.push(q);
           }
 
@@ -1793,8 +1780,8 @@ module.exports = (knex) => {
           })
           .innerJoin('UniqueIdentifierTypes as ia1', 'ia1.name', 'author.name')
           .leftJoin('TrustDistances as td', (qq) => {
-            qq.on('td.start_attr_name', '=', knex.raw('?', myId[0]));
-            qq.andOn('td.start_attr_value', '=', knex.raw('?', myId[1]));
+            qq.on('td.start_attr_name', '=', knex.raw('?', MY_ID[0]));
+            qq.andOn('td.start_attr_value', '=', knex.raw('?', MY_ID[1]));
             qq.andOn('td.end_attr_name', '=', 'author.name');
             qq.andOn('td.end_attr_value', '=', 'author.value');
           })
@@ -1934,7 +1921,7 @@ module.exports = (knex) => {
         let j;
         for (i = 0; i < message.signedData.author.length; i += 1) {
           const author = message.signedData.author[i];
-          const t = author[0] === 'keyID' ? author[1] : myKey.hash; // trusted key
+          const t = author[0] === 'keyID' ? author[1] : MY_KEY.hash; // trusted key
           for (j = 0; j < message.signedData.recipient.length; j += 1) {
             const recipient = message.signedData.recipient[j];
             const q = pub.getTrustDistance(['keyID', t], ['keyID', message.signerKeyHash])
@@ -1949,7 +1936,7 @@ module.exports = (knex) => {
 
     getIndexesFromIpfsRoot() {
       return knex('TrustIndexedAttributes')
-        .where({ name: myId[0], value: myId[1] })
+        .where({ name: MY_ID[0], value: MY_ID[1] })
         .whereNotNull('ipfs_index_root')
         .select('ipfs_index_root')
         .then((res) => {
@@ -2017,9 +2004,9 @@ module.exports = (knex) => {
     }
     return schema.init(knex, config)
       .then(() => pub.getUniqueIdentifierTypes())
-      .then(() => pub.addTrustIndexedAttribute(myId, myTrustIndexDepth))
-    // TODO: if myId is changed, the old one should be removed from TrustIndexedAttributes
-      .then(() => pub.mapIdentityAttributes({ id: myId }))
+      .then(() => pub.addTrustIndexedAttribute(MY_ID, MY_TRUST_INDEX_DEPTH))
+    // TODO: if MY_ID is changed, the old one should be removed from TrustIndexedAttributes
+      .then(() => pub.mapIdentityAttributes({ id: MY_ID }))
       .then(() => pub.checkDefaultTrustList())
       .then(() => {
         if (p.ipfsStorage) {

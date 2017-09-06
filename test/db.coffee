@@ -147,10 +147,6 @@ describe 'Database', ->
         db.generateWebOfTrustIndex(['email', 'alice@example.com'], 3, true, key.hash)
       .then (res) ->
         res.should.equal 3
-      ###
-      db.getTrustPaths(['email', 'alice@example.com'], ['email', 'charles@example.com'], 3).then (res) ->
-        res.length.should.equal 1
-        ###
     it 'should extend trust on rating message save', ->
       message = Message.create
         author: [['email', 'alice@example.com']]

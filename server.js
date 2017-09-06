@@ -575,25 +575,6 @@ router.get('/identities/:attr_name/:attr_value/received', (req, res) => {
   getMessages(req, res, options);
 });
 
-
-router.get('/identities/:attr_name/:attr_value/trustpaths', (req, res) => {
-  if (!(req.query.target_name && req.query.target_value)) {
-    res.status(400).json('target_name and target_value must be specified');
-    return;
-  }
-  const maxLength = req.query.max_length || 4;
-  const shortestOnly = req.query.max_length !== undefined;
-  const viewpoint = ['keyID', myKey.hash];
-  const limit = req.query.limit || 50;
-  return db.getTrustPaths(
-    [req.params.attr_name, req.params.attr_value],
-    [req.query.target_name, req.query.target_value], maxLength, shortestOnly, viewpoint, limit,
-  )
-    .then(dbRes => res.json(dbRes))
-    .catch(err => handleError(err, req, res));
-});
-
-
 /**
  * @apiIgnore
  * @api {get} /identities/:pointer_type/:pointer_value/stats Generatewotindex
