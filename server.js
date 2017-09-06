@@ -8,7 +8,6 @@ const session = require('express-session');
 
 const app = express();
 const server = require('http').Server(app);
-const io = require('socket.io')(server).of('/api');
 const bodyParser = require('body-parser');
 
 const identifi = require('identifi-lib');
@@ -122,7 +121,6 @@ const getIpfs = ipfs.id()
   });
 
 const loginOptions = [];
-const outgoingConnections = {};
 
 process.on('uncaughtException', (e) => {
   log(e);
@@ -131,16 +129,6 @@ process.on('uncaughtException', (e) => {
 // Init DB
 let knex;
 let db;
-
-function emitMsg(msg) {
-  if (typeof msg.signedData !== 'object' || msg.signedData.public === false) {
-    return;
-  }
-  io.emit('msg', { jws: msg.jws, hash: msg.hash });
-  Object.keys(outgoingConnections).forEach((key) => {
-    outgoingConnections[key].emit('msg', { jws: msg.jws, hash: msg.hash });
-  });
-}
 
 function handleMsgEvent(data) {
   const m = data;
@@ -153,12 +141,11 @@ function handleMsgEvent(data) {
   db.messageExists(m.hash)
     .then((exists) => {
       if (!exists) {
-        db.saveMessage(m).then(() => {
-          emitMsg(m);
-        }).catch((e) => {
-          console.log(e.stack);
-          log('error handling msg', m.hash, e);
-        });
+        db.saveMessage(m).return()
+          .catch((e) => {
+            console.log(e.stack);
+            log('error handling msg', m.hash, e);
+          });
       }
     });
 }
@@ -386,7 +373,7 @@ router.route('/messages')
  * @apiParam {String} jws Identifi message as JSON web signature
  *
  * @apiDescription
- * Successfully posted messages are broadcast to other nodes via /api websocket.
+ * Successfully posted messages are broadcast to other nodes via ipfs pubsub.
  *
  */
   .post(authOptional, (req, res) => {
@@ -410,8 +397,9 @@ router.route('/messages')
             .then((r) => {
               res.status(201).json(r);
             });
-          emitMsg(m);
-          ipfs.pubsub.publish('identifi', Buffer.from(m.jws));
+          if (ipfs && ipfs.pubsub) {
+            ipfs.pubsub.publish('identifi', Buffer.from(m.jws));
+          }
         } else {
           db.saveMessage(m)
             .then((r) => {
@@ -661,18 +649,6 @@ try {
 } catch (e) {
   // console.log(e);
 }
-
-function handleIncomingWebsocket(socket) {
-  log(`connection from ${socket.client.conn.remoteAddress}`);
-
-  socket.on('msg', (data) => {
-    log(`msg received from ${socket.client.conn.remoteAddress}: ${data.hash || data.ipfs_hash}`);
-    handleMsgEvent(data);
-  });
-}
-
-// Handle incoming websockets
-io.on('connection', handleIncomingWebsocket);
 
 // Start the http server
 server.ready.then(() => {

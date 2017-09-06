@@ -1549,7 +1549,7 @@ module.exports = (knex) => {
 
         return Promise.all([sent, received]).then((response) => {
           const res = Object.assign({}, response[0][0], response[1][0]);
-          Object.values(res).forEach((key) => {
+          Object.keys(res).forEach((key) => {
             if (key.indexOf('sent_') === 0 || key.indexOf('received_') === 0) {
               res[key] = parseInt(res[key]);
             }
