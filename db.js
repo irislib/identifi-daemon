@@ -1368,68 +1368,59 @@ module.exports = (knex) => {
       return mapNextIdentifier();
     },
 
-    addTrustIndexedAttribute(id, depth) {
-      return knex('TrustIndexedAttributes').where({ name: id[0], value: id[1] }).count('* as count')
-        .then((res) => {
-          if (parseInt(res[0].count)) {
-            return knex('TrustIndexedAttributes').where({ name: id[0], value: id[1] }).update({ depth });
-          }
-          return knex('TrustIndexedAttributes').insert({ name: id[0], value: id[1], depth });
-        })
-        .then(() => pub.getTrustIndexedAttributes(true))
-        .then((res) => {
-          pub.trustIndexedAttributes = res;
+    async addTrustIndexedAttribute(id, depth) {
+      let r = await knex('TrustIndexedAttributes').where({ name: id[0], value: id[1] }).count('* as count');
+      if (parseInt(r[0].count)) {
+        await knex('TrustIndexedAttributes').where({ name: id[0], value: id[1] }).update({ depth });
+      } else {
+        await knex('TrustIndexedAttributes').insert({ name: id[0], value: id[1], depth });
+        pub.trustIndexedAttributes = await pub.getTrustIndexedAttributes(true);
+        r = await knex('TrustDistances')
+          .where({
+            start_attr_name: id[0],
+            start_attr_value: id[1],
+            end_attr_name: id[0],
+            end_attr_value: id[1],
+          })
+          .count('* as c');
+        if (parseInt(r[0].c) === 0) {
+        // Add trust distance to self = 0
           return knex('TrustDistances')
-            .where({
+            .insert({
               start_attr_name: id[0],
               start_attr_value: id[1],
               end_attr_name: id[0],
               end_attr_value: id[1],
-            })
-            .count('* as c');
-        })
-        .then((res) => {
-          if (parseInt(res[0].c) === 0) {
-          // Add trust distance to self = 0
-            return knex('TrustDistances')
-              .insert({
-                start_attr_name: id[0],
-                start_attr_value: id[1],
-                end_attr_name: id[0],
-                end_attr_value: id[1],
-                distance: 0,
-              }).return();
-          }
-        });
-    },
-
-    getTrustIndexedAttributes(forceRefresh) {
-      if (pub.trustIndexedAttributes && !forceRefresh) {
-        return Promise.resolve(pub.trustIndexedAttributes);
+              distance: 0,
+            }).return();
+        }
       }
-      return knex('TrustIndexedAttributes').select('*').then((res) => {
-        pub.trustIndexedAttributes = res;
-        return res;
-      });
     },
 
-    getUniqueIdentifierTypes() {
-      return knex('UniqueIdentifierTypes').select('name')
-        .then((types) => {
-          pub.uniqueIdentifierTypes = [];
-          types.forEach((type) => {
-            pub.uniqueIdentifierTypes.push(type.name);
-          });
-        });
+    async getTrustIndexedAttributes(forceRefresh) {
+      if (pub.trustIndexedAttributes && !forceRefresh) {
+        return pub.trustIndexedAttributes;
+      }
+      const r = await knex('TrustIndexedAttributes').select('*');
+      pub.trustIndexedAttributes = r;
+      return r;
+    },
+
+    async getUniqueIdentifierTypes() {
+      const r = await knex('UniqueIdentifierTypes').select('name');
+      pub.uniqueIdentifierTypes = [];
+      r.forEach((type) => {
+        pub.uniqueIdentifierTypes.push(type.name);
+      });
     },
 
     isUniqueType(type) {
       return pub.uniqueIdentifierTypes.indexOf(type) > -1;
     },
 
-    getMessageCount() {
-      return knex('Messages').count('* as val')
-        .then(res => parseInt(res[0].val));
+    async getMessageCount() {
+      const r = await knex('Messages').count('* as count');
+      return parseInt(r[0].count);
     },
 
     getStats(id, options) {
@@ -1569,56 +1560,49 @@ module.exports = (knex) => {
       });
     },
 
-    checkDefaultTrustList() {
-      const _ = this;
-      return knex('Messages').count('* as count')
-        .then((res) => {
-          if (parseInt(res[0].count) === 0) {
-            const queries = [];
-            const message = Message.createRating({
-              author: [MY_ID],
-              recipient: [['keyID', '/pbxjXjwEsojbSfdM3wGWfE24F4fX3GasmoHXY3yYPM=']],
-              comment: 'Identifi seed node, trusted by default',
-              rating: 10,
-              context: 'identifi_network',
-              public: false,
-            });
-            const message2 = Message.createRating({
-              author: [MY_ID],
-              recipient: [['nodeID', 'Qmbb1DRwd75rZk5TotTXJYzDSJL6BaNT1DAQ6VbKcKLhbs']],
-              comment: 'Identifi IPFS seed node, trusted by default',
-              rating: 10,
-              context: 'identifi_network',
-              public: false,
-            });
-            Message.sign(message, MY_KEY.private.pem, MY_KEY.public.hex);
-            Message.sign(message2, MY_KEY.private.pem, MY_KEY.public.hex);
-            queries.push(_.saveMessage(message));
-            queries.push(_.saveMessage(message2));
-            return Promise.all(queries);
-          }
+    async checkDefaultTrustList() {
+      const r = await knex('Messages').count('* as count');
+      if (parseInt(r[0].count) === 0) {
+        const queries = [];
+        const message = Message.createRating({
+          author: [MY_ID],
+          recipient: [['keyID', '/pbxjXjwEsojbSfdM3wGWfE24F4fX3GasmoHXY3yYPM=']],
+          comment: 'Identifi seed node, trusted by default',
+          rating: 10,
+          context: 'identifi_network',
+          public: false,
         });
+        const message2 = Message.createRating({
+          author: [MY_ID],
+          recipient: [['nodeID', 'Qmbb1DRwd75rZk5TotTXJYzDSJL6BaNT1DAQ6VbKcKLhbs']],
+          comment: 'Identifi IPFS seed node, trusted by default',
+          rating: 10,
+          context: 'identifi_network',
+          public: false,
+        });
+        Message.sign(message, MY_KEY.private.pem, MY_KEY.public.hex);
+        Message.sign(message2, MY_KEY.private.pem, MY_KEY.public.hex);
+        queries.push(this.saveMessage(message));
+        queries.push(this.saveMessage(message2));
+        return Promise.all(queries);
+      }
     },
 
-    ensureFreeSpace() {
-      return this.getMessageCount()
-        .then((res) => {
-          if (res > config.maxMessageCount) {
-            const nMessagesToDelete = Math.min(100, Math.ceil(config.maxMessageCount / 10));
-            const messagesToDelete = knex('Messages')
-              .select('hash')
-              .limit(nMessagesToDelete)
-              .orderBy('priority', 'asc')
-              .orderBy('created', 'asc');
-            return knex('Messages')
-              .whereIn('hash', messagesToDelete).del()
-              .then(() => {
-                knex('MessageAttributes')
-                  .whereIn('message_hash', messagesToDelete)
-                  .del();
-              });
-          }
-        });
+    async ensureFreeSpace() {
+      const r = await this.getMessageCount();
+      if (r > config.maxMessageCount) {
+        const nMessagesToDelete = Math.min(100, Math.ceil(config.maxMessageCount / 10));
+        const messagesToDelete = knex('Messages')
+          .select('hash')
+          .limit(nMessagesToDelete)
+          .orderBy('priority', 'asc')
+          .orderBy('created', 'asc');
+        await knex('Messages')
+          .whereIn('hash', messagesToDelete).del();
+        return knex('MessageAttributes')
+          .whereIn('message_hash', messagesToDelete)
+          .del();
+      }
     },
   };
 
@@ -1633,78 +1617,72 @@ module.exports = (knex) => {
       Messages authored or received by attributes of type keyID have slightly
       higher priority.
     */
-    getPriority(m) {
+    async getPriority(m) {
       const maxPriority = 100;
       const message = m;
       let priority;
 
       message.signerKeyHash = Message.getSignerKeyHash(message);
 
-      return pub.getTrustDistance(MY_ID, ['keyID', message.signerKeyHash])
-        .then((distanceToSigner) => {
-          if (distanceToSigner === -1) { // Unknown signer
-            return Promise.resolve(0);
-          }
-          let i;
-          const queries = [];
-          // Get distances to message authors
-          for (i = 0; i < message.signedData.author.length; i += 1) {
-            const q = pub.getTrustDistance(MY_ID, message.signedData.author[i]);
-            queries.push(q);
-          }
+      const distanceToSigner = await pub.getTrustDistance(MY_ID, ['keyID', message.signerKeyHash]);
+      if (distanceToSigner === -1) { // Unknown signer
+        return 0;
+      }
+      let i;
+      const queries = [];
+      // Get distances to message authors
+      message.signedData.author.forEach(authorId =>
+        queries.push(pub.getTrustDistance(MY_ID, authorId)));
 
-          return Promise.all(queries).then((authorDistances) => {
-            let shortestDistanceToAuthor = 10000000;
-            for (let j = 0; j < authorDistances.length; j += 1) {
-              if (authorDistances[j] > -1 && authorDistances[j] < shortestDistanceToAuthor) {
-                shortestDistanceToAuthor = authorDistances[j];
-              }
-            }
+      let shortestDistanceToAuthor = 10000000;
+      const authorDistances = await Promise.all(queries);
+      authorDistances.forEach((d) => {
+        if (d > -1 && d < shortestDistanceToAuthor) {
+          shortestDistanceToAuthor = d;
+        }
+      });
 
-            priority = maxPriority / (distanceToSigner + 1);
-            priority = (priority / 2) + (priority / (shortestDistanceToAuthor + 2));
-            priority = Math.round(priority);
+      priority = maxPriority / (distanceToSigner + 1);
+      priority = (priority / 2) + (priority / (shortestDistanceToAuthor + 2));
+      priority = Math.round(priority);
 
-            let hasAuthorKeyID;
-            let hasRecipientKeyID;
-            for (i = 0; i < message.signedData.author.length; i += 1) {
-              if (message.signedData.author[i][0] === 'keyID') {
-                hasAuthorKeyID = true;
-                break;
-              }
-            }
-            for (i = 0; i < message.signedData.recipient.length; i += 1) {
-              if (message.signedData.recipient[i][0] === 'keyID') {
-                hasRecipientKeyID = true;
-                break;
-              }
-            }
-            if (!hasAuthorKeyID) { priority -= 1; }
-            if (!hasRecipientKeyID) { priority -= 1; }
-            priority = Math.max(priority, 0);
-            return Promise.resolve(priority);
-          });
-        });
+      let hasAuthorKeyID;
+      let hasRecipientKeyID;
+      for (i = 0; i < message.signedData.author.length; i += 1) {
+        if (message.signedData.author[i][0] === 'keyID') {
+          hasAuthorKeyID = true;
+          break;
+        }
+      }
+      for (i = 0; i < message.signedData.recipient.length; i += 1) {
+        if (message.signedData.recipient[i][0] === 'keyID') {
+          hasRecipientKeyID = true;
+          break;
+        }
+      }
+      if (!hasAuthorKeyID) { priority -= 1; }
+      if (!hasRecipientKeyID) { priority -= 1; }
+      return Math.max(priority, 0);
     },
 
     isLatest() { // param: message
       return true; // TODO: implement
     },
 
-    saveTrustDistance(startId, endId, distance) {
-      return knex('TrustDistances').where({
+    async saveTrustDistance(startId, endId, distance) {
+      await knex('TrustDistances').where({
         start_attr_name: startId[0],
         start_attr_value: startId[1],
         end_attr_name: endId[0],
         end_attr_value: endId[1],
-      }).del()
-        .then(() => knex('TrustDistances').insert({
-          start_attr_name: startId[0],
-          start_attr_value: startId[1],
-          end_attr_name: endId[0],
-          end_attr_value: endId[1],
-          distance,
-        }));
+      }).del();
+      return knex('TrustDistances').insert({
+        start_attr_name: startId[0],
+        start_attr_value: startId[1],
+        end_attr_name: endId[0],
+        end_attr_value: endId[1],
+        distance,
+      });
     },
 
     saveIdentityAttribute(identifier, viewpoint, identityId, confirmations, refutations) {
@@ -1733,24 +1711,23 @@ module.exports = (knex) => {
         .select('IdentityAttributes.identity_id');
     },
 
-    updateIdentityIndexesByMessage(message) { // param: trustedKeyID
+    async updateIdentityIndexesByMessage(message) { // TODO: param: trustedKeyID
       if (message.signedData.type !== 'verify_identity' && message.signedData.type !== 'unverify_identity') {
-        return Promise.resolve();
+        return;
       }
 
       const queries = [];
 
       // TODO: make this faster
-      return pub.getTrustIndexedAttributes().then((viewpoints) => {
-        for (let j = 0; j < viewpoints.length; j += 1) {
-          const viewpoint = [viewpoints[j].name, viewpoints[j].value];
-          for (let i = 0; i < message.signedData.recipient.length; i += 1) {
-            const m = pub.mapIdentityAttributes({ id: message.signedData.recipient[i], viewpoint });
-            queries.push(m);
-          }
-        }
-        return Promise.all(queries);
+      const viewpoints = await pub.getTrustIndexedAttributes();
+      viewpoints.forEach((vp) => {
+        const viewpoint = [vp.name, vp.value];
+        message.signedData.recipient.forEach((recipientId) => {
+          const q = pub.mapIdentityAttributes({ id: recipientId, viewpoint });
+          queries.push(q);
+        });
       });
+      return Promise.all(queries);
 
       // TODO:
       // Get TrustIndexedAttributes as t
@@ -1993,7 +1970,7 @@ module.exports = (knex) => {
     },
   };
 
-  pub.init = (conf, ipfs) => {
+  pub.init = async (conf, ipfs) => {
     if (ipfs) {
       p.ipfs = ipfs;
       p.ipfsStorage = new btree.IPFSStorage(p.ipfs);
@@ -2002,26 +1979,21 @@ module.exports = (knex) => {
     if (conf.db.client === 'pg') {
       SQL_IFNULL = 'COALESCE';
     }
-    return schema.init(knex, config)
-      .then(() => pub.getUniqueIdentifierTypes())
-      .then(() => pub.addTrustIndexedAttribute(MY_ID, MY_TRUST_INDEX_DEPTH))
+    await schema.init(knex, config);
+    await pub.getUniqueIdentifierTypes();
+    await pub.addTrustIndexedAttribute(MY_ID, MY_TRUST_INDEX_DEPTH);
     // TODO: if MY_ID is changed, the old one should be removed from TrustIndexedAttributes
-      .then(() => pub.mapIdentityAttributes({ id: MY_ID }))
-      .then(() => pub.checkDefaultTrustList())
-      .then(() => {
-        if (p.ipfsStorage) {
-          return p.getIndexesFromIpfsRoot();
-        }
-      })
-      .then(() => {
-        if (!p.ipfsStorage) {
-          return;
-        }
-        if (process.env.NODE_ENV !== 'test') {
-          pub.saveMessagesFromIpfsIndexes(); // non-blocking
-        }
-        pub.keepAddingNewMessagesToIpfsIndex();
-      });
+    await pub.mapIdentityAttributes({ id: MY_ID });
+    await pub.checkDefaultTrustList();
+    if (p.ipfsStorage) {
+      await p.getIndexesFromIpfsRoot();
+    }
+    if (p.ipfsStorage) {
+      if (process.env.NODE_ENV !== 'test') {
+        pub.saveMessagesFromIpfsIndexes(); // non-blocking
+      }
+      pub.keepAddingNewMessagesToIpfsIndex();
+    }
   };
 
   return pub;

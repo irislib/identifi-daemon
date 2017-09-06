@@ -161,7 +161,7 @@ try {
   knex = require('knex')(dbConf);
   db = require('./db.js')(knex);
   server.ready = getIpfs
-    .then(newIpfs => db.init(config, newIpfs).return())
+    .then(newIpfs => db.init(config, newIpfs))
     .then(() => {
       if (ipfs && ipfs.pubsub) {
         ipfs.pubsub.subscribe('identifi', ipfsMsgHandler);
