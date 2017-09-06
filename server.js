@@ -57,8 +57,8 @@ if (process.env.NODE_ENV !== 'test') {
 
 const logStream = fs.createWriteStream(config.get('logfile'), { flags: 'a', encoding: 'utf8' });
 
-function log(msg) {
-  msg = `${moment.utc().format()}: ${util.format(msg)}`;
+function log(m) {
+  const msg = `${moment.utc().format()}: ${util.format(m)}`;
   logStream.write(`${msg}\n`);
   console.log(msg);
 }
@@ -131,6 +131,44 @@ process.on('uncaughtException', (e) => {
 // Init DB
 let knex;
 let db;
+
+function emitMsg(msg) {
+  if (typeof msg.signedData !== 'object' || msg.signedData.public === false) {
+    return;
+  }
+  io.emit('msg', { jws: msg.jws, hash: msg.hash });
+  Object.keys(outgoingConnections).forEach((key) => {
+    outgoingConnections[key].emit('msg', { jws: msg.jws, hash: msg.hash });
+  });
+}
+
+function handleMsgEvent(data) {
+  const m = data;
+  try {
+    Message.verify(m);
+  } catch (e) {
+    log('failed to verify msg');
+    return;
+  }
+  db.messageExists(m.hash)
+    .then((exists) => {
+      if (!exists) {
+        db.saveMessage(m).then(() => {
+          emitMsg(m);
+        }).catch((e) => {
+          console.log(e.stack);
+          log('error handling msg', m.hash, e);
+        });
+      }
+    });
+}
+
+function ipfsMsgHandler(msg) {
+  if (msg.from !== ipfs.myId) {
+    handleMsgEvent({ jws: msg.data.toString() });
+  }
+}
+
 try {
   const dbConf = config.get('db');
   knex = require('knex')(dbConf);
@@ -251,17 +289,6 @@ function handleError(err, req, res) {
   log(err);
   log(req);
   res.status(500).json('Server error');
-}
-
-
-function emitMsg(msg) {
-  if (typeof msg.signedData !== 'object' || msg.signedData.public === false) {
-    return;
-  }
-  io.emit('msg', { jws: msg.jws, hash: msg.hash });
-  Object.keys(outgoingConnections).forEach((key) => {
-    outgoingConnections[key].emit('msg', { jws: msg.jws, hash: msg.hash });
-  });
 }
 
 
@@ -633,33 +660,6 @@ try {
   app.use('/', express.static(`${angular}/dist`));
 } catch (e) {
   // console.log(e);
-}
-
-function handleMsgEvent(data) {
-  const m = data;
-  try {
-    Message.verify(m);
-  } catch (e) {
-    log('failed to verify msg');
-    return;
-  }
-  db.messageExists(m.hash)
-    .then((exists) => {
-      if (!exists) {
-        db.saveMessage(m).then(() => {
-          emitMsg(m);
-        }).catch((e) => {
-          console.log(e.stack);
-          log('error handling msg', m.hash, e);
-        });
-      }
-    });
-}
-
-function ipfsMsgHandler(msg) {
-  if (msg.from !== ipfs.myId) {
-    handleMsgEvent({ jws: msg.data.toString() });
-  }
 }
 
 function handleIncomingWebsocket(socket) {

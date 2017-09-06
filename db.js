@@ -52,16 +52,14 @@ module.exports = (knex) => {
 
   const pub = {
     trustIndexedAttributes: null,
-    saveMessage(message, updateTrustIndexes, addToIpfs) {
-      if (typeof updateTrustIndexes === 'undefined') { updateTrustIndexes = true; }
-      if (typeof addToIpfs === 'undefined') { addToIpfs = true; }
+    saveMessage(msg, updateTrustIndexes = true, addToIpfs = true) {
+      const message = msg;
       if (typeof message.signerKeyHash === 'undefined') {
         message.signerKeyHash = Message.getSignerKeyHash(message);
       }
       const q = this.ensureFreeSpace();
       // Unobtrusively store msg to ipfs
-      addToIpfs = (p.ipfs && !message.ipfs_hash) && addToIpfs;
-      if (addToIpfs) {
+      if ((p.ipfs && !message.ipfs_hash) && addToIpfs) {
         q.then(() => pub.addMessageToIpfs(message))
           .then((res) => {
             message.ipfs_hash = res[0].hash;
@@ -83,12 +81,14 @@ module.exports = (knex) => {
             q2.then(() => pub.getIdentityAttributesByAuthorOrRecipient(message, true))
               .then(attrs => pub.getIndexKeysByIdentity(attrs))
               .then((keys) => {
-                ipfsIdentityIndexKeysToRemove[message.hash] = ipfsIdentityIndexKeysToRemove[message.hash].concat(keys);
+                ipfsIdentityIndexKeysToRemove[message.hash] =
+                  ipfsIdentityIndexKeysToRemove[message.hash].concat(keys);
                 return pub.getIdentityAttributesByAuthorOrRecipient(message, false);
               })
               .then(attrs => pub.getIndexKeysByIdentity(attrs))
               .then((keys) => {
-                ipfsIdentityIndexKeysToRemove[message.hash] = ipfsIdentityIndexKeysToRemove[message.hash].concat(keys);
+                ipfsIdentityIndexKeysToRemove[message.hash] =
+                  ipfsIdentityIndexKeysToRemove[message.hash].concat(keys);
               });
           }
           const isPublic = typeof message.signedData.public === 'undefined' ? true : message.signedData.public;
@@ -110,8 +110,8 @@ module.exports = (knex) => {
               saved_at: new Date().toISOString(),
             })
               .then(() => {
-                let i,
-                  queries = [];
+                let i;
+                const queries = [];
                 for (i = 0; i < message.signedData.author.length; i += 1) {
                   queries.push(trx('MessageAttributes').insert({
                     message_hash: message.hash,
@@ -169,7 +169,8 @@ module.exports = (knex) => {
           if (messages.length) {
             console.log('', messages.length, 'new messages to index');
           }
-          // rebuilding the indexes is more efficient than inserting large number of entries individually
+          /* rebuilding the indexes is more efficient than
+          inserting large number of entries individually */
           if (messages.length < REBUILD_INDEXES_IF_NEW_MSGS_GT) {
             let q = Promise.resolve();
             // remove identity index entries that point to expired identity profiles
@@ -183,8 +184,8 @@ module.exports = (knex) => {
                 delete ipfsIdentityIndexKeysToRemove[msg];
               });
             });
-            messages.forEach((message) => {
-              message = Message.decode(message);
+            messages.forEach((msg) => {
+              const message = Message.decode(msg);
               const d = new Date(message.saved_at).toISOString();
               if (d > lastIpfsIndexedMessageSavedAt) {
                 lastIpfsIndexedMessageSavedAt = d;
@@ -193,7 +194,7 @@ module.exports = (knex) => {
             });
             return timeoutPromise(q.return(messages.length), 100000)
               .then((res) => {
-                if (typeof res === undefined) { return pub.addIndexesToIpfs(); }
+                if (typeof res === 'undefined') { return pub.addIndexesToIpfs(); }
                 return res;
               });
           }
@@ -223,7 +224,8 @@ module.exports = (knex) => {
       return [];
     },
 
-    addMessageToIpfsIndex(message) {
+    addMessageToIpfsIndex(msg) {
+      const message = msg;
       const msgIndexKey = pub.getMsgIndexKey(message); // TODO: should have distance
       return p.ipfsMessagesByDistance.put(msgIndexKey, message)
         .then(() => p.ipfsMessagesByTimestamp.put(msgIndexKey.substr(msgIndexKey.indexOf(':') + 1), message))
@@ -290,7 +292,8 @@ module.exports = (knex) => {
       // TODO: if info already exists, don't rewrite
       let indexRoot;
       return pub.getIdentityAttributes({ id: myId })
-        .then((attrs) => {
+        .then((a) => {
+          let attrs = a;
           if (attrs.length) {
             attrs = attrs[0];
           } else {
@@ -331,8 +334,8 @@ module.exports = (knex) => {
         .then((res) => {
           if (p.ipfs.name && res._json.multihash) {
             console.log('publishing index', res._json.multihash);
-            p.ipfs.name.publish(res._json.multihash, {}).then((res) => {
-              console.log('published index', res);
+            p.ipfs.name.publish(res._json.multihash, {}).then((r) => {
+              console.log('published index', r);
             });
           }
           return indexRoot;
@@ -359,7 +362,7 @@ module.exports = (knex) => {
         }
         if (attrs[j].val.indexOf(' ') > -1) {
           const words = attrs[j].val.toLowerCase().split(' ');
-          for (let l = 0; l < words.length; l++) {
+          for (let l = 0; l < words.length; l += 1) {
             const k = `${distance}:${encodeURIComponent(words[l])}:${name}:${hash.substr(0, 9)}`;
             indexKeys.push(k);
           }
@@ -377,7 +380,7 @@ module.exports = (knex) => {
       if (!attrs.length) {
         return Promise.resolve(identityProfile);
       }
-      let d1 = new Date();
+      // let d1 = new Date();
       let uniqueAttr = attrs[0];
       for (let i = 0; i < attrs.length; i += 1) {
         if (pub.isUniqueType(attrs[i].name)) {
@@ -402,7 +405,7 @@ module.exports = (knex) => {
               targetHash: null,
             });
           });
-          d1 = new Date();
+          // d1 = new Date();
           if (msgs.length && p.ipfsStorage) {
             return btree.MerkleBTree.fromSortedList(msgs, ipfsIndexWidth, p.ipfsStorage);
           }
@@ -411,7 +414,8 @@ module.exports = (knex) => {
           if (receivedIndex) {
             identityProfile.received = receivedIndex.rootNode.hash;
           }
-          // console.log('recipient msgs btree building took', d1 - new Date(), 'ms'); d1 = new Date();
+          // console.log('recipient msgs btree building took', d1 - new Date(), 'ms');
+          // d1 = new Date();
           return pub.getMessages({
             author: [uniqueAttr.name, uniqueAttr.val],
             limit: 10000,
@@ -430,7 +434,7 @@ module.exports = (knex) => {
               targetHash: null,
             });
           });
-          d1 = new Date();
+          // d1 = new Date();
           if (msgs.length && p.ipfsStorage) {
             return btree.MerkleBTree.fromSortedList(msgs, ipfsIndexWidth, p.ipfsStorage);
           }
@@ -473,8 +477,8 @@ module.exports = (knex) => {
         .then((res) => {
           if (res.length) {
             const hash = crypto.createHash('md5').update(JSON.stringify(ip)).digest('base64');
-            let q = Promise.resolve(),
-              q2 = Promise.resolve();
+            let q = Promise.resolve();
+            let q2 = Promise.resolve();
             pub.getIdentityProfileIndexKeys(ip, hash).forEach((key) => {
               console.log('adding key', key);
               console.log('and', key.substr(key.indexOf(':') + 1));
@@ -501,7 +505,7 @@ module.exports = (knex) => {
             return pub.getIdentityProfile(res[i])
               .then((identityProfile) => {
                 const hash = crypto.createHash('md5').update(JSON.stringify(identityProfile)).digest('base64');
-                identityProfilesByHash[hash] = identityProfile;
+                identityProfilesByHash[hash] = identityProfile;
                 pub.getIdentityProfileIndexKeys(identityProfile, hash).forEach((key) => {
                   identityIndexEntriesToAdd.push({ key, value: hash, targetHash: null });
                 });
@@ -521,10 +525,10 @@ module.exports = (knex) => {
                   values.push(Buffer.from(JSON.stringify(identityProfilesByHash[key]), 'utf8'));
                 });
                 return p.ipfs.files.add(values)
-                  .then((res) => {
+                  .then((r) => {
                     keys.forEach((key, i) => {
-                      if (i < res.length && res[i].hash) {
-                        identityProfilesByHash[key] = res[i].hash;
+                      if (i < res.length && r[i].hash) {
+                        identityProfilesByHash[key] = r[i].hash;
                       }
                     });
                     return addIdentityProfilesToIpfs();
@@ -534,18 +538,27 @@ module.exports = (knex) => {
             })
             .then(() => {
               identityIndexEntriesToAdd.forEach((entry) => {
+                // eslint-disable-next-line no-param-reassign
                 entry.value = identityProfilesByHash[entry.value];
               });
               console.log('building index identities_by_distance');
-              return btree.MerkleBTree.fromSortedList(identityIndexEntriesToAdd.sort(sortByKey).slice(), ipfsIndexWidth, p.ipfsStorage);
+              return btree.MerkleBTree.fromSortedList(
+                identityIndexEntriesToAdd.sort(sortByKey).slice(),
+                ipfsIndexWidth,
+                p.ipfsStorage,
+              );
             })
             .then((index) => {
               p.ipfsIdentitiesByDistance = index;
               identityIndexEntriesToAdd.forEach((entry) => {
-                entry.key = entry.key.substr(entry.key.indexOf(':') + 1);
+                entry.key = entry.key.substr(entry.key.indexOf(':') + 1); // eslint-disable-line no-param-reassign
               });
               console.log('building index identities_by_searchkey');
-              return btree.MerkleBTree.fromSortedList(identityIndexEntriesToAdd.sort(sortByKey), ipfsIndexWidth, p.ipfsStorage);
+              return btree.MerkleBTree.fromSortedList(
+                identityIndexEntriesToAdd.sort(sortByKey),
+                ipfsIndexWidth,
+                p.ipfsStorage,
+              );
             })
             .then((index) => {
               p.ipfsIdentitiesBySearchKey = index;
@@ -563,12 +576,11 @@ module.exports = (knex) => {
     },
 
     addMessageIndexToIpfs() {
-      const limit = 10000;
-      const offset = 0;
-      const distance = 0;
       const maxMsgCount = 100000;
       let msgsToIndex = [];
-      function iterate(limit, offset, distance) {
+      function iterate(limit = 10000, initialOffset = 0, initialDistance = 0) {
+        let distance = initialDistance;
+        let offset = initialOffset;
         return pub.getMessages({
           limit,
           offset,
@@ -587,9 +599,9 @@ module.exports = (knex) => {
             } else {
               offset += limit;
             }
-            msgs.forEach((msg) => {
+            msgs.forEach((m) => {
               process.stdout.write('.');
-              msg = Message.decode(msg);
+              const msg = Message.decode(m);
               msg.distance = distance;
               const key = pub.getMsgIndexKey(msg);
               msgsToIndex.push({ key, value: msg, targetHash: null });
@@ -606,18 +618,22 @@ module.exports = (knex) => {
       }
 
       console.log('adding msgs to ipfs');
-      return iterate(limit, offset, distance)
+      return iterate()
         .then((res) => {
           console.log('res', res);
           console.log('adding messages_by_distance index to ipfs');
-          return btree.MerkleBTree.fromSortedList(msgsToIndex.slice(), ipfsIndexWidth, p.ipfsStorage);
+          return btree.MerkleBTree.fromSortedList(
+            msgsToIndex.slice(),
+            ipfsIndexWidth,
+            p.ipfsStorage,
+          );
         })
         .then((index) => {
           p.ipfsMessagesByDistance = index;
 
           // create index of messages sorted by timestamp
           msgsToIndex.forEach((msg) => {
-            msg.key = msg.key.substr(msg.key.indexOf(':') + 1);
+            msg.key = msg.key.substr(msg.key.indexOf(':') + 1); // eslint-disable-line no-param-reassign
           });
           msgsToIndex = msgsToIndex.sort(sortByKey);
           console.log('adding messages_by_timestamp index to ipfs');
@@ -740,7 +756,7 @@ module.exports = (knex) => {
         .then(res => Promise.resolve(!!parseInt(res[0].exists)));
     },
 
-    getMessages(options) {
+    getMessages(opts) {
       const defaultOptions = {
         orderBy: 'timestamp',
         direction: 'desc',
@@ -748,13 +764,10 @@ module.exports = (knex) => {
         offset: 0,
         where: {},
       };
-      options = options || defaultOptions;
-      for (const key in defaultOptions) {
-        options[key] = options[key] !== undefined ? options[key] : defaultOptions[key];
-      }
+      const options = Object.assign(defaultOptions, opts);
 
-      let authorIdentityIdQuery = Promise.resolve([]),
-        recipientIdentityIdQuery = Promise.resolve([]);
+      let authorIdentityIdQuery = Promise.resolve([]);
+      let recipientIdentityIdQuery = Promise.resolve([]);
       if (options.viewpoint) {
         if (options.author) {
           authorIdentityIdQuery = knex('IdentityAttributes')
@@ -837,6 +850,8 @@ module.exports = (knex) => {
             case 'negative':
               query.whereRaw(':rating: < ( :max_rating: + :min_rating:) / 2', bindings);
               break;
+            default:
+              break;
           }
         }
 
@@ -915,7 +930,7 @@ module.exports = (knex) => {
         .then(res => !!res));
     },
 
-    getIdentityAttributes(options) {
+    getIdentityAttributes(opts) {
       const defaultOptions = {
         orderBy: 'value',
         direction: 'asc',
@@ -925,10 +940,7 @@ module.exports = (knex) => {
         having: {},
         viewpoint: myId,
       };
-      options = options || defaultOptions;
-      for (const key in defaultOptions) {
-        options[key] = options[key] !== undefined ? options[key] : defaultOptions[key];
-      }
+      const options = Object.assign(defaultOptions, opts);
 
       if (options.id) {
         options.where['attr.name'] = options.id[0];
@@ -959,7 +971,7 @@ module.exports = (knex) => {
         subquery.where(knex.raw('lower("attr"."value")'), 'LIKE', `%${options.searchValue.toLowerCase()}%`);
       }
 
-      let q = knex.from('IdentityAttributes AS attr')
+      const q = knex.from('IdentityAttributes AS attr')
         .select([
           'attr.identity_id',
           'attr.name',
@@ -981,9 +993,7 @@ module.exports = (knex) => {
         })
         .where('attr.identity_id', 'in', subquery);
 
-      // sql += "ORDER BY iid >= 0 DESC, IFNULL(tp.Distance,1000) ASC, CASE WHEN attrvalue LIKE :query || '%' THEN 0 ELSE 1 END, UID.name IS NOT NULL DESC, attrvalue ASC ";
-
-      return q = q.then((res) => {
+      return q.then((res) => {
         const identities = {};
         let i;
         for (i = 0; i < res.length; i += 1) {
@@ -1000,22 +1010,19 @@ module.exports = (knex) => {
           });
         }
 
-        let arr = [];
-        for (const key in identities) {
-          arr.push(identities[key]);
-        }
-
         // Sort by distance
-        arr = arr.sort((identity1, identity2) => {
-          let smallestDistance1 = 1000,
-            smallestDistance2 = 1000;
+        const arr = Object.values(identities).sort((identity1, identity2) => {
+          let smallestDistance1 = 1000;
+          let smallestDistance2 = 1000;
           for (i = 0; i < identity1.length; i += 1) {
-            if (!Number.isNaN(parseInt(identity1[i].dist)) && identity1[i].dist < smallestDistance1) {
+            if (!Number.isNaN(parseInt(identity1[i].dist)) &&
+            identity1[i].dist < smallestDistance1) {
               smallestDistance1 = identity1[i].dist;
             }
           }
           for (i = 0; i < identity2.length; i += 1) {
-            if (!Number.isNaN(parseInt(identity2[i].dist)) && identity2[i].dist < smallestDistance2) {
+            if (!Number.isNaN(parseInt(identity2[i].dist)) &&
+            identity2[i].dist < smallestDistance2) {
               smallestDistance2 = identity2[i].dist;
             }
           }
@@ -1026,8 +1033,9 @@ module.exports = (knex) => {
       });
     },
 
-    mapIdentityAttributes(options) {
+    mapIdentityAttributes(opts) {
       let identityId;
+      const options = opts;
       options.viewpoint = options.viewpoint || myId;
       // Find out existing identity_id for the identifier
       const getExistingId = knex.from('IdentityAttributes as ia')
@@ -1055,8 +1063,8 @@ module.exports = (knex) => {
               // No existing identity_id - return a new one
               .select(knex.raw(`${SQL_IFNULL}(MAX(identity_id), 0) + 1 AS identity_id`));
           })
-          .then((res) => {
-            identityId = parseInt(res[0].identity_id);
+          .then((r) => {
+            identityId = parseInt(r[0].identity_id);
             // First insert the queried identifier with the identity_id
             return knex('IdentityAttributes').insert({
               identity_id: identityId,
@@ -1129,15 +1137,16 @@ module.exports = (knex) => {
                   knex.raw('?', options.viewpoint[1]),
                   knex.raw('SUM(CASE WHEN m.type = \'verify_identity\' THEN 1 ELSE 0 END)'),
                   knex.raw('SUM(CASE WHEN m.type = \'unverify_identity\' THEN 1 ELSE 0 END)'),
-                ).groupBy('attr2.name', 'attr2.value');
+                )
+                .groupBy('attr2.name', 'attr2.value');
             }
 
             function iterateSearch() {
               return knex('IdentityAttributes').whereIn('identity_id', generateDeleteSubQuery()).del()
                 .then(() => knex('IdentityAttributes').insert(generateInsertSubQuery()))
-                .then((res) => {
-                  if (JSON.stringify(last) !== JSON.stringify(res)) {
-                    last = res;
+                .then((r) => {
+                  if (JSON.stringify(last) !== JSON.stringify(r)) {
+                    last = r;
                     return iterateSearch();
                   }
                 });
