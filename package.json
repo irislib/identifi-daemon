@@ -69,7 +69,6 @@
     "sqlite3": "^3.1.9"
   },
   "watch": {
-    "test": "*.js",
     "lint": "*.js"
   },
   "scripts": {
