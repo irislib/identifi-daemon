@@ -250,34 +250,32 @@ module.exports = (knex) => {
     addDbMessagesToIpfs() {
       let counter = 0;
 
-      function getReindexQuery() {
+      async function getReindexQuery() {
         const msgs = {};
-        return knex('Messages').whereNull('ipfs_hash').select('jws', 'hash').limit(100)
-          .then((res) => {
-            if (res.length && p.ipfs) {
-              res.forEach((msg) => {
-                msgs[msg.hash] = Buffer.from(msg.jws, 'utf8');
-              });
-              return p.ipfs.files.add(Object.values(msgs));
-            }
-            return [];
-          })
-          .then((res) => {
-            console.log('added', res.length, 'msgs to ipfs');
-            const queries = [];
-            Object.keys(msgs).forEach((hash, index) => {
-              queries.push(knex('Messages').where({ hash }).update({ ipfs_hash: res[index].hash }).return());
-            });
-            return Promise.all(queries);
-          })
-          .then((res) => {
-            console.log('updated', res.length, 'db entries');
-            if (res.length) {
-              counter += 1;
-              return getReindexQuery();
-            }
-          })
-          .catch((e) => { console.log('adding to ipfs failed:', e); });
+        let r = await knex('Messages').whereNull('ipfs_hash').select('jws', 'hash').limit(100);
+        if (r.length && p.ipfs) {
+          r.forEach((msg) => {
+            msgs[msg.hash] = Buffer.from(msg.jws, 'utf8');
+          });
+          try {
+            r = await p.ipfs.files.add(Object.values(msgs));
+          } catch (e) {
+            console.log('adding to ipfs failed:', e);
+          }
+        } else {
+          r = [];
+        }
+        console.log('added', res.length, 'msgs to ipfs');
+        const queries = [];
+        Object.keys(msgs).forEach((hash, index) => {
+          queries.push(knex('Messages').where({ hash }).update({ ipfs_hash: r[index].hash }));
+        });
+        r = await Promise.all(queries);
+        console.log('updated', res.length, 'db entries');
+        if (r.length) {
+          counter += 1;
+          return getReindexQuery();
+        }
       }
 
       return getReindexQuery().then(() => `Reindexed ${counter} messages`);
