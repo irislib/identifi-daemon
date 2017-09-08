@@ -282,7 +282,7 @@ module.exports = (knex) => {
         res = await Promise.resolve(res);
         if (p.ipfs.name && res._json.multihash) {
           console.log('publishing index', res._json.multihash);
-          const r = await p.ipfs.name.publish(res._json.multihash, {})
+          const r = await p.ipfs.name.publish(res._json.multihash, {});
           console.log('published index', r);
         }
         return indexRoot;

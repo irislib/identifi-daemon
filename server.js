@@ -1,5 +1,4 @@
 /* jshint latedef:nofunc */
-const moment = require('moment');
 const fs = require('fs');
 
 const express = require('express');
@@ -17,7 +16,6 @@ const pkg = require('./package.json');
 
 const osHomedir = require('os-homedir');
 const path = require('path');
-const util = require('util');
 
 const keyutil = require('identifi-lib/keyutil');
 
@@ -56,7 +54,7 @@ if (process.env.NODE_ENV !== 'test') {
 const logStream = fs.createWriteStream(config.get('logfile'), { flags: 'a', encoding: 'utf8' });
 
 function log(m) {
-  const msg = `${moment.utc().format()}: ${util.format(m)}`;
+  const msg = `${(new Date()).toISOString()}: ${m}`;
   logStream.write(`${msg}\n`);
   console.log(msg);
 }
