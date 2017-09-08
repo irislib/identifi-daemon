@@ -19,28 +19,6 @@ const REBUILD_INDEXES_IF_NEW_MSGS_GT = 30;
 let config;
 let SQL_IFNULL = 'IFNULL';
 
-function sortByKey(a, b) {
-  if (a.key < b.key) {
-    return -1;
-  }
-  if (a.key > b.key) {
-    return 1;
-  }
-  return 0;
-}
-
-function timeoutPromise(promise, timeout) {
-  return Promise.race([
-    promise,
-    new Promise(((resolve) => {
-      setTimeout(() => {
-        // console.log('promise timed out');
-        resolve();
-      }, timeout);
-    })),
-  ]);
-}
-
 module.exports = (knex) => {
   let p; // Private methods
   let lastIpfsIndexedMessageSavedAt = (new Date()).toISOString();
@@ -48,102 +26,95 @@ module.exports = (knex) => {
 
   const pub = {
     trustIndexedAttributes: null,
-    saveMessage(msg, updateTrustIndexes = true, addToIpfs = true) {
+    async saveMessage(msg, updateTrustIndexes = true, addToIpfs = true) {
       const message = msg;
       if (typeof message.signerKeyHash === 'undefined') {
         message.signerKeyHash = Message.getSignerKeyHash(message);
       }
-      const q = this.ensureFreeSpace();
+      await this.ensureFreeSpace();
       // Unobtrusively store msg to ipfs
       if ((p.ipfs && !message.ipfs_hash) && addToIpfs) {
-        q.then(() => pub.addMessageToIpfs(message))
-          .then((res) => {
-            message.ipfs_hash = res[0].hash;
-          });
+        const res = await pub.addMessageToIpfs(message);
+        message.ipfs_hash = res[0].hash;
       }
-      return q.then(() => pub.messageExists(message.hash))
-        .then((exists) => {
-          if (exists) {
-            if (addToIpfs && message.ipfs_hash) {
-            // Msg was added to IPFS - update ipfs_hash
-              return knex('Messages').where({ hash: message.hash }).update({ ipfs_hash: message.ipfs_hash });
-            }
-            return Promise.resolve(false);
+      const exists = await pub.messageExists(message.hash);
+
+      if (exists) {
+        if (addToIpfs && message.ipfs_hash) {
+        // Msg was added to IPFS - update ipfs_hash
+          return knex('Messages').where({ hash: message.hash }).update({ ipfs_hash: message.ipfs_hash });
+        }
+        return false;
+      }
+      if (Object.keys(ipfsIdentityIndexKeysToRemove).length < REBUILD_INDEXES_IF_NEW_MSGS_GT) {
+        // Mark for deletion the index references to expiring identity profiles
+        ipfsIdentityIndexKeysToRemove[message.hash] = [];
+        const authorAttrs = await pub.getIdentityAttributesByAuthorOrRecipient(message, true);
+        const authorKeys = await pub.getIndexKeysByIdentity(authorAttrs);
+        ipfsIdentityIndexKeysToRemove[message.hash] =
+          ipfsIdentityIndexKeysToRemove[message.hash].concat(authorKeys);
+        const recipientAttrs = pub.getIdentityAttributesByAuthorOrRecipient(message, false);
+        const recipientKeys = await pub.getIndexKeysByIdentity(recipientAttrs);
+        ipfsIdentityIndexKeysToRemove[message.hash] =
+          ipfsIdentityIndexKeysToRemove[message.hash].concat(recipientKeys);
+      }
+      const isPublic = typeof message.signedData.public === 'undefined' ? true : message.signedData.public;
+      await p.deletePreviousMessage(message);
+      const priority = await p.getPriority(message);
+      await knex.transaction(trx => trx('Messages').insert({
+        hash: message.hash,
+        ipfs_hash: message.ipfs_hash,
+        jws: message.jws,
+        timestamp: message.signedData.timestamp,
+        type: message.signedData.type || 'rating',
+        rating: message.signedData.rating || 0,
+        max_rating: message.signedData.maxRating || 0,
+        min_rating: message.signedData.minRating || 0,
+        public: isPublic,
+        priority,
+        is_latest: p.isLatest(message),
+        signer_keyid: message.signerKeyHash,
+        saved_at: new Date().toISOString(),
+      })
+        .then(() => {
+          let i;
+          const queries = [];
+          for (i = 0; i < message.signedData.author.length; i += 1) {
+            queries.push(trx('MessageAttributes').insert({
+              message_hash: message.hash,
+              name: message.signedData.author[i][0],
+              value: message.signedData.author[i][1],
+              is_recipient: false,
+            }));
           }
-          const q2 = Promise.resolve();
-          if (Object.keys(ipfsIdentityIndexKeysToRemove).length < REBUILD_INDEXES_IF_NEW_MSGS_GT) {
-            // Mark for deletion the index references to expiring identity profiles
-            ipfsIdentityIndexKeysToRemove[message.hash] = [];
-            q2.then(() => pub.getIdentityAttributesByAuthorOrRecipient(message, true))
-              .then(attrs => pub.getIndexKeysByIdentity(attrs))
-              .then((keys) => {
-                ipfsIdentityIndexKeysToRemove[message.hash] =
-                  ipfsIdentityIndexKeysToRemove[message.hash].concat(keys);
-                return pub.getIdentityAttributesByAuthorOrRecipient(message, false);
-              })
-              .then(attrs => pub.getIndexKeysByIdentity(attrs))
-              .then((keys) => {
-                ipfsIdentityIndexKeysToRemove[message.hash] =
-                  ipfsIdentityIndexKeysToRemove[message.hash].concat(keys);
-              });
+          for (i = 0; i < message.signedData.recipient.length; i += 1) {
+            queries.push(trx('MessageAttributes').insert({
+              message_hash: message.hash,
+              name: message.signedData.recipient[i][0],
+              value: message.signedData.recipient[i][1],
+              is_recipient: true,
+            }));
           }
-          const isPublic = typeof message.signedData.public === 'undefined' ? true : message.signedData.public;
-          return q2.then(() => p.deletePreviousMessage(message))
-            .then(() => p.getPriority(message))
-            .then(priority => knex.transaction(trx => trx('Messages').insert({
-              hash: message.hash,
-              ipfs_hash: message.ipfs_hash,
-              jws: message.jws,
-              timestamp: message.signedData.timestamp,
-              type: message.signedData.type || 'rating',
-              rating: message.signedData.rating || 0,
-              max_rating: message.signedData.maxRating || 0,
-              min_rating: message.signedData.minRating || 0,
-              public: isPublic,
-              priority,
-              is_latest: p.isLatest(message),
-              signer_keyid: message.signerKeyHash,
-              saved_at: new Date().toISOString(),
-            })
-              .then(() => {
-                let i;
-                const queries = [];
-                for (i = 0; i < message.signedData.author.length; i += 1) {
-                  queries.push(trx('MessageAttributes').insert({
-                    message_hash: message.hash,
-                    name: message.signedData.author[i][0],
-                    value: message.signedData.author[i][1],
-                    is_recipient: false,
-                  }));
-                }
-                for (i = 0; i < message.signedData.recipient.length; i += 1) {
-                  queries.push(trx('MessageAttributes').insert({
-                    message_hash: message.hash,
-                    name: message.signedData.recipient[i][0],
-                    value: message.signedData.recipient[i][1],
-                    is_recipient: true,
-                  }));
-                }
-                return Promise.all(queries);
-              }))
-              .then(() => {
-                if (updateTrustIndexes) {
-                  return p.updateWotIndexesByMessage(message)
-                    .then(() => p.updateIdentityIndexesByMessage(message)
-                      .then(res => res));
-                }
-              }));
-        })
-        .then(() => message);
+          return Promise.all(queries);
+        }))
+        .then(() => {
+          if (updateTrustIndexes) {
+            return p.updateWotIndexesByMessage(message)
+              .then(() => p.updateIdentityIndexesByMessage(message)
+                .then(res => res));
+          }
+        });
+
+      return message;
     },
 
-    keepAddingNewMessagesToIpfsIndex() {
-      return pub.addNewMessagesToIpfsIndex()
-        .then(() => new Promise(((resolve) => {
-          setTimeout(() => {
-            resolve(pub.keepAddingNewMessagesToIpfsIndex());
-          }, 10000);
-        })));
+    async keepAddingNewMessagesToIpfsIndex() {
+      await pub.addNewMessagesToIpfsIndex();
+      return new Promise(((resolve) => {
+        setTimeout(() => {
+          resolve(pub.keepAddingNewMessagesToIpfsIndex());
+        }, 10000);
+      }));
     },
 
     async addIndexesToIpfs() {
@@ -173,7 +144,7 @@ module.exports = (knex) => {
               q.then(() => {
                 const q2 = p.ipfsIdentitiesByDistance.delete(key);
                 const q3 = p.ipfsIdentitiesBySearchKey.delete(key.substr(key.indexOf(':') + 1));
-                return timeoutPromise(Promise.all([q2, q3]), 30000);
+                return util.timeoutPromise(Promise.all([q2, q3]), 30000);
               });
               delete ipfsIdentityIndexKeysToRemove[msg];
             });
@@ -186,7 +157,7 @@ module.exports = (knex) => {
             }
             q = q.then(() => pub.addMessageToIpfsIndex(message));
           });
-          const r = await timeoutPromise(q.return(messages.length), 200000);
+          const r = await util.timeoutPromise(q.return(messages.length), 200000);
           return typeof r === 'undefined' ? pub.addIndexesToIpfs() : r;
         }
         await pub.addIndexesToIpfs();
@@ -443,7 +414,7 @@ module.exports = (knex) => {
           q = q.then(p.ipfsIdentitiesByDistance.put(key, r[0].hash));
           q2 = q2.then(p.ipfsIdentitiesBySearchKey.put(key.substr(key.indexOf(':') + 1), r[0].hash));
         });
-        return timeoutPromise(Promise.all([q, q2]), 30000);
+        return util.timeoutPromise(Promise.all([q, q2]), 30000);
       }
     },
 
@@ -497,7 +468,7 @@ module.exports = (knex) => {
 
       console.log('building index identities_by_distance');
       p.ipfsIdentitiesByDistance = await btree.MerkleBTree.fromSortedList(
-        identityIndexEntriesToAdd.sort(sortByKey).slice(),
+        identityIndexEntriesToAdd.sort(util.sortByKey).slice(),
         IPFS_INDEX_WIDTH,
         p.ipfsStorage,
       );
@@ -506,7 +477,7 @@ module.exports = (knex) => {
       });
       console.log('building index identities_by_searchkey');
       p.ipfsIdentitiesBySearchKey = await btree.MerkleBTree.fromSortedList(
-        identityIndexEntriesToAdd.sort(sortByKey),
+        identityIndexEntriesToAdd.sort(util.sortByKey),
         IPFS_INDEX_WIDTH,
         p.ipfsStorage,
       );
@@ -572,7 +543,7 @@ module.exports = (knex) => {
       msgsToIndex.forEach((msg) => {
         msg.key = msg.key.substr(msg.key.indexOf(':') + 1); // eslint-disable-line no-param-reassign
       });
-      msgsToIndex = msgsToIndex.sort(sortByKey);
+      msgsToIndex = msgsToIndex.sort(util.sortByKey);
       console.log('adding messages_by_timestamp index to ipfs');
       p.ipfsMessagesByTimestamp = await btree.MerkleBTree.fromSortedList(
         msgsToIndex,
@@ -587,7 +558,7 @@ module.exports = (knex) => {
       const r = await knex('Messages').where('ipfs_hash', path).count('* as count');
       if (parseInt(r[0].count) === 0) {
         try {
-          const buffer = await timeoutPromise(p.ipfs.files.cat(path, { buffer: true }), 5000);
+          const buffer = await util.timeoutPromise(p.ipfs.files.cat(path, { buffer: true }), 5000);
           if (buffer) {
             const msg = { jws: buffer.toString('utf8'), ipfs_hash: path };
             process.stdout.write('+');
@@ -609,11 +580,11 @@ module.exports = (knex) => {
           console.log('ipfs.name is not available');
           return;
         }
-        const r = await timeoutPromise(p.ipfs.name.resolve(ipnsName), 60000);
+        const r = await util.timeoutPromise(p.ipfs.name.resolve(ipnsName), 60000);
         if (!r) { throw new Error('Ipfs index name was not resolved', ipnsName); }
         let path = r.Path.replace('/ipfs/', '');
         console.log('resolved name', path);
-        const links = await timeoutPromise(p.ipfs.object.links(path), 30000);
+        const links = await util.timeoutPromise(p.ipfs.object.links(path), 30000);
         if (!links) { throw new Error('Ipfs index was not resolved', ipnsName); }
         for (let i = 0; i < links.length; i += 1) {
           if (links[i]._name === 'messages_by_distance') {
@@ -1768,62 +1739,54 @@ module.exports = (knex) => {
       return Promise.all(queries);
     },
 
-    getIndexesFromIpfsRoot() {
-      return knex('TrustIndexedAttributes')
+    async getIndexesFromIpfsRoot() {
+      const res = await knex('TrustIndexedAttributes')
         .where({ name: MY_ID[0], value: MY_ID[1] })
         .whereNotNull('ipfs_index_root')
-        .select('ipfs_index_root')
-        .then((res) => {
-          let q = Promise.resolve();
-          if (res.length) {
-            q = q.then(() => p.ipfs.object.links(res[0].ipfs_index_root)
-              .then((links) => {
-                const queries = [];
-                links.forEach((link) => {
-                  switch (link._name) {
-                    case 'messages_by_distance':
-                      queries.push(btree.MerkleBTree.getByHash(link._multihash, p.ipfsStorage)
-                        .then((index) => {
-                          p.ipfsMessagesByDistance = index;
-                        }));
-                      break;
-                    case 'messages_by_timestamp':
-                      queries.push(btree.MerkleBTree.getByHash(link._multihash, p.ipfsStorage)
-                        .then((index) => {
-                          p.ipfsMessagesByTimestamp = index;
-                        }));
-                      break;
-                    case 'identities_by_distance':
-                      queries.push(btree.MerkleBTree.getByHash(link._multihash, p.ipfsStorage)
-                        .then((index) => {
-                          p.ipfsIdentitiesByDistance = index;
-                        }));
-                      break;
-                    case 'identities_by_searchkey':
-                      queries.push(btree.MerkleBTree.getByHash(link._multihash, p.ipfsStorage)
-                        .then((index) => {
-                          p.ipfsIdentitiesBySearchKey = index;
-                        }));
-                      break;
-                    default:
-                      break;
-                  }
-                });
-                return Promise.all(queries);
-              }));
+        .select('ipfs_index_root');
+      if (res.length) {
+        const links = await p.ipfs.object.links(res[0].ipfs_index_root);
+        const queries = [];
+        links.forEach((link) => {
+          switch (link._name) {
+            case 'messages_by_distance':
+              queries.push(btree.MerkleBTree.getByHash(link._multihash, p.ipfsStorage)
+                .then((index) => {
+                  p.ipfsMessagesByDistance = index;
+                }));
+              break;
+            case 'messages_by_timestamp':
+              queries.push(btree.MerkleBTree.getByHash(link._multihash, p.ipfsStorage)
+                .then((index) => {
+                  p.ipfsMessagesByTimestamp = index;
+                }));
+              break;
+            case 'identities_by_distance':
+              queries.push(btree.MerkleBTree.getByHash(link._multihash, p.ipfsStorage)
+                .then((index) => {
+                  p.ipfsIdentitiesByDistance = index;
+                }));
+              break;
+            case 'identities_by_searchkey':
+              queries.push(btree.MerkleBTree.getByHash(link._multihash, p.ipfsStorage)
+                .then((index) => {
+                  p.ipfsIdentitiesBySearchKey = index;
+                }));
+              break;
+            default:
+              break;
           }
-          q = timeoutPromise(q, 15000);
-          return q.then(() => {
-            p.ipfsIdentitiesBySearchKey = p.ipfsIdentitiesBySearchKey ||
-              new btree.MerkleBTree(p.ipfsStorage, 100);
-            p.ipfsIdentitiesByDistance = p.ipfsIdentitiesByDistance ||
-              new btree.MerkleBTree(p.ipfsStorage, 100);
-            p.ipfsMessagesByDistance = p.ipfsMessagesByDistance ||
-              new btree.MerkleBTree(p.ipfsStorage, 100);
-            p.ipfsMessagesByTimestamp = p.ipfsMessagesByTimestamp ||
-              new btree.MerkleBTree(p.ipfsStorage, 100);
-          });
         });
+        await util.timeoutPromise(Promise.all(queries), 15000);
+      }
+      p.ipfsIdentitiesBySearchKey = p.ipfsIdentitiesBySearchKey ||
+        new btree.MerkleBTree(p.ipfsStorage, 100);
+      p.ipfsIdentitiesByDistance = p.ipfsIdentitiesByDistance ||
+        new btree.MerkleBTree(p.ipfsStorage, 100);
+      p.ipfsMessagesByDistance = p.ipfsMessagesByDistance ||
+        new btree.MerkleBTree(p.ipfsStorage, 100);
+      p.ipfsMessagesByTimestamp = p.ipfsMessagesByTimestamp ||
+        new btree.MerkleBTree(p.ipfsStorage, 100);
     },
   };
 
