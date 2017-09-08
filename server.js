@@ -1,5 +1,4 @@
 /* jshint latedef:nofunc */
-const Promise = require('bluebird');
 const moment = require('moment');
 const fs = require('fs');
 

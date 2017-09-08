@@ -1,4 +1,3 @@
-const Promise = require('bluebird');
 const util = require('./util.js');
 const schema = require('./schema.js');
 

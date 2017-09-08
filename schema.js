@@ -1,8 +1,5 @@
 /* jshint unused:false */
 
-
-const P = require('bluebird');
-
 function addDefaultUniqueIdentifierTypes(db) {
   return db.table('UniqueIdentifierTypes').insert([
     { name: 'email' },
@@ -109,7 +106,7 @@ function init(db) {
     t.primary(['name', 'value']);
   }).catch(catcher));
 
-  return P.all(queries);
+  return Promise.all(queries);
 }
 
 module.exports = { init };
