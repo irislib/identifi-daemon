@@ -521,7 +521,7 @@ module.exports = (knex) => {
       return key;
     },
 
-    addMessageIndexToIpfs() {
+    async addMessageIndexToIpfs() {
       const maxMsgCount = 100000;
       let msgsToIndex = [];
       async function iterate(limit = 10000, initialOffset = 0, initialDistance = 0) {
@@ -559,32 +559,28 @@ module.exports = (knex) => {
       }
 
       console.log('adding msgs to ipfs');
-      return iterate()
-        .then((res) => {
-          console.log('res', res);
-          console.log('adding messages_by_distance index to ipfs');
-          return btree.MerkleBTree.fromSortedList(
-            msgsToIndex.slice(),
-            IPFS_INDEX_WIDTH,
-            p.ipfsStorage,
-          );
-        })
-        .then((index) => {
-          p.ipfsMessagesByDistance = index;
+      const r = await iterate();
+      console.log('res', r);
+      console.log('adding messages_by_distance index to ipfs');
+      p.ipfsMessagesByDistance = await btree.MerkleBTree.fromSortedList(
+        msgsToIndex.slice(),
+        IPFS_INDEX_WIDTH,
+        p.ipfsStorage,
+      );
 
-          // create index of messages sorted by timestamp
-          msgsToIndex.forEach((msg) => {
-            msg.key = msg.key.substr(msg.key.indexOf(':') + 1); // eslint-disable-line no-param-reassign
-          });
-          msgsToIndex = msgsToIndex.sort(sortByKey);
-          console.log('adding messages_by_timestamp index to ipfs');
-          return btree.MerkleBTree.fromSortedList(msgsToIndex, IPFS_INDEX_WIDTH, p.ipfsStorage);
-        })
-        .then((index) => {
-          p.ipfsMessagesByTimestamp = index;
-          // Add message index to IPFS
-          return pub.addIndexRootToIpfs();
-        });
+      // create index of messages sorted by timestamp
+      msgsToIndex.forEach((msg) => {
+        msg.key = msg.key.substr(msg.key.indexOf(':') + 1); // eslint-disable-line no-param-reassign
+      });
+      msgsToIndex = msgsToIndex.sort(sortByKey);
+      console.log('adding messages_by_timestamp index to ipfs');
+      p.ipfsMessagesByTimestamp = await btree.MerkleBTree.fromSortedList(
+        msgsToIndex,
+        IPFS_INDEX_WIDTH,
+        p.ipfsStorage,
+      );
+      // Add message index to IPFS
+      return pub.addIndexRootToIpfs();
     },
 
     async saveMessageFromIpfs(path) {
@@ -606,54 +602,46 @@ module.exports = (knex) => {
       }
     },
 
-    saveMessagesFromIpfsIndex(ipnsName) {
-      console.log('Getting path for name', ipnsName);
-      if (!(p.ipfs && p.ipfs.name)) {
-        console.log('ipfs.name is not available');
-        return;
-      }
-      const getName = timeoutPromise(p.ipfs.name.resolve(ipnsName), 60000);
-      return getName
-        .then((res) => {
-          if (!res) { throw new Error('Ipfs index name was not resolved', ipnsName); }
-          const path = res.Path.replace('/ipfs/', '');
-          console.log('resolved name', path);
-          return timeoutPromise(p.ipfs.object.links(path), 30000);
-        })
-        .then((links) => {
-          if (!links) { throw new Error('Ipfs index was not resolved', ipnsName); }
-          let path;
-          for (let i = 0; i < links.length; i += 1) {
-            if (links[i]._name === 'messages_by_distance') {
-              path = links[i]._multihash;
-            }
+    async saveMessagesFromIpfsIndex(ipnsName) {
+      try {
+        console.log('Getting path for name', ipnsName);
+        if (!(p.ipfs && p.ipfs.name)) {
+          console.log('ipfs.name is not available');
+          return;
+        }
+        const r = await timeoutPromise(p.ipfs.name.resolve(ipnsName), 60000);
+        if (!r) { throw new Error('Ipfs index name was not resolved', ipnsName); }
+        let path = r.Path.replace('/ipfs/', '');
+        console.log('resolved name', path);
+        const links = await timeoutPromise(p.ipfs.object.links(path), 30000);
+        if (!links) { throw new Error('Ipfs index was not resolved', ipnsName); }
+        for (let i = 0; i < links.length; i += 1) {
+          if (links[i]._name === 'messages_by_distance') {
+            path = links[i]._multihash;
+            break;
           }
-          if (!path) {
-            throw new Error('No messages index found at', ipnsName);
+        }
+        if (!path) {
+          throw new Error('No messages index found at', ipnsName);
+        }
+        console.log('Looking up index');
+        const index = await btree.MerkleBTree.getByHash(path, p.ipfsStorage, IPFS_INDEX_WIDTH);
+        const msgs = await index.searchText('', 100000);
+        let q = Promise.resolve();
+        console.log('Processing', msgs.length, 'messages from index');
+        msgs.forEach((entry) => {
+          const msg = { jws: entry.value.jws };
+          if (Message.decode(msg)) {
+            process.stdout.write('.');
+            q = q.then(() => pub.saveMessage(msg, false, false));
           }
-          console.log('Looking up index');
-          return btree.MerkleBTree.getByHash(path, p.ipfsStorage, IPFS_INDEX_WIDTH);
-        })
-        .then(index => index.searchText('', 100000))
-        .then((msgs) => {
-          let q = Promise.resolve();
-          console.log('Processing', msgs.length, 'messages from index');
-          msgs.forEach((entry) => {
-            const msg = { jws: entry.value.jws };
-            if (Message.decode(msg)) {
-              process.stdout.write('.');
-              q = q.then(() => pub.saveMessage(msg, false, false));
-            }
-          });
-          return q;
-        })
-        .then(() => {
-          console.log('Finished saving messages from index', ipnsName);
-          return pub.addDbMessagesToIpfs();
-        })
-        .catch((e) => {
-          console.log('Processing index', ipnsName, 'failed:', e);
         });
+        await q;
+        console.log('Finished saving messages from index', ipnsName);
+        return pub.addDbMessagesToIpfs();
+      } catch (e) {
+        console.log('Processing index', ipnsName, 'failed:', e);
+      }
     },
 
     async saveMessagesFromIpfsIndexes() {
@@ -970,8 +958,7 @@ module.exports = (knex) => {
       return arr;
     },
 
-    mapIdentityAttributes(opts) {
-      let identityId;
+    async mapIdentityAttributes(opts) {
       const options = opts;
       options.viewpoint = options.viewpoint || MY_ID;
       // Find out existing identity_id for the identifier
@@ -984,133 +971,124 @@ module.exports = (knex) => {
           viewpoint_value: options.viewpoint[1],
         })
         .innerJoin('UniqueIdentifierTypes as uidt', 'uidt.name', 'ia.name');
-      let existingId;
 
-      return getExistingId.then((res) => {
-        existingId = res;
-        return knex('IdentityAttributes')
-          // Delete previously saved attributes of the identity_id
-          .where('identity_id', 'in', getExistingId).del()
-          .then(async () => {
-            if (existingId.length) {
-              // Pass on the existing identity_id
-              return existingId;
-            }
-            return knex('IdentityAttributes')
-              // No existing identity_id - return a new one
-              .select(knex.raw(`${SQL_IFNULL}(MAX(identity_id), 0) + 1 AS identity_id`));
+      const r = await getExistingId;
+      let identityId;
+      if (r.length) {
+        identityId = parseInt(r[0].identity_id);
+        // Delete previously saved attributes of the identity_id
+        await knex('IdentityAttributes')
+          .where('identity_id', 'in', getExistingId).del();
+      } else {
+        // No existing identity_id - return a new one
+        const rr = await knex('IdentityAttributes')
+          .select(knex.raw(`${SQL_IFNULL}(MAX(identity_id), 0) + 1 AS identity_id`));
+        identityId = parseInt(rr[0].identity_id);
+      }
+      // First insert the queried identifier with the identity_id
+      await knex('IdentityAttributes').insert({
+        identity_id: identityId,
+        name: options.id[0],
+        value: options.id[1],
+        viewpoint_name: options.viewpoint[0],
+        viewpoint_value: options.viewpoint[1],
+        confirmations: 1,
+        refutations: 0,
+      });
+
+      let last;
+      function generateSubQuery() {
+        return knex
+          .from('Messages as m')
+          .innerJoin('MessageAttributes as attr1', (q) => {
+            q.on('m.hash', '=', 'attr1.message_hash');
           })
-          .then((r) => {
-            identityId = parseInt(r[0].identity_id);
-            // First insert the queried identifier with the identity_id
-            return knex('IdentityAttributes').insert({
-              identity_id: identityId,
-              name: options.id[0],
-              value: options.id[1],
-              viewpoint_name: options.viewpoint[0],
-              viewpoint_value: options.viewpoint[1],
-              confirmations: 1,
-              refutations: 0,
-            });
+          .innerJoin('IdentityAttributes as ia', (q) => {
+            q.on('ia.name', '=', 'attr1.name');
+            q.on('ia.value', '=', 'attr1.value');
+            q.on('ia.identity_id', '=', identityId);
           })
-          .then(() => {
-            let last;
-            function generateSubQuery() {
-              return knex
-                .from('Messages as m')
-                .innerJoin('MessageAttributes as attr1', (q) => {
-                  q.on('m.hash', '=', 'attr1.message_hash');
-                })
-                .innerJoin('IdentityAttributes as ia', (q) => {
-                  q.on('ia.name', '=', 'attr1.name');
-                  q.on('ia.value', '=', 'attr1.value');
-                  q.on('ia.identity_id', '=', identityId);
-                })
-                .innerJoin('MessageAttributes as attr2', (q) => {
-                  q.on('m.hash', '=', 'attr2.message_hash');
-                  q.on('attr2.is_recipient', '=', 'attr1.is_recipient');
-                })
-                .innerJoin('UniqueIdentifierTypes as uidt', 'uidt.name', 'attr1.name')
-                .innerJoin('TrustDistances as td_signer', (q) => {
-                  q.on('td_signer.start_attr_name', '=', knex.raw('?', options.viewpoint[0]));
-                  q.on('td_signer.start_attr_value', '=', knex.raw('?', options.viewpoint[1]));
-                  q.on('td_signer.end_attr_name', '=', knex.raw('?', 'keyID'));
-                  q.on('td_signer.end_attr_value', '=', 'm.signer_keyid');
-                });
-            }
-
-            function generateDeleteSubQuery() {
-              return generateSubQuery()
-                // Select for deletion the related identity attributes that were previously inserted
-                // with a different identity_id
-                .innerJoin('IdentityAttributes as existing', (q) => {
-                  q.on('existing.identity_id', '!=', identityId);
-                  q.on('existing.name', '=', 'attr2.name');
-                  q.on('existing.value', '=', 'attr2.value');
-                  q.on('existing.viewpoint_name', '=', knex.raw('?', options.viewpoint[0]));
-                  q.on('existing.viewpoint_value', '=', knex.raw('?', options.viewpoint[1]));
-                })
-                .innerJoin('UniqueIdentifierTypes as uidt2', 'uidt2.name', 'existing.name')
-                .select('existing.identity_id');
-            }
-
-            function generateInsertSubQuery() {
-              return generateSubQuery()
-                // Select for insertion the related identity attributes that do not already exist
-                // on the identity_id
-                .leftJoin('IdentityAttributes as existing', (q) => {
-                  q.on('existing.identity_id', '=', identityId);
-                  q.on('existing.name', '=', 'attr2.name');
-                  q.on('existing.value', '=', 'attr2.value');
-                  q.on('existing.viewpoint_name', '=', knex.raw('?', options.viewpoint[0]));
-                  q.on('existing.viewpoint_value', '=', knex.raw('?', options.viewpoint[1]));
-                })
-                .whereNull('existing.identity_id')
-                .select(
-                  identityId,
-                  'attr2.name',
-                  'attr2.value',
-                  knex.raw('?', options.viewpoint[0]),
-                  knex.raw('?', options.viewpoint[1]),
-                  knex.raw('SUM(CASE WHEN m.type = \'verify_identity\' THEN 1 ELSE 0 END)'),
-                  knex.raw('SUM(CASE WHEN m.type = \'unverify_identity\' THEN 1 ELSE 0 END)'),
-                )
-                .groupBy('attr2.name', 'attr2.value');
-            }
-
-            function iterateSearch() {
-              return knex('IdentityAttributes').whereIn('identity_id', generateDeleteSubQuery()).del()
-                .then(() => knex('IdentityAttributes').insert(generateInsertSubQuery()))
-                .then((r) => {
-                  if (JSON.stringify(last) !== JSON.stringify(r)) {
-                    last = r;
-                    return iterateSearch();
-                  }
-                });
-            }
-
-            return iterateSearch();
+          .innerJoin('MessageAttributes as attr2', (q) => {
+            q.on('m.hash', '=', 'attr2.message_hash');
+            q.on('attr2.is_recipient', '=', 'attr1.is_recipient');
           })
-          .then(() => {
-            const hasSearchedAttributes = options.searchedAttributes &&
-              options.searchedAttributes.length > 0;
-
-            if (hasSearchedAttributes) {
-              return knex('IdentityAttributes')
-                .select('name', 'value as val', 'confirmations as conf', 'refutations as ref')
-                .where('identity_id', identityId)
-                .whereIn('name', options.searchedAttributes)
-                .orderByRaw('confirmations - refutations DESC');
-            }
-
-            return knex('IdentityAttributes')
-              .select('name', 'value as val', 'confirmations as conf', 'refutations as ref')
-              .where('identity_id', identityId)
-              .orderByRaw('confirmations - refutations DESC');
+          .innerJoin('UniqueIdentifierTypes as uidt', 'uidt.name', 'attr1.name')
+          .innerJoin('TrustDistances as td_signer', (q) => {
+            q.on('td_signer.start_attr_name', '=', knex.raw('?', options.viewpoint[0]));
+            q.on('td_signer.start_attr_value', '=', knex.raw('?', options.viewpoint[1]));
+            q.on('td_signer.end_attr_name', '=', knex.raw('?', 'keyID'));
+            q.on('td_signer.end_attr_value', '=', 'm.signer_keyid');
           });
-      })
-        .then(res => pub.getStats(options.id, { viewpoint: options.viewpoint, maxDistance: 0 })
-          .then(() => res));
+      }
+
+      function generateDeleteSubQuery() {
+        return generateSubQuery()
+          // Select for deletion the related identity attributes that were previously inserted
+          // with a different identity_id
+          .innerJoin('IdentityAttributes as existing', (q) => {
+            q.on('existing.identity_id', '!=', identityId);
+            q.on('existing.name', '=', 'attr2.name');
+            q.on('existing.value', '=', 'attr2.value');
+            q.on('existing.viewpoint_name', '=', knex.raw('?', options.viewpoint[0]));
+            q.on('existing.viewpoint_value', '=', knex.raw('?', options.viewpoint[1]));
+          })
+          .innerJoin('UniqueIdentifierTypes as uidt2', 'uidt2.name', 'existing.name')
+          .select('existing.identity_id');
+      }
+
+      function generateInsertSubQuery() {
+        return generateSubQuery()
+          // Select for insertion the related identity attributes that do not already exist
+          // on the identity_id
+          .leftJoin('IdentityAttributes as existing', (q) => {
+            q.on('existing.identity_id', '=', identityId);
+            q.on('existing.name', '=', 'attr2.name');
+            q.on('existing.value', '=', 'attr2.value');
+            q.on('existing.viewpoint_name', '=', knex.raw('?', options.viewpoint[0]));
+            q.on('existing.viewpoint_value', '=', knex.raw('?', options.viewpoint[1]));
+          })
+          .whereNull('existing.identity_id')
+          .select(
+            identityId,
+            'attr2.name',
+            'attr2.value',
+            knex.raw('?', options.viewpoint[0]),
+            knex.raw('?', options.viewpoint[1]),
+            knex.raw('SUM(CASE WHEN m.type = \'verify_identity\' THEN 1 ELSE 0 END)'),
+            knex.raw('SUM(CASE WHEN m.type = \'unverify_identity\' THEN 1 ELSE 0 END)'),
+          )
+          .groupBy('attr2.name', 'attr2.value');
+      }
+
+      async function iterateSearch() {
+        await knex('IdentityAttributes').whereIn('identity_id', generateDeleteSubQuery()).del();
+        const rr = await knex('IdentityAttributes').insert(generateInsertSubQuery());
+        if (JSON.stringify(last) !== JSON.stringify(rr)) {
+          last = rr;
+          return iterateSearch();
+        }
+      }
+
+      await iterateSearch();
+
+      const hasSearchedAttributes = options.searchedAttributes &&
+        options.searchedAttributes.length > 0;
+
+      if (hasSearchedAttributes) {
+        return knex('IdentityAttributes')
+          .select('name', 'value as val', 'confirmations as conf', 'refutations as ref')
+          .where('identity_id', identityId)
+          .whereIn('name', options.searchedAttributes)
+          .orderByRaw('confirmations - refutations DESC');
+      }
+
+      const ia = await knex('IdentityAttributes')
+        .select('name', 'value as val', 'confirmations as conf', 'refutations as ref')
+        .where('identity_id', identityId)
+        .orderByRaw('confirmations - refutations DESC');
+
+      await pub.getStats(options.id, { viewpoint: options.viewpoint, maxDistance: 0 });
+      return ia;
     },
 
     async getTrustDistance(from, to) {
@@ -1362,7 +1340,7 @@ module.exports = (knex) => {
       return parseInt(r[0].count);
     },
 
-    getStats(id, options) {
+    async getStats(id, options) {
       let sentSql = '';
       sentSql += 'SUM(CASE WHEN m.rating > (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS sent_positive, ';
       sentSql += 'SUM(CASE WHEN m.rating = (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS sent_neutral, ';
@@ -1375,7 +1353,7 @@ module.exports = (knex) => {
         dbFalse = 0;
       }
 
-      let sent = knex('Messages as m')
+      const sent = knex('Messages as m')
         .innerJoin('MessageAttributes as author', (q) => {
           q.on('author.message_hash', '=', 'm.hash');
           q.on('author.is_recipient', '=', knex.raw('?', dbFalse));
@@ -1389,7 +1367,7 @@ module.exports = (knex) => {
       receivedSql += 'SUM(CASE WHEN m.rating < (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS received_negative, ';
       receivedSql += 'MIN(m.timestamp) AS first_seen ';
 
-      let received = knex('Messages as m')
+      const received = knex('Messages as m')
         .innerJoin('MessageAttributes as recipient', (q) => {
           q.on('recipient.message_hash', '=', 'm.hash');
           q.on('recipient.is_recipient', '=', knex.raw('?', dbTrue));
@@ -1409,50 +1387,7 @@ module.exports = (knex) => {
           })
           .select('identity_id');
 
-        identityIdQuery.then((res) => {
-          if (res.length) {
-            identityId = res[0].identity_id;
-
-            sent.select('ia.identity_id as identity_id', 'm.hash');
-            sent.innerJoin('IdentityAttributes as ia', (q) => {
-              q.on('author.name', '=', 'ia.name');
-              q.on('author.value', '=', 'ia.value');
-            });
-            sent.where('ia.identity_id', identityId);
-            sent.where('m.priority', '>', 0);
-            sent.groupBy('m.hash', 'ia.identity_id');
-
-            const sentSubquery = knex.raw(sent).wrap('(', ') s');
-            sent = knex('Messages as m')
-              .select(knex.raw(sentSql))
-              .innerJoin(sentSubquery, 'm.hash', 's.hash')
-              .groupBy('s.identity_id');
-
-            received.select('ia.identity_id as identity_id', 'm.hash as hash');
-            received.innerJoin('IdentityAttributes as ia', (q) => {
-              q.on('recipient.name', '=', 'ia.name');
-              q.on('recipient.value', '=', 'ia.value');
-            });
-            received.where('ia.identity_id', identityId);
-            received.groupBy('m.hash', 'ia.identity_id');
-
-            received.innerJoin('TrustDistances as td', (q) => {
-              q.on('td.start_attr_name', '=', knex.raw('?', options.viewpoint[0]));
-              q.andOn('td.start_attr_value', '=', knex.raw('?', options.viewpoint[1]));
-              q.andOn('td.end_attr_name', '=', 'ia.name');
-              q.andOn('td.end_attr_value', '=', 'ia.value');
-              if (options.maxDistance > 0) {
-                q.andOn('td.distance', '<=', options.maxDistance);
-              }
-            });
-
-            const receivedSubquery = knex.raw(received).wrap('(', ') s');
-            received = knex('Messages as m')
-              .select(knex.raw(receivedSql))
-              .innerJoin(receivedSubquery, 'm.hash', 's.hash')
-              .groupBy('s.identity_id');
-          }
-        });
+        await identityIdQuery;
       }
       return identityIdQuery.then(() => {
         if (!identityId) {
