@@ -1116,7 +1116,7 @@ module.exports = (knex) => {
       2. build a web of trust consisting of all kinds of unique attributes, sourcing from messages
           signed by keyIDs in our web of trust
     */
-    generateWebOfTrustIndex(id, maxDepth, maintain, trustedKeyID) {
+    async generateWebOfTrustIndex(id, maxDepth, maintain, trustedKeyID) {
       if (id[0] !== 'keyID' && !trustedKeyID) {
         throw new Error('Please specify a trusted keyID');
       }
@@ -1192,64 +1192,53 @@ module.exports = (knex) => {
         return trx('TrustDistances').insert(subQuery).return();
       }
 
-      let q;
       let q2;
       if (maintain) {
-        q = this.addTrustIndexedAttribute(id, maxDepth);
-      } else {
-        q = Promise.resolve();
+        await this.addTrustIndexedAttribute(id, maxDepth);
       }
-      q = q.then(() => pub.mapIdentityAttributes({ id, viewpoint: id }));
+      await pub.mapIdentityAttributes({ id, viewpoint: id });
       let i;
-      return q.then(() => knex.transaction(trx => trx('TrustDistances')
-        .where({ start_attr_name: id[0], start_attr_value: id[1] }).del()
-        .then(() =>
-          trx('TrustDistances')
-            .where({
+      return knex.transaction(async (trx) => {
+        await trx('TrustDistances').where({ start_attr_name: id[0], start_attr_value: id[1] }).del();
+        await trx('TrustDistances')
+          .where({
+            start_attr_name: trustedKey[0],
+            start_attr_value: trustedKey[1],
+          }).del();
+        // Add trust distance to self = 0
+        await trx('TrustDistances')
+          .insert({
+            start_attr_name: id[0],
+            start_attr_value: id[1],
+            end_attr_name: id[0],
+            end_attr_value: id[1],
+            distance: 0,
+          });
+        if (trustedKey[0] !== id[0] && trustedKey[1] !== id[1]) {
+          await trx('TrustDistances')
+            .insert({
               start_attr_name: trustedKey[0],
               start_attr_value: trustedKey[1],
-            }).del())
-        .then(() =>
-          // Add trust distance to self = 0
-          trx('TrustDistances')
-            .insert({
-              start_attr_name: id[0],
-              start_attr_value: id[1],
-              end_attr_name: id[0],
-              end_attr_value: id[1],
+              end_attr_name: trustedKey[0],
+              end_attr_value: trustedKey[1],
               distance: 0,
-            })
-            .then(() => {
-              if (trustedKey[0] !== id[0] && trustedKey[1] !== id[1]) {
-                return trx('TrustDistances')
-                  .insert({
-                    start_attr_name: trustedKey[0],
-                    start_attr_value: trustedKey[1],
-                    end_attr_name: trustedKey[0],
-                    end_attr_value: trustedKey[1],
-                    distance: 0,
-                  })
-                  .return();
-              }
-            }))
-        .then(() => {
-          q2 = Promise.resolve();
-          for (i = 1; i <= maxDepth; i += 1) {
-            q2.then(buildQuery(true, trx, i));
-          }
-          return q2;
-        })
-        .then(() => {
-          q2 = Promise.resolve();
-          for (i = 1; i <= maxDepth; i += 1) {
-            q2.then(buildQuery(false, trx, i));
-          }
-          return q2;
-        })
-        .then(() => trx('TrustDistances')
+            });
+        }
+        q2 = Promise.resolve();
+        for (i = 1; i <= maxDepth; i += 1) {
+          q2.then(buildQuery(true, trx, i));
+        }
+        await q2;
+        q2 = Promise.resolve();
+        for (i = 1; i <= maxDepth; i += 1) {
+          q2.then(buildQuery(false, trx, i));
+        }
+        await q2;
+        const res = await trx('TrustDistances')
           .where({ start_attr_name: id[0], start_attr_value: id[1] })
-          .count('* as wot_size'))
-        .then(res => parseInt(res[0].wot_size))));
+          .count('* as wot_size');
+        return parseInt(res[0].wot_size);
+      });
     },
 
     async generateIdentityIndex(viewpoint) { // possible param: trustedkeyid
@@ -1386,52 +1375,46 @@ module.exports = (knex) => {
             viewpoint_value: options.viewpoint[1],
           })
           .select('identity_id');
-
-        await identityIdQuery;
       }
-      return identityIdQuery.then(() => {
-        if (!identityId) {
-          sent.where({ 'author.name': id[0], 'author.value': id[1] });
-          sent.groupBy('author.name', 'author.value');
-          sent.select(knex.raw(sentSql));
-          received.where({ 'recipient.name': id[0], 'recipient.value': id[1] });
-          received.groupBy('recipient.name', 'recipient.value');
-          received.select(knex.raw(receivedSql));
+      await identityIdQuery;
+      if (!identityId) {
+        sent.where({ 'author.name': id[0], 'author.value': id[1] });
+        sent.groupBy('author.name', 'author.value');
+        sent.select(knex.raw(sentSql));
+        received.where({ 'recipient.name': id[0], 'recipient.value': id[1] });
+        received.groupBy('recipient.name', 'recipient.value');
+        received.select(knex.raw(receivedSql));
+      }
+
+      const response = await Promise.all([sent, received]);
+      const res = Object.assign({}, response[0][0], response[1][0]);
+      Object.keys(res).forEach((key) => {
+        if (key.indexOf('sent_') === 0 || key.indexOf('received_') === 0) {
+          res[key] = parseInt(res[key]);
         }
-
-        return Promise.all([sent, received]).then((response) => {
-          const res = Object.assign({}, response[0][0], response[1][0]);
-          Object.keys(res).forEach((key) => {
-            if (key.indexOf('sent_') === 0 || key.indexOf('received_') === 0) {
-              res[key] = parseInt(res[key]);
-            }
-          });
-
-          if (options.viewpoint && !options.maxDistance) {
-            const identityIds = [];
-            if (identityId) {
-              identityIds.push(identityId);
-            }
-            knex('IdentityStats')
-              .where('identity_id', 'in', identityIds)
-              .delete()
-              .then(() => {
-                if (identityId) {
-                  knex('IdentityStats')
-                    .insert({
-                      identity_id: identityId,
-                      viewpoint_name: options.viewpoint[0],
-                      viewpoint_value: options.viewpoint[1],
-                      positive_score: res.received_positive || 0,
-                      negative_score: res.received_negative || 0,
-                    }).return();
-                }
-              });
-          }
-
-          return Promise.resolve(res);
-        });
       });
+
+      if (options.viewpoint && !options.maxDistance) {
+        const identityIds = [];
+        if (identityId) {
+          identityIds.push(identityId);
+        }
+        await knex('IdentityStats')
+          .where('identity_id', 'in', identityIds)
+          .delete();
+        if (identityId) {
+          knex('IdentityStats')
+            .insert({
+              identity_id: identityId,
+              viewpoint_name: options.viewpoint[0],
+              viewpoint_value: options.viewpoint[1],
+              positive_score: res.received_positive || 0,
+              negative_score: res.received_negative || 0,
+            }).return();
+        }
+      }
+
+      return res;
     },
 
     async checkDefaultTrustList() {
@@ -1676,9 +1659,9 @@ module.exports = (knex) => {
         }
       }
 
-      function getAndAddHashes(author, recipient) {
-        return getHashesQuery(author, recipient)
-          .then(addHashes);
+      async function getAndAddHashes(author, recipient) {
+        const r = await getHashesQuery(author, recipient);
+        return addHashes(r);
       }
 
       function addInnerJoinMessageRecipient(query, recipient, n) {
