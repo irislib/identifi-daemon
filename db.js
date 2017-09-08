@@ -60,50 +60,46 @@ module.exports = (knex) => {
       const isPublic = typeof message.signedData.public === 'undefined' ? true : message.signedData.public;
       await p.deletePreviousMessage(message);
       const priority = await p.getPriority(message);
-      await knex.transaction(trx => trx('Messages').insert({
-        hash: message.hash,
-        ipfs_hash: message.ipfs_hash,
-        jws: message.jws,
-        timestamp: message.signedData.timestamp,
-        type: message.signedData.type || 'rating',
-        rating: message.signedData.rating || 0,
-        max_rating: message.signedData.maxRating || 0,
-        min_rating: message.signedData.minRating || 0,
-        public: isPublic,
-        priority,
-        is_latest: p.isLatest(message),
-        signer_keyid: message.signerKeyHash,
-        saved_at: new Date().toISOString(),
-      })
-        .then(() => {
-          let i;
-          const queries = [];
-          for (i = 0; i < message.signedData.author.length; i += 1) {
-            queries.push(trx('MessageAttributes').insert({
-              message_hash: message.hash,
-              name: message.signedData.author[i][0],
-              value: message.signedData.author[i][1],
-              is_recipient: false,
-            }));
-          }
-          for (i = 0; i < message.signedData.recipient.length; i += 1) {
-            queries.push(trx('MessageAttributes').insert({
-              message_hash: message.hash,
-              name: message.signedData.recipient[i][0],
-              value: message.signedData.recipient[i][1],
-              is_recipient: true,
-            }));
-          }
-          return Promise.all(queries);
-        }))
-        .then(() => {
-          if (updateTrustIndexes) {
-            return p.updateWotIndexesByMessage(message)
-              .then(() => p.updateIdentityIndexesByMessage(message)
-                .then(res => res));
-          }
+      await knex.transaction(async (trx) => {
+        await trx('Messages').insert({
+          hash: message.hash,
+          ipfs_hash: message.ipfs_hash,
+          jws: message.jws,
+          timestamp: message.signedData.timestamp,
+          type: message.signedData.type || 'rating',
+          rating: message.signedData.rating || 0,
+          max_rating: message.signedData.maxRating || 0,
+          min_rating: message.signedData.minRating || 0,
+          public: isPublic,
+          priority,
+          is_latest: p.isLatest(message),
+          signer_keyid: message.signerKeyHash,
+          saved_at: new Date().toISOString(),
         });
-
+        let i;
+        const queries = [];
+        for (i = 0; i < message.signedData.author.length; i += 1) {
+          queries.push(trx('MessageAttributes').insert({
+            message_hash: message.hash,
+            name: message.signedData.author[i][0],
+            value: message.signedData.author[i][1],
+            is_recipient: false,
+          }));
+        }
+        for (i = 0; i < message.signedData.recipient.length; i += 1) {
+          queries.push(trx('MessageAttributes').insert({
+            message_hash: message.hash,
+            name: message.signedData.recipient[i][0],
+            value: message.signedData.recipient[i][1],
+            is_recipient: true,
+          }));
+        }
+        return Promise.all(queries);
+      });
+      if (updateTrustIndexes) {
+        await p.updateWotIndexesByMessage(message);
+        await p.updateIdentityIndexesByMessage(message);
+      }
       return message;
     },
 
@@ -286,9 +282,8 @@ module.exports = (knex) => {
         res = await Promise.resolve(res);
         if (p.ipfs.name && res._json.multihash) {
           console.log('publishing index', res._json.multihash);
-          p.ipfs.name.publish(res._json.multihash, {}).then((r) => {
-            console.log('published index', r);
-          });
+          const r = await p.ipfs.name.publish(res._json.multihash, {})
+          console.log('published index', r);
         }
         return indexRoot;
       } catch (e) {
