@@ -321,7 +321,7 @@ describe 'API', ->
         r.then (res) ->
           # for m in res
           #  console.log JSON.stringify(message.decode(m).signedData, null, '  ')
-          res.length.should.equal 7 # umm, this should be 8, including msg from myKey, but ignore for now
+          res.length.should.equal 8
       it 'should filter messages by viewpoint, max_distance 2', ->
         r = identifi.request
           apiMethod: 'messages'
@@ -330,7 +330,7 @@ describe 'API', ->
             viewpoint_value: 'alice@example.com'
             max_distance: 2
         r.then (res) ->
-          res.length.should.equal 9
+          res.length.should.equal 10
       it 'should filter messages by timestamp_lte', ->
         r = identifi.request
           apiMethod: 'messages'
@@ -420,7 +420,7 @@ describe 'API', ->
           qs:
             attr_name: 'email'
         r.then (res) ->
-          res.length.should.equal 3
+          res.length.should.equal 4
       it 'should filter by search query', -> # TODO: fix?
         r = identifi.request
           apiMethod: 'identities'
@@ -542,4 +542,4 @@ describe 'API', ->
             viewpoint_name: 'email'
             viewpoint_value: 'alice@example.com'
         r.then (res) ->
-          res.length.should.equal 5
+          res.length.should.equal 6

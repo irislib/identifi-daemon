@@ -127,7 +127,7 @@ process.on('uncaughtException', (e) => {
 let knex;
 let db;
 
-function handleMsgEvent(data) {
+async function handleMsgEvent(data) {
   const m = data;
   try {
     Message.verify(m);
@@ -135,16 +135,15 @@ function handleMsgEvent(data) {
     log('failed to verify msg');
     return;
   }
-  db.messageExists(m.hash)
-    .then((exists) => {
-      if (!exists) {
-        db.saveMessage(m).return()
-          .catch((e) => {
-            console.log(e.stack);
-            log('error handling msg', m.hash, e);
-          });
-      }
-    });
+  const exists = await db.messageExists(m.hash);
+  if (!exists) {
+    try {
+      await db.saveMessage(m);
+    } catch (e) {
+      console.log(e.stack);
+      log('error handling msg', m.hash, e);
+    }
+  }
 }
 
 function ipfsMsgHandler(msg) {

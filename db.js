@@ -923,9 +923,26 @@ module.exports = (knex) => {
       return arr;
     },
 
-    async mapIdentityAttributes(opts) {
+    async identifierExists(id) {
+      const exists = await knex.from('MessageAttributes')
+        .where('name', id[0])
+        .andWhere('value', id[1])
+        .limit(1);
+      return !!exists.length;
+    },
+
+    async mapIdentityAttributes(opts, forceAdd = false) {
       const options = opts;
       options.viewpoint = options.viewpoint || MY_ID;
+
+      if (!forceAdd) {
+        // First see if the identifier exists in any message
+        const exists = await pub.identifierExists(options.id);
+        if (!exists) {
+          return [];
+        }
+      }
+
       // Find out existing identity_id for the identifier
       const getExistingId = knex.from('IdentityAttributes as ia')
         .select('identity_id')
@@ -1208,6 +1225,8 @@ module.exports = (knex) => {
 
     async generateIdentityIndex(viewpoint) { // possible param: trustedkeyid
       console.log('Generating identity index (SQL)');
+
+      await pub.mapIdentityAttributes({ id: viewpoint, viewpoint }, true);
       async function mapNextIdentifier() {
         const r = await knex('TrustDistances')
           .leftJoin('IdentityAttributes', (q) => {
@@ -1227,7 +1246,7 @@ module.exports = (knex) => {
         if (r.length) {
           const id = [r[0].end_attr_name, r[0].end_attr_value];
           process.stdout.write('*');
-          await pub.mapIdentityAttributes({ id, viewpoint });
+          await pub.mapIdentityAttributes({ id, viewpoint }, true);
           return mapNextIdentifier();
         }
       }
