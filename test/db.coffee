@@ -4,6 +4,7 @@
 process.env.NODE_ENV = 'test'
 config = require('config')
 fs = require('fs')
+IdentifiDB = require('../db.js')
 P = require('bluebird')
 chai = require('chai')
 chaiAsPromised = require('chai-as-promised')
@@ -39,7 +40,7 @@ describe 'Database', ->
     knex = require('knex')(config.get('db'))
     resetPostgres(knex)
     .then ->
-      db = require('../db.js')(knex)
+      db = new IdentifiDB(knex)
       db.init(config)
   after ->
     cleanup()

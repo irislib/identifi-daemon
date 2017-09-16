@@ -29,16 +29,17 @@
     "reputation"
   ],
   "dependencies": {
-    "body-parser": "^1.17.2",
+    "async": "^2.5.0",
+    "body-parser": "^1.18.1",
     "config": "^1.26.2",
     "daemonize2": "^0.4.2",
     "express": "^4.15.4",
     "express-jwt": "^5.3.0",
     "express-session": "^1.15.5",
     "identifi-lib": "0.0.21",
-    "ipfs-api": "^14.3.2",
-    "ipfs-block": "git+https://github.com/ipfs/js-ipfs-block.git#1a6a82041825da4c842ac9023af603190b2306e5",
-    "ipld-dag-pb": "^0.11.0",
+    "ipfs": "^0.26.0",
+    "ipfs-api": "^14.3.5",
+    "ipld-dag-pb": "^0.11.2",
     "jws": "^3.1.4",
     "knex": "^0.13.0",
     "merkle-btree": "^1.0.18",
@@ -47,7 +48,6 @@
     "pg": "^7.3.0"
   },
   "optionalDependencies": {
-    "ipfs": "^0.25.4",
     "passport-facebook": "^2.1.1",
     "passport-google-oauth2": "^0.1.6",
     "passport-persona": "^0.2.1",
@@ -59,10 +59,10 @@
     "chai": "^4.1.2",
     "chai-as-promised": "7.1.1",
     "coffee-script": "^1.12.7",
-    "eslint": "^4.6.1",
+    "eslint": "^4.7.0",
     "eslint-config-airbnb-base": "^12.0.0",
     "eslint-plugin-import": "^2.7.0",
-    "mocha": "^3.5.0",
+    "mocha": "^3.5.3",
     "npm-watch": "^0.2.0",
     "request-promise": "^4.2.1",
     "sqlite3": "^3.1.11"

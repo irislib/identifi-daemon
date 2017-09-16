@@ -1,35 +1,36 @@
 /* jshint latedef:nofunc */
 const fs = require('fs');
-
 const express = require('express');
 const session = require('express-session');
+const jwt = require('express-jwt');
+const osHomedir = require('os-homedir');
+const path = require('path');
+const bodyParser = require('body-parser');
+const identifi = require('identifi-lib');
+const keyutil = require('identifi-lib/keyutil');
+const passport = require('passport');
+const config = require('config');
+const http = require('http');
+const ipfsAPI = require('ipfs-api');
+const knexLib = require('knex');
+const crypto = require('crypto');
+
+const IdentifiDB = require('./db');
 
 const app = express();
-const server = require('http').Server(app);
-const bodyParser = require('body-parser');
-
-const identifi = require('identifi-lib');
+const server = http.Server(app);
 
 const Message = identifi.message;
 const identifiClient = identifi.client;
 const pkg = require('./package.json');
 
-const osHomedir = require('os-homedir');
-const path = require('path');
-
-const keyutil = require('identifi-lib/keyutil');
-
 const datadir = process.env.IDENTIFI_DATADIR || (`${osHomedir()}/.identifi`);
 const myKey = keyutil.getDefault(datadir);
 
-const jwt = require('express-jwt');
-
 const authRequired = jwt({ secret: Buffer.from(myKey.public.pem) });
 const authOptional = jwt({ secret: Buffer.from(myKey.public.pem), credentialsRequired: false });
-const passport = require('passport');
 
 process.env.NODE_CONFIG_DIR = `${__dirname}/config`;
-const config = require('config');
 
 if (process.env.NODE_ENV !== 'test') {
   // Extend default config from datadir/config.json and write the result back to it
@@ -59,8 +60,6 @@ function log(m) {
   console.log(msg);
 }
 
-const ipfsAPI = require('ipfs-api');
-
 let ipfs = ipfsAPI(config.get('ipfsHost'), config.get('ipfsPort').toString());
 const getIpfs = ipfs.id()
   .then((res) => {
@@ -70,48 +69,11 @@ const getIpfs = ipfs.id()
   })
   .catch(() => {
     log('No local IPFS API found, starting embedded IPFS node');
-    function loadIpfs() {
-      ipfs.load((err) => {
-        if (err) { throw err; }
-        console.log('IPFS repo was loaded');
-        if (process.env.NODE_ENV === 'test') {
-          // Do not connect to peers
-          return;
-        }
-        ipfs.goOnline((err2) => {
-          if (err2) { throw err2; }
-          // We have to do this manually as of ipfs 0.20.3
-          ipfs.bootstrap.list((err3, res) => {
-            if (err3) { return; }
-            let i;
-            for (i = 0; i < res.length; i += 1) {
-              console.log('connecting to peer', res[i]);
-              ipfs.swarm.connect(res[i])
-                .catch(log);
-            }
-          });
-        });
-      });
-    }
-
     try {
       const IpfsLib = require('ipfs');
       ipfs = new IpfsLib();
-
-      ipfs._repo.version.exists((err, exists) => {
-        if (err) { throw err; }
-        if (exists) {
-          loadIpfs();
-        } else {
-          ipfs.init({ emptyRepo: true, bits: 2048 }, (err2) => {
-            if (err2) { throw err2; }
-            log('IPFS repo was initialized');
-            loadIpfs();
-          });
-        }
-      });
     } catch (e) {
-      log('instantiating ipfs node failed:', e);
+      log(`instantiating ipfs node failed: ${e}`);
       ipfs = null;
     }
     return ipfs;
@@ -123,8 +85,11 @@ process.on('uncaughtException', (e) => {
   log(e);
 });
 
+process.on('unhandledRejection', (reason, p) => {
+  console.log('Unhandled Rejection at: Promise', p, 'reason:', reason);
+});
+
 // Init DB
-let knex;
 let db;
 
 async function handleMsgEvent(data) {
@@ -154,8 +119,8 @@ function ipfsMsgHandler(msg) {
 
 try {
   const dbConf = config.get('db');
-  knex = require('knex')(dbConf);
-  db = require('./db.js')(knex);
+  const knex = knexLib(dbConf);
+  db = new IdentifiDB(knex);
   server.ready = getIpfs
     .then(newIpfs => db.init(config, newIpfs))
     .then(() => {
@@ -169,7 +134,7 @@ try {
 }
 
 app.use(session({
-  secret: require('crypto').randomBytes(16).toString('base64'),
+  secret: crypto.randomBytes(16).toString('base64'),
   resave: false,
   saveUninitialized: true,
   cookie: { secure: false },
