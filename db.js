@@ -1,4 +1,6 @@
-const util = require('./util.js');
+import util from './util';
+import ipfsUtils from './ipfs_utils';
+
 const schema = require('./schema.js');
 
 const crypto = require('crypto');
@@ -103,20 +105,6 @@ module.exports = (knex) => {
       return message;
     },
 
-    async keepAddingNewMessagesToIpfsIndex() {
-      await pub.addNewMessagesToIpfsIndex();
-      return new Promise(((resolve) => {
-        setTimeout(() => {
-          resolve(pub.keepAddingNewMessagesToIpfsIndex());
-        }, 10000);
-      }));
-    },
-
-    async addIndexesToIpfs() {
-      await pub.addMessageIndexToIpfs();
-      return pub.addIdentityIndexToIpfs();
-    },
-
     async addNewMessagesToIpfsIndex() {
       try {
         const messages = await pub.getMessages({
@@ -153,9 +141,9 @@ module.exports = (knex) => {
             q = q.then(() => pub.addMessageToIpfsIndex(message));
           });
           const r = await util.timeoutPromise(q.return(messages.length), 200000);
-          return typeof r === 'undefined' ? pub.addIndexesToIpfs() : r;
+          return typeof r === 'undefined' ? ipfsUtils.addIndexesToIpfs() : r;
         }
-        await pub.addIndexesToIpfs();
+        await ipfsUtils.addIndexesToIpfs();
         ipfsIdentityIndexKeysToRemove = {};
         if (messages.length) {
           console.log('adding index root to ipfs');
@@ -1825,7 +1813,7 @@ module.exports = (knex) => {
       if (process.env.NODE_ENV !== 'test') {
         pub.saveMessagesFromIpfsIndexes(); // non-blocking
       }
-      pub.keepAddingNewMessagesToIpfsIndex();
+      ipfsUtils.keepAddingNewMessagesToIpfsIndex();
     }
   };
 
