@@ -21,7 +21,6 @@ let config;
 let SQL_IFNULL = 'IFNULL';
 
 module.exports = (knex) => {
-  let p; // Private methods
   let lastIpfsIndexedMessageSavedAt = (new Date()).toISOString();
   let ipfsIdentityIndexKeysToRemove = {};
 
@@ -34,7 +33,7 @@ module.exports = (knex) => {
       }
       await this.ensureFreeSpace();
       // Unobtrusively store msg to ipfs
-      if ((p.ipfs && !message.ipfs_hash) && addToIpfs) {
+      if ((pub.ipfs && !message.ipfs_hash) && addToIpfs) {
         const res = await pub.addMessageToIpfs(message);
         message.ipfs_hash = res[0].hash;
       }
@@ -60,8 +59,8 @@ module.exports = (knex) => {
           ipfsIdentityIndexKeysToRemove[message.hash].concat(recipientKeys);
       }
       const isPublic = typeof message.signedData.public === 'undefined' ? true : message.signedData.public;
-      await p.deletePreviousMessage(message);
-      const priority = await p.getPriority(message);
+      await pub.deletePreviousMessage(message);
+      const priority = await pub.getPriority(message);
       await knex.transaction(async (trx) => {
         await trx('Messages').insert({
           hash: message.hash,
@@ -74,7 +73,7 @@ module.exports = (knex) => {
           min_rating: message.signedData.minRating || 0,
           public: isPublic,
           priority,
-          is_latest: p.isLatest(message),
+          is_latest: pub.isLatest(message),
           signer_keyid: message.signerKeyHash,
           saved_at: new Date().toISOString(),
         });
@@ -99,8 +98,8 @@ module.exports = (knex) => {
         return Promise.all(queries);
       });
       if (updateTrustIndexes) {
-        await p.updateWotIndexesByMessage(message);
-        await p.updateIdentityIndexesByMessage(message);
+        await pub.updateWotIndexesByMessage(message);
+        await pub.updateIdentityIndexesByMessage(message);
       }
       return message;
     },
@@ -125,8 +124,8 @@ module.exports = (knex) => {
           Object.keys(ipfsIdentityIndexKeysToRemove).forEach((msg) => {
             ipfsIdentityIndexKeysToRemove[msg].forEach((key) => {
               q.then(() => {
-                const q2 = p.ipfsIdentitiesByDistance.delete(key);
-                const q3 = p.ipfsIdentitiesBySearchKey.delete(key.substr(key.indexOf(':') + 1));
+                const q2 = pub.ipfsIdentitiesByDistance.delete(key);
+                const q3 = pub.ipfsIdentitiesBySearchKey.delete(key.substr(key.indexOf(':') + 1));
                 return util.timeoutPromise(Promise.all([q2, q3]), 30000);
               });
               delete ipfsIdentityIndexKeysToRemove[msg];
@@ -170,8 +169,8 @@ module.exports = (knex) => {
       try { // TODO: move these try/catches to calling function
         const message = msg;
         const msgIndexKey = pub.getMsgIndexKey(message); // TODO: should have distance
-        await p.ipfsMessagesByDistance.put(msgIndexKey, message);
-        await p.ipfsMessagesByTimestamp.put(msgIndexKey.substr(msgIndexKey.indexOf(':') + 1), message);
+        await pub.ipfsMessagesByDistance.put(msgIndexKey, message);
+        await pub.ipfsMessagesByTimestamp.put(msgIndexKey.substr(msgIndexKey.indexOf(':') + 1), message);
         const authorAttrs = await pub.getIdentityAttributesByAuthorOrRecipient(message, true);
         await pub.addIdentityToIpfsIndex(authorAttrs);
 
@@ -192,7 +191,7 @@ module.exports = (knex) => {
     },
 
     addMessageToIpfs(message) {
-      return p.ipfs.files.add(Buffer.from(message.jws, 'utf8'));
+      return pub.ipfs.files.add(Buffer.from(message.jws, 'utf8'));
     },
 
     async addDbMessagesToIpfs() {
@@ -200,12 +199,12 @@ module.exports = (knex) => {
       async function getReindexQuery() {
         const msgs = {};
         let r = await knex('Messages').whereNull('ipfs_hash').select('jws', 'hash').limit(100);
-        if (r.length && p.ipfs) {
+        if (r.length && pub.ipfs) {
           r.forEach((msg) => {
             msgs[msg.hash] = Buffer.from(msg.jws, 'utf8');
           });
           try {
-            r = await p.ipfs.files.add(Object.values(msgs));
+            r = await pub.ipfs.files.add(Object.values(msgs));
           } catch (e) {
             console.log('adding to ipfs failed:', e);
           }
@@ -241,12 +240,12 @@ module.exports = (knex) => {
         } else {
           attrs = [];
         }
-        let res = await p.ipfs.files.add([
+        let res = await pub.ipfs.files.add([
           { path: 'info', content: Buffer.from(JSON.stringify({ keyID: MY_ID[1], attrs })) },
-          { path: 'messages_by_distance', content: Buffer.from(p.ipfsMessagesByDistance.rootNode.serialize()) },
-          { path: 'messages_by_timestamp', content: Buffer.from(p.ipfsMessagesByTimestamp.rootNode.serialize()) },
-          { path: 'identities_by_searchkey', content: Buffer.from(p.ipfsIdentitiesBySearchKey.rootNode.serialize()) },
-          { path: 'identities_by_distance', content: Buffer.from(p.ipfsIdentitiesByDistance.rootNode.serialize()) },
+          { path: 'messages_by_distance', content: Buffer.from(pub.ipfsMessagesByDistance.rootNode.serialize()) },
+          { path: 'messages_by_timestamp', content: Buffer.from(pub.ipfsMessagesByTimestamp.rootNode.serialize()) },
+          { path: 'identities_by_searchkey', content: Buffer.from(pub.ipfsIdentitiesBySearchKey.rootNode.serialize()) },
+          { path: 'identities_by_distance', content: Buffer.from(pub.ipfsIdentitiesByDistance.rootNode.serialize()) },
         ]);
         const links = [];
         for (let i = 0; i < res.length; i += 1) {
@@ -257,7 +256,7 @@ module.exports = (knex) => {
             if (err) {
               reject(err);
             }
-            resolve(p.ipfs.object.put(dag));
+            resolve(pub.ipfs.object.put(dag));
           });
         }));
         if (res._json.multihash) {
@@ -268,9 +267,9 @@ module.exports = (knex) => {
             .return(res);
         }
         res = await Promise.resolve(res);
-        if (p.ipfs.name && res._json.multihash) {
+        if (pub.ipfs.name && res._json.multihash) {
           console.log('publishing index', res._json.multihash);
-          const r = await p.ipfs.name.publish(res._json.multihash, {});
+          const r = await pub.ipfs.name.publish(res._json.multihash, {});
           console.log('published index', r);
         }
         return indexRoot;
@@ -339,9 +338,9 @@ module.exports = (knex) => {
         });
       });
       try {
-        if (msgs.length && p.ipfsStorage) {
+        if (msgs.length && pub.ipfsStorage) {
           const receivedIndex = await btree.MerkleBTree
-            .fromSortedList(msgs, IPFS_INDEX_WIDTH, p.ipfsStorage);
+            .fromSortedList(msgs, IPFS_INDEX_WIDTH, pub.ipfsStorage);
           identityProfile.received = receivedIndex.rootNode.hash;
         }
         const sent = await pub.getMessages({
@@ -359,13 +358,13 @@ module.exports = (knex) => {
             targetHash: null,
           });
         });
-        if (msgs.length && p.ipfsStorage) {
+        if (msgs.length && pub.ipfsStorage) {
           const sentIndex = await btree.MerkleBTree
-            .fromSortedList(msgs, IPFS_INDEX_WIDTH, p.ipfsStorage);
+            .fromSortedList(msgs, IPFS_INDEX_WIDTH, pub.ipfsStorage);
           identityProfile.sent = sentIndex.rootNode.hash;
         }
       } catch (e) {
-        console.log('p.ipfs', p.ipfs);
+        console.log('pub.ipfs', pub.ipfs);
         console.log('adding', attrs, 'failed:', e);
       }
       return identityProfile;
@@ -385,7 +384,7 @@ module.exports = (knex) => {
     async addIdentityToIpfsIndex(attrs) {
       const ip = await pub.getIdentityProfile(attrs);
       console.log('adding identityprofile to ipfs', ip);
-      const r = await p.ipfs.files.add(Buffer.from(JSON.stringify(ip), 'utf8'));
+      const r = await pub.ipfs.files.add(Buffer.from(JSON.stringify(ip), 'utf8'));
       if (r.length) {
         const hash = crypto.createHash('md5').update(JSON.stringify(ip)).digest('base64');
         let q = Promise.resolve();
@@ -393,8 +392,8 @@ module.exports = (knex) => {
         pub.getIdentityProfileIndexKeys(ip, hash).forEach((key) => {
           console.log('adding key', key);
           console.log('and', key.substr(key.indexOf(':') + 1));
-          q = q.then(p.ipfsIdentitiesByDistance.put(key, r[0].hash));
-          q2 = q2.then(p.ipfsIdentitiesBySearchKey.put(key.substr(key.indexOf(':') + 1), r[0].hash));
+          q = q.then(pub.ipfsIdentitiesByDistance.put(key, r[0].hash));
+          q2 = q2.then(pub.ipfsIdentitiesBySearchKey.put(key.substr(key.indexOf(':') + 1), r[0].hash));
         });
         return util.timeoutPromise(Promise.all([q, q2]), 30000);
       }
@@ -433,7 +432,7 @@ module.exports = (knex) => {
         keys.forEach((key) => {
           values.push(Buffer.from(JSON.stringify(identityProfilesByHash[key]), 'utf8'));
         });
-        const rr = await p.ipfs.files.add(values);
+        const rr = await pub.ipfs.files.add(values);
         keys.forEach((key, i) => {
           if (i < rr.length && rr[i].hash) {
             identityProfilesByHash[key] = rr[i].hash;
@@ -449,19 +448,19 @@ module.exports = (knex) => {
       });
 
       console.log('building index identities_by_distance');
-      p.ipfsIdentitiesByDistance = await btree.MerkleBTree.fromSortedList(
+      pub.ipfsIdentitiesByDistance = await btree.MerkleBTree.fromSortedList(
         identityIndexEntriesToAdd.sort(util.sortByKey).slice(),
         IPFS_INDEX_WIDTH,
-        p.ipfsStorage,
+        pub.ipfsStorage,
       );
       identityIndexEntriesToAdd.forEach((entry) => {
         entry.key = entry.key.substr(entry.key.indexOf(':') + 1); // eslint-disable-line no-param-reassign
       });
       console.log('building index identities_by_searchkey');
-      p.ipfsIdentitiesBySearchKey = await btree.MerkleBTree.fromSortedList(
+      pub.ipfsIdentitiesBySearchKey = await btree.MerkleBTree.fromSortedList(
         identityIndexEntriesToAdd.sort(util.sortByKey),
         IPFS_INDEX_WIDTH,
-        p.ipfsStorage,
+        pub.ipfsStorage,
       );
       return pub.addIndexRootToIpfs();
     },
@@ -515,10 +514,10 @@ module.exports = (knex) => {
       const r = await iterate();
       console.log('res', r);
       console.log('adding messages_by_distance index to ipfs');
-      p.ipfsMessagesByDistance = await btree.MerkleBTree.fromSortedList(
+      pub.ipfsMessagesByDistance = await btree.MerkleBTree.fromSortedList(
         msgsToIndex.slice(),
         IPFS_INDEX_WIDTH,
-        p.ipfsStorage,
+        pub.ipfsStorage,
       );
 
       // create index of messages sorted by timestamp
@@ -527,10 +526,10 @@ module.exports = (knex) => {
       });
       msgsToIndex = msgsToIndex.sort(util.sortByKey);
       console.log('adding messages_by_timestamp index to ipfs');
-      p.ipfsMessagesByTimestamp = await btree.MerkleBTree.fromSortedList(
+      pub.ipfsMessagesByTimestamp = await btree.MerkleBTree.fromSortedList(
         msgsToIndex,
         IPFS_INDEX_WIDTH,
-        p.ipfsStorage,
+        pub.ipfsStorage,
       );
       // Add message index to IPFS
       return pub.addIndexRootToIpfs();
@@ -540,7 +539,8 @@ module.exports = (knex) => {
       const r = await knex('Messages').where('ipfs_hash', path).count('* as count');
       if (parseInt(r[0].count) === 0) {
         try {
-          const buffer = await util.timeoutPromise(p.ipfs.files.cat(path, { buffer: true }), 5000);
+          const buffer = await util.timeoutPromise(pub.ipfs.files
+            .cat(path, { buffer: true }), 5000);
           if (buffer) {
             const msg = { jws: buffer.toString('utf8'), ipfs_hash: path };
             process.stdout.write('+');
@@ -558,15 +558,15 @@ module.exports = (knex) => {
     async saveMessagesFromIpfsIndex(ipnsName) {
       try {
         console.log('Getting path for name', ipnsName);
-        if (!(p.ipfs && p.ipfs.name)) {
+        if (!(pub.ipfs && pub.ipfs.name)) {
           console.log('ipfs.name is not available');
           return;
         }
-        const r = await util.timeoutPromise(p.ipfs.name.resolve(ipnsName), 60000);
+        const r = await util.timeoutPromise(pub.ipfs.name.resolve(ipnsName), 60000);
         if (!r) { throw new Error('Ipfs index name was not resolved', ipnsName); }
         let path = r.Path.replace('/ipfs/', '');
         console.log('resolved name', path);
-        const links = await util.timeoutPromise(p.ipfs.object.links(path), 30000);
+        const links = await util.timeoutPromise(pub.ipfs.object.links(path), 30000);
         if (!links) { throw new Error('Ipfs index was not resolved', ipnsName); }
         for (let i = 0; i < links.length; i += 1) {
           if (links[i]._name === 'messages_by_distance') {
@@ -578,7 +578,7 @@ module.exports = (knex) => {
           throw new Error('No messages index found at', ipnsName);
         }
         console.log('Looking up index');
-        const index = await btree.MerkleBTree.getByHash(path, p.ipfsStorage, IPFS_INDEX_WIDTH);
+        const index = await btree.MerkleBTree.getByHash(path, pub.ipfsStorage, IPFS_INDEX_WIDTH);
         const msgs = await index.searchText('', 100000);
         let q = Promise.resolve();
         console.log('Processing', msgs.length, 'messages from index');
@@ -1433,9 +1433,7 @@ module.exports = (knex) => {
           .del();
       }
     },
-  };
 
-  p = {
     /*
       Message priority algorithm based on
       1. trust distance of signer from our key
@@ -1676,8 +1674,8 @@ module.exports = (knex) => {
         ipfsIndexKeys = util.removeDuplicates(ipfsIndexKeys);
         for (i = 0; i < ipfsIndexKeys.length; i += 1) {
           console.log('deleting from index', ipfsIndexKeys[i], ipfsIndexKeys[i].substr(ipfsIndexKeys[i].indexOf(':') + 1));
-          queries.push(p.ipfsMessagesByDistance.delete(ipfsIndexKeys[i]));
-          queries.push(p.ipfsMessagesByTimestamp.delete(ipfsIndexKeys[i].substr(ipfsIndexKeys[i].indexOf(':') + 1)));
+          queries.push(pub.ipfsMessagesByDistance.delete(ipfsIndexKeys[i]));
+          queries.push(pub.ipfsMessagesByTimestamp.delete(ipfsIndexKeys[i].substr(ipfsIndexKeys[i].indexOf(':') + 1)));
         }
         return Promise.all(queries);
       });
@@ -1746,32 +1744,32 @@ module.exports = (knex) => {
         .whereNotNull('ipfs_index_root')
         .select('ipfs_index_root');
       if (res.length) {
-        const links = await p.ipfs.object.links(res[0].ipfs_index_root);
+        const links = await pub.ipfs.object.links(res[0].ipfs_index_root);
         const queries = [];
         links.forEach((link) => {
           switch (link._name) {
             case 'messages_by_distance':
-              queries.push(btree.MerkleBTree.getByHash(link._multihash, p.ipfsStorage)
+              queries.push(btree.MerkleBTree.getByHash(link._multihash, pub.ipfsStorage)
                 .then((index) => {
-                  p.ipfsMessagesByDistance = index;
+                  pub.ipfsMessagesByDistance = index;
                 }));
               break;
             case 'messages_by_timestamp':
-              queries.push(btree.MerkleBTree.getByHash(link._multihash, p.ipfsStorage)
+              queries.push(btree.MerkleBTree.getByHash(link._multihash, pub.ipfsStorage)
                 .then((index) => {
-                  p.ipfsMessagesByTimestamp = index;
+                  pub.ipfsMessagesByTimestamp = index;
                 }));
               break;
             case 'identities_by_distance':
-              queries.push(btree.MerkleBTree.getByHash(link._multihash, p.ipfsStorage)
+              queries.push(btree.MerkleBTree.getByHash(link._multihash, pub.ipfsStorage)
                 .then((index) => {
-                  p.ipfsIdentitiesByDistance = index;
+                  pub.ipfsIdentitiesByDistance = index;
                 }));
               break;
             case 'identities_by_searchkey':
-              queries.push(btree.MerkleBTree.getByHash(link._multihash, p.ipfsStorage)
+              queries.push(btree.MerkleBTree.getByHash(link._multihash, pub.ipfsStorage)
                 .then((index) => {
-                  p.ipfsIdentitiesBySearchKey = index;
+                  pub.ipfsIdentitiesBySearchKey = index;
                 }));
               break;
             default:
@@ -1780,21 +1778,21 @@ module.exports = (knex) => {
         });
         await util.timeoutPromise(Promise.all(queries), 15000);
       }
-      p.ipfsIdentitiesBySearchKey = p.ipfsIdentitiesBySearchKey ||
-        new btree.MerkleBTree(p.ipfsStorage, 100);
-      p.ipfsIdentitiesByDistance = p.ipfsIdentitiesByDistance ||
-        new btree.MerkleBTree(p.ipfsStorage, 100);
-      p.ipfsMessagesByDistance = p.ipfsMessagesByDistance ||
-        new btree.MerkleBTree(p.ipfsStorage, 100);
-      p.ipfsMessagesByTimestamp = p.ipfsMessagesByTimestamp ||
-        new btree.MerkleBTree(p.ipfsStorage, 100);
+      pub.ipfsIdentitiesBySearchKey = pub.ipfsIdentitiesBySearchKey ||
+        new btree.MerkleBTree(pub.ipfsStorage, 100);
+      pub.ipfsIdentitiesByDistance = pub.ipfsIdentitiesByDistance ||
+        new btree.MerkleBTree(pub.ipfsStorage, 100);
+      pub.ipfsMessagesByDistance = pub.ipfsMessagesByDistance ||
+        new btree.MerkleBTree(pub.ipfsStorage, 100);
+      pub.ipfsMessagesByTimestamp = pub.ipfsMessagesByTimestamp ||
+        new btree.MerkleBTree(pub.ipfsStorage, 100);
     },
   };
 
   pub.init = async (conf, ipfs) => {
     if (ipfs) {
-      p.ipfs = ipfs;
-      p.ipfsStorage = new btree.IPFSStorage(p.ipfs);
+      pub.ipfs = ipfs;
+      pub.ipfsStorage = new btree.IPFSStorage(pub.ipfs);
     }
     config = conf;
     if (conf.db.client === 'pg') {
@@ -1806,10 +1804,10 @@ module.exports = (knex) => {
     // TODO: if MY_ID is changed, the old one should be removed from TrustIndexedAttributes
     await pub.mapIdentityAttributes({ id: MY_ID });
     await pub.checkDefaultTrustList();
-    if (p.ipfsStorage) {
-      await p.getIndexesFromIpfsRoot();
+    if (pub.ipfsStorage) {
+      await pub.getIndexesFromIpfsRoot();
     }
-    if (p.ipfsStorage) {
+    if (pub.ipfsStorage) {
       if (process.env.NODE_ENV !== 'test') {
         pub.saveMessagesFromIpfsIndexes(); // non-blocking
       }
