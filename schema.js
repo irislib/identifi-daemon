@@ -98,7 +98,7 @@ function init(db) {
     t.index(['viewpoint_name', 'viewpoint_value', 'distance']);
   }).catch(catcher));
 
-  queries.push(db.schema.createTableIfNotExists('TrustIndexedAttributes', (t) => {
+  queries.push(db.schema.createTableIfNotExists('IndexedViewpoints', (t) => {
     t.string('name').notNullable();
     t.string('value').notNullable();
     t.string('ipfs_index_root');

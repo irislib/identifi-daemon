@@ -124,7 +124,7 @@ describe 'Database', ->
         ###
   describe 'trust functions', ->
     it 'should have 1 trust indexed attribute', ->
-      db.getTrustIndexedAttributes().then (res) ->
+      db.getIndexedViewpoints().then (res) ->
         res.length.should.equal 1
         res[0].name.should.equal 'keyID'
         res[0].value.should.equal key.hash
@@ -132,7 +132,7 @@ describe 'Database', ->
       db.generateWebOfTrustIndex(['email', 'alice@example.com'], 3, true, key.hash).then (res) ->
         res.should.equal 3
     it 'should have 2 trust indexed attributes', ->
-      db.getTrustIndexedAttributes().then (res) ->
+      db.getIndexedViewpoints().then (res) ->
         res.length.should.equal 2
         res[1].name.should.equal 'email'
         res[1].value.should.equal 'alice@example.com'

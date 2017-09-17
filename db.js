@@ -19,7 +19,7 @@ class IdentifiDB {
     this.MY_ID = ['keyID', this.MY_KEY.hash];
     this.SQL_IFNULL = 'IFNULL';
     this.ipfsIdentityIndexKeysToRemove = {};
-    this.trustIndexedAttributes = null;
+    this.IndexedViewpoints = null;
   }
 
   async saveMessage(msg, updateTrustIndexes = true, addToIpfs = true) {
@@ -836,12 +836,12 @@ class IdentifiDB {
   }
 
   async addTrustIndexedAttribute(id, depth) {
-    let r = await this.knex('TrustIndexedAttributes').where({ name: id[0], value: id[1] }).count('* as count');
+    let r = await this.knex('IndexedViewpoints').where({ name: id[0], value: id[1] }).count('* as count');
     if (parseInt(r[0].count)) {
-      await this.knex('TrustIndexedAttributes').where({ name: id[0], value: id[1] }).update({ depth });
+      await this.knex('IndexedViewpoints').where({ name: id[0], value: id[1] }).update({ depth });
     } else {
-      await this.knex('TrustIndexedAttributes').insert({ name: id[0], value: id[1], depth });
-      this.trustIndexedAttributes = await this.getTrustIndexedAttributes(true);
+      await this.knex('IndexedViewpoints').insert({ name: id[0], value: id[1], depth });
+      this.IndexedViewpoints = await this.getIndexedViewpoints(true);
       r = await this.knex('TrustDistances')
         .where({
           start_attr_name: id[0],
@@ -864,12 +864,12 @@ class IdentifiDB {
     }
   }
 
-  async getTrustIndexedAttributes(forceRefresh) {
-    if (this.trustIndexedAttributes && !forceRefresh) {
-      return this.trustIndexedAttributes;
+  async getIndexedViewpoints(forceRefresh) {
+    if (this.IndexedViewpoints && !forceRefresh) {
+      return this.IndexedViewpoints;
     }
-    const r = await this.knex('TrustIndexedAttributes').select('*');
-    this.trustIndexedAttributes = r;
+    const r = await this.knex('IndexedViewpoints').select('*');
+    this.IndexedViewpoints = r;
     return r;
   }
 
@@ -1135,7 +1135,7 @@ class IdentifiDB {
     const queries = [];
 
     // TODO: make this faster
-    const viewpoints = await this.getTrustIndexedAttributes();
+    const viewpoints = await this.getIndexedViewpoints();
     viewpoints.forEach((vp) => {
       const viewpoint = [vp.name, vp.value];
       message.signedData.recipient.forEach((recipientId) => {
@@ -1146,7 +1146,7 @@ class IdentifiDB {
     return Promise.all(queries);
 
     // TODO:
-    // Get TrustIndexedAttributes as t
+    // Get IndexedViewpoints as t
     // Return unless message signer and author are trusted by t
     // Find existing or new identity_id for message recipient UniqueIdentifierTypes
     // If the attribute exists on the identity_id, increase confirmations or refutations
@@ -1277,7 +1277,7 @@ class IdentifiDB {
 
     const makeSubquery = (author, recipient) =>
       this.knex
-        .from('TrustIndexedAttributes AS viewpoint')
+        .from('IndexedViewpoints AS viewpoint')
         .innerJoin('UniqueIdentifierTypes as ia', 'ia.name', this.knex.raw('?', recipient[0]))
         .innerJoin('TrustDistances AS td', (q) => {
           q.on('td.start_attr_name', '=', 'viewpoint.name')
@@ -1337,7 +1337,7 @@ class IdentifiDB {
     await schema.init(this.knex, this.config);
     await this.getUniqueIdentifierTypes();
     await this.addTrustIndexedAttribute(this.MY_ID, MY_TRUST_INDEX_DEPTH);
-    // TODO: if this.MY_ID is changed, the old one should be removed from TrustIndexedAttributes
+    // TODO: if this.MY_ID is changed, the old one should be removed from IndexedViewpoints
     await this.mapIdentityAttributes({ id: this.MY_ID });
     await this.checkDefaultTrustList();
     if (this.ipfsStorage) { // non-blocking

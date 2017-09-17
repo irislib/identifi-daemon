@@ -276,7 +276,7 @@ class IpfsUtils {
       }));
       if (res._json.multihash) {
         indexRoot = res._json.multihash;
-        return this.db.knex('TrustIndexedAttributes')
+        return this.db.knex('IndexedViewpoints')
           .where({ name: this.db.MY_ID[0], value: this.db.MY_ID[1] })
           .update('ipfs_index_root', res._json.multihash)
           .return(res);
@@ -429,7 +429,7 @@ class IpfsUtils {
   }
 
   async getIndexesFromIpfsRoot() {
-    const res = await this.db.knex('TrustIndexedAttributes')
+    const res = await this.db.knex('IndexedViewpoints')
       .where({ name: this.db.MY_ID[0], value: this.db.MY_ID[1] })
       .whereNotNull('ipfs_index_root')
       .select('ipfs_index_root');
