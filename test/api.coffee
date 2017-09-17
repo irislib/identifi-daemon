@@ -35,7 +35,6 @@ resetPostgres = ->
 
 describe 'API', ->
   server = undefined
-  socket = undefined
   before ->
     cleanup()
     resetPostgres().then ->
@@ -48,8 +47,6 @@ describe 'API', ->
 
       identifi.apiRoot = 'http://127.0.0.1:4944/api'
       server.ready
-    .then ->
-      socket = identifi.getSocket({ isPeer: true })
   after cleanup
   after ->
     console.log 'Test server at ' + config.get('port') + ' shutting down'

@@ -8,6 +8,7 @@ const util = require('./util');
 class IpfsUtils {
   constructor(db) {
     this.db = db;
+    this.addingIndexes = false;
   }
 
   async keepAddingNewMessagesToIpfsIndex() {
@@ -25,64 +26,72 @@ class IpfsUtils {
   }
 
   async addMessageIndexToIpfs() {
-    const maxMsgCount = 100000;
-    let msgsToIndex = [];
-    const iterate = async (limit = 10000, initialOffset = 0, initialDistance = 0) => {
-      let distance = initialDistance;
-      let offset = initialOffset;
-      const msgs = await this.db.getMessages({
-        limit,
-        offset,
-        orderBy: 'timestamp',
-        direction: 'asc',
-        viewpoint: this.db.MY_ID,
-        where: { 'td.distance': distance },
-      });
-      if (msgs.length === 0 && offset === 0) {
-        return msgs.length;
-      }
-      if (msgs.length < limit) {
-        distance += 1;
-        offset = 0;
-      } else {
-        offset += limit;
-      }
-      msgs.forEach((m) => {
-        process.stdout.write('.');
-        const msg = Message.decode(m);
-        msg.distance = distance;
-        const key = this.constructor.getMsgIndexKey(msg);
-        msgsToIndex.push({ key, value: msg, targetHash: null });
-      });
-      const hasMore = !(msgs.length === 0 && offset === 0);
-      if (msgsToIndex.length < maxMsgCount && hasMore) {
-        return iterate(limit, offset, distance);
-      }
-      return msgsToIndex.length;
-    };
+    if (this.addingIndexes) {
+      return false;
+    }
+    this.addingIndexes = true;
+    try {
+      const maxMsgCount = 100000; // TODO: make it support larger indexes
+      let msgsToIndex = [];
+      const iterate = async (limit = 10000, initialOffset = 0, initialDistance = 0) => {
+        let distance = initialDistance;
+        let offset = initialOffset;
+        const msgs = await this.db.getMessages({
+          limit,
+          offset,
+          orderBy: 'timestamp',
+          direction: 'asc',
+          viewpoint: this.db.MY_ID,
+          where: { 'td.distance': distance },
+        });
+        if (msgs.length === 0 && offset === 0) {
+          return msgs.length;
+        }
+        if (msgs.length < limit) {
+          distance += 1;
+          offset = 0;
+        } else {
+          offset += limit;
+        }
+        msgs.forEach((m) => {
+          process.stdout.write('.');
+          const msg = Message.decode(m);
+          msg.distance = distance;
+          const key = this.constructor.getMsgIndexKey(msg);
+          msgsToIndex.push({ key, value: msg, targetHash: null });
+        });
+        const hasMore = !(msgs.length === 0 && offset === 0);
+        if (msgsToIndex.length < maxMsgCount && hasMore) {
+          return iterate(limit, offset, distance);
+        }
+        return msgsToIndex.length;
+      };
 
-    console.log('adding msgs to ipfs');
-    const r = await iterate();
-    console.log('res', r);
-    console.log('adding messages_by_distance index to ipfs');
-    this.db.ipfsMessagesByDistance = await btree.MerkleBTree.fromSortedList(
-      msgsToIndex.slice(),
-      this.db.IPFS_INDEX_WIDTH,
-      this.db.ipfsStorage,
-    );
+      console.log('adding msgs to ipfs');
+      const r = await iterate();
+      console.log('res', r);
+      console.log('adding messages_by_distance index to ipfs');
+      this.db.ipfsMessagesByDistance = await btree.MerkleBTree.fromSortedList(
+        msgsToIndex.slice(),
+        this.db.IPFS_INDEX_WIDTH,
+        this.db.ipfsStorage,
+      );
 
-    // create index of messages sorted by timestamp
-    msgsToIndex.forEach((msg) => {
-      msg.key = msg.key.substr(msg.key.indexOf(':') + 1); // eslint-disable-line no-param-reassign
-    });
-    msgsToIndex = msgsToIndex.sort(util.sortByKey);
-    console.log('adding messages_by_timestamp index to ipfs');
-    this.db.ipfsMessagesByTimestamp = await btree.MerkleBTree.fromSortedList(
-      msgsToIndex,
-      this.db.IPFS_INDEX_WIDTH,
-      this.db.ipfsStorage,
-    );
-    // Add message index to IPFS
+      // create index of messages sorted by timestamp
+      msgsToIndex.forEach((msg) => {
+        msg.key = msg.key.substr(msg.key.indexOf(':') + 1); // eslint-disable-line no-param-reassign
+      });
+      msgsToIndex = msgsToIndex.sort(util.sortByKey);
+      console.log('adding messages_by_timestamp index to ipfs');
+      this.db.ipfsMessagesByTimestamp = await btree.MerkleBTree.fromSortedList(
+        msgsToIndex,
+        this.db.IPFS_INDEX_WIDTH,
+        this.db.ipfsStorage,
+      );
+      // Add message index to IPFS
+    } finally {
+      this.addingIndexes = false;
+    }
     return this.addIndexRootToIpfs();
   }
 
@@ -355,68 +364,76 @@ class IpfsUtils {
   }
 
   async addIdentityIndexToIpfs() {
-    const maxIndexSize = 100000;
-    const identityIndexEntriesToAdd = [];
-    const identityProfilesByHash = {};
-    const r = await this.db.getIdentityAttributes({ limit: maxIndexSize });
-    console.log('Adding identity index of', r.length, 'entries to ipfs');
+    if (this.addingIndexes) {
+      return false;
+    }
+    this.addingIndexes = true;
+    try {
+      const maxIndexSize = 100000;
+      const identityIndexEntriesToAdd = [];
+      const identityProfilesByHash = {};
+      const r = await this.db.getIdentityAttributes({ limit: maxIndexSize });
+      console.log('Adding identity index of', r.length, 'entries to ipfs');
 
-    const iterate = async (i) => {
-      console.log(`${i}/${r.length}`);
-      if (i >= r.length) {
-        return;
-      }
-      const identityProfile = await this.db.getIdentityProfile(r[i]);
-      const hash = crypto.createHash('md5').update(JSON.stringify(identityProfile)).digest('base64');
-      identityProfilesByHash[hash] = identityProfile;
-      this.constructor.getIdentityProfileIndexKeys(identityProfile, hash).forEach((key) => {
-        identityIndexEntriesToAdd.push({ key, value: hash, targetHash: null });
-      });
-      return iterate(i + 1);
-    };
-
-    await iterate(0);
-    const orderedKeys = Object.keys(identityProfilesByHash);
-
-    const addIdentityProfilesToIpfs = async () => {
-      if (!orderedKeys.length) {
-        return;
-      }
-      const keys = orderedKeys.splice(0, 100);
-      const values = [];
-      keys.forEach((key) => {
-        values.push(Buffer.from(JSON.stringify(identityProfilesByHash[key]), 'utf8'));
-      });
-      const rr = await this.db.ipfs.files.add(values);
-      keys.forEach((key, i) => {
-        if (i < rr.length && rr[i].hash) {
-          identityProfilesByHash[key] = rr[i].hash;
+      const iterate = async (i) => {
+        console.log(`${i}/${r.length}`);
+        if (i >= r.length) {
+          return;
         }
+        const identityProfile = await this.db.getIdentityProfile(r[i]);
+        const hash = crypto.createHash('md5').update(JSON.stringify(identityProfile)).digest('base64');
+        identityProfilesByHash[hash] = identityProfile;
+        this.constructor.getIdentityProfileIndexKeys(identityProfile, hash).forEach((key) => {
+          identityIndexEntriesToAdd.push({ key, value: hash, targetHash: null });
+        });
+        return iterate(i + 1);
+      };
+
+      await iterate(0);
+      const orderedKeys = Object.keys(identityProfilesByHash);
+
+      const addIdentityProfilesToIpfs = async () => {
+        if (!orderedKeys.length) {
+          return;
+        }
+        const keys = orderedKeys.splice(0, 100);
+        const values = [];
+        keys.forEach((key) => {
+          values.push(Buffer.from(JSON.stringify(identityProfilesByHash[key]), 'utf8'));
+        });
+        const rr = await this.db.ipfs.files.add(values);
+        keys.forEach((key, i) => {
+          if (i < rr.length && rr[i].hash) {
+            identityProfilesByHash[key] = rr[i].hash;
+          }
+        });
+        return addIdentityProfilesToIpfs();
+      };
+
+      await addIdentityProfilesToIpfs();
+      identityIndexEntriesToAdd.forEach((entry) => {
+        // eslint-disable-next-line no-param-reassign
+        entry.value = identityProfilesByHash[entry.value];
       });
-      return addIdentityProfilesToIpfs();
-    };
 
-    await addIdentityProfilesToIpfs();
-    identityIndexEntriesToAdd.forEach((entry) => {
-      // eslint-disable-next-line no-param-reassign
-      entry.value = identityProfilesByHash[entry.value];
-    });
-
-    console.log('building index identities_by_distance');
-    this.db.ipfsIdentitiesByDistance = await btree.MerkleBTree.fromSortedList(
-      identityIndexEntriesToAdd.sort(util.sortByKey).slice(),
-      this.db.IPFS_INDEX_WIDTH,
-      this.db.ipfsStorage,
-    );
-    identityIndexEntriesToAdd.forEach((entry) => {
-      entry.key = entry.key.substr(entry.key.indexOf(':') + 1); // eslint-disable-line no-param-reassign
-    });
-    console.log('building index identities_by_searchkey');
-    this.db.ipfsIdentitiesBySearchKey = await btree.MerkleBTree.fromSortedList(
-      identityIndexEntriesToAdd.sort(util.sortByKey),
-      this.db.IPFS_INDEX_WIDTH,
-      this.db.ipfsStorage,
-    );
+      console.log('building index identities_by_distance');
+      this.db.ipfsIdentitiesByDistance = await btree.MerkleBTree.fromSortedList(
+        identityIndexEntriesToAdd.sort(util.sortByKey).slice(),
+        this.db.IPFS_INDEX_WIDTH,
+        this.db.ipfsStorage,
+      );
+      identityIndexEntriesToAdd.forEach((entry) => {
+        entry.key = entry.key.substr(entry.key.indexOf(':') + 1); // eslint-disable-line no-param-reassign
+      });
+      console.log('building index identities_by_searchkey');
+      this.db.ipfsIdentitiesBySearchKey = await btree.MerkleBTree.fromSortedList(
+        identityIndexEntriesToAdd.sort(util.sortByKey),
+        this.db.IPFS_INDEX_WIDTH,
+        this.db.ipfsStorage,
+      );
+    } finally {
+      this.addingIndexes = false;
+    }
     return this.addIndexRootToIpfs();
   }
 
