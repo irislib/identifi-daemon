@@ -269,7 +269,7 @@ router.get('/', (req, res) => {
 
 router.route('/reindex')
   .get(authRequired, (req, res) => {
-    db.addIdentityIndexToIpfs()
+    db.ipfsUtils.addIdentityIndexToIpfs()
     // db.addDbMessagesToIpfs()
       .then(dbRes => res.json(dbRes))
       .catch(err => handleError(err, req, res));
