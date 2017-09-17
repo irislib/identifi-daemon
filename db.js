@@ -532,7 +532,7 @@ class IdentifiDB {
         viewpoint_name: options.viewpoint[0],
         viewpoint_value: options.viewpoint[1],
       })
-      .innerJoin('UniqueIdentifierTypes as uidt', 'uidt.name', 'ia.name');
+      .innerJoin('UniqueAttributeTypes as uidt', 'uidt.name', 'ia.name');
 
     const r = await getExistingId;
     let identityId;
@@ -574,7 +574,7 @@ class IdentifiDB {
           q.on('m.hash', '=', 'attr2.message_hash');
           q.on('attr2.is_recipient', '=', 'attr1.is_recipient');
         })
-        .innerJoin('UniqueIdentifierTypes as uidt', 'uidt.name', 'attr1.name')
+        .innerJoin('UniqueAttributeTypes as uidt', 'uidt.name', 'attr1.name')
         .innerJoin('TrustDistances as td_signer', (q) => {
           q.on('td_signer.start_attr_name', '=', this.knex.raw('?', options.viewpoint[0]));
           q.on('td_signer.start_attr_value', '=', this.knex.raw('?', options.viewpoint[1]));
@@ -593,7 +593,7 @@ class IdentifiDB {
           q.on('existing.viewpoint_name', '=', this.knex.raw('?', options.viewpoint[0]));
           q.on('existing.viewpoint_value', '=', this.knex.raw('?', options.viewpoint[1]));
         })
-        .innerJoin('UniqueIdentifierTypes as uidt2', 'uidt2.name', 'existing.name')
+        .innerJoin('UniqueAttributeTypes as uidt2', 'uidt2.name', 'existing.name')
         .select('existing.identity_id');
 
     const generateInsertSubQuery = () =>
@@ -733,8 +733,8 @@ class IdentifiDB {
       subQuery.whereNull('td_recipient.distance');
 
       if (!betweenKeyIDsOnly) {
-        subQuery.innerJoin('UniqueIdentifierTypes as uidt1', 'uidt1.name', 'attr1.name');
-        subQuery.innerJoin('UniqueIdentifierTypes as uidt2', 'uidt2.name', 'attr2.name');
+        subQuery.innerJoin('UniqueAttributeTypes as uidt1', 'uidt1.name', 'attr1.name');
+        subQuery.innerJoin('UniqueAttributeTypes as uidt2', 'uidt2.name', 'attr2.name');
         subQuery.leftJoin('TrustDistances as td_signer', (q) => {
           q.on('td_signer.start_attr_name', '=', trx.raw('?', trustedKey[0]));
           q.on('td_signer.start_attr_value', '=', trx.raw('?', trustedKey[1]));
@@ -873,16 +873,16 @@ class IdentifiDB {
     return r;
   }
 
-  async getUniqueIdentifierTypes() {
-    const r = await this.knex('UniqueIdentifierTypes').select('name');
-    this.uniqueIdentifierTypes = [];
+  async getUniqueAttributeTypes() {
+    const r = await this.knex('UniqueAttributeTypes').select('name');
+    this.UniqueAttributeTypes = [];
     r.forEach((type) => {
-      this.uniqueIdentifierTypes.push(type.name);
+      this.UniqueAttributeTypes.push(type.name);
     });
   }
 
   isUniqueType(type) {
-    return this.uniqueIdentifierTypes.indexOf(type) > -1;
+    return this.UniqueAttributeTypes.indexOf(type) > -1;
   }
 
   async getMessageCount() {
@@ -1123,7 +1123,7 @@ class IdentifiDB {
         name: identifier[0],
         value: identifier[1],
       })
-      .innerJoin('UniqueIdentifierTypes', 'IdentityAttributes.name', 'UniqueIdentifierTypes.name')
+      .innerJoin('UniqueAttributeTypes', 'IdentityAttributes.name', 'UniqueAttributeTypes.name')
       .select('IdentityAttributes.identity_id');
   }
 
@@ -1148,7 +1148,7 @@ class IdentifiDB {
     // TODO:
     // Get IndexedViewpoints as t
     // Return unless message signer and author are trusted by t
-    // Find existing or new identity_id for message recipient UniqueIdentifierTypes
+    // Find existing or new identity_id for message recipient UniqueAttributeTypes
     // If the attribute exists on the identity_id, increase confirmations or refutations
     // If the attribute doesn't exist, add it with 1 confirmation or refutation
   }
@@ -1171,7 +1171,7 @@ class IdentifiDB {
           qq.on('recipient.message_hash', '=', 'm.hash');
           qq.andOn('recipient.is_recipient', '=', this.knex.raw('?', true));
         })
-        .innerJoin('UniqueIdentifierTypes as ia1', 'ia1.name', 'author.name')
+        .innerJoin('UniqueAttributeTypes as ia1', 'ia1.name', 'author.name')
         .leftJoin('TrustDistances as td', (qq) => {
           qq.on('td.start_attr_name', '=', this.knex.raw('?', this.MY_ID[0]));
           qq.andOn('td.start_attr_value', '=', this.knex.raw('?', this.MY_ID[1]));
@@ -1190,7 +1190,7 @@ class IdentifiDB {
           'recipient.name': recipient[0],
           'recipient.value': recipient[1],
         });
-        q.innerJoin('UniqueIdentifierTypes as ia2', 'ia2.name', 'recipient.name');
+        q.innerJoin('UniqueAttributeTypes as ia2', 'ia2.name', 'recipient.name');
       }
 
       if (isVerifyMsg) {
@@ -1278,7 +1278,7 @@ class IdentifiDB {
     const makeSubquery = (author, recipient) =>
       this.knex
         .from('IndexedViewpoints AS viewpoint')
-        .innerJoin('UniqueIdentifierTypes as ia', 'ia.name', this.knex.raw('?', recipient[0]))
+        .innerJoin('UniqueAttributeTypes as ia', 'ia.name', this.knex.raw('?', recipient[0]))
         .innerJoin('TrustDistances AS td', (q) => {
           q.on('td.start_attr_name', '=', 'viewpoint.name')
             .andOn('td.start_attr_value', '=', 'viewpoint.value')
@@ -1335,7 +1335,7 @@ class IdentifiDB {
       this.SQL_IFNULL = 'COALESCE';
     }
     await schema.init(this.knex, this.config);
-    await this.getUniqueIdentifierTypes();
+    await this.getUniqueAttributeTypes();
     await this.addTrustIndexedAttribute(this.MY_ID, MY_TRUST_INDEX_DEPTH);
     // TODO: if this.MY_ID is changed, the old one should be removed from IndexedViewpoints
     await this.mapIdentityAttributes({ id: this.MY_ID });

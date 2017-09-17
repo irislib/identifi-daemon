@@ -1,7 +1,7 @@
 /* jshint unused:false */
 
-function addDefaultUniqueIdentifierTypes(db) {
-  return db.table('UniqueIdentifierTypes').insert([
+function addDefaultUniqueAttributeTypes(db) {
+  return db.table('UniqueAttributeTypes').insert([
     { name: 'email' },
     { name: 'account' },
     { name: 'url' },
@@ -23,9 +23,9 @@ function catcher(e) {
 
 function init(db) {
   const queries = [];
-  queries.push(db.schema.createTableIfNotExists('UniqueIdentifierTypes', (t) => {
+  queries.push(db.schema.createTableIfNotExists('UniqueAttributeTypes', (t) => {
     t.string('name').primary();
-  }).then(() => addDefaultUniqueIdentifierTypes(db).catch(catcher)).catch(catcher));
+  }).then(() => addDefaultUniqueAttributeTypes(db).catch(catcher)).catch(catcher));
 
   queries.push(db.schema.createTableIfNotExists('Messages', (t) => {
     t.string('hash').unique().primary();
