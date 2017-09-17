@@ -565,7 +565,7 @@ router.get('/identities/:attr_name/:attr_value/generatewotindex', authRequired, 
     .then(() => {
       res.json(wotSize);
       if (req.params.attr_name === 'keyID' && req.params.attr_value === myKey.hash && process.env.NODE_ENV !== 'test') {
-        db.addIndexesToIpfs();
+        db.ipfsUtils.addIndexesToIpfs();
       }
     })
     .catch(err => handleError(err, req, res));
