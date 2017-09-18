@@ -209,7 +209,8 @@ class IpfsUtils {
       if (shortestDistance < 99) {
         message.distance = shortestDistance;
       }
-      return this.addIdentityToIpfsIndex(recipientAttrs);
+      await this.addIdentityToIpfsIndex(recipientAttrs);
+      return this.addIndexRootToIpfs();
     } catch (e) {
       console.log('adding to ipfs failed:', e);
     }
@@ -348,7 +349,8 @@ class IpfsUtils {
         q = q.then(this.db.ipfsIdentitiesByDistance.put(key, r[0].hash));
         q2 = q2.then(this.db.ipfsIdentitiesBySearchKey.put(key.substr(key.indexOf(':') + 1), r[0].hash));
       });
-      return util.timeoutPromise(Promise.all([q, q2]), 30000);
+      await util.timeoutPromise(Promise.all([q, q2]), 30000);
+      return this.addIndexRootToIpfs();
     }
   }
 

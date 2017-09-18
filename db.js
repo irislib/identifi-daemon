@@ -121,12 +121,11 @@ class IdentifiDB {
         // remove identity index entries that point to expired identity profiles
         Object.keys(this.ipfsIdentityIndexKeysToRemove).forEach((msg) => {
           this.ipfsIdentityIndexKeysToRemove[msg].forEach((key) => {
-            console.log('deleting old index keys');
             q = q.then(() => {
               const q2 = this.ipfsIdentitiesByDistance.delete(key);
               const q3 = this.ipfsIdentitiesBySearchKey.delete(key.substr(key.indexOf(':') + 1));
               return util.timeoutPromise(Promise.all([q2, q3]), 30000);
-            });
+            }).then(() => console.log('deleted old entry', key));
             delete this.ipfsIdentityIndexKeysToRemove[msg];
           });
         });
@@ -219,7 +218,6 @@ class IdentifiDB {
         identityProfile.sent = sentIndex.rootNode.hash;
       }
     } catch (e) {
-      console.log('this.ipfs', this.ipfs);
       console.log('adding', attrs, 'failed:', e);
     }
     return identityProfile;
