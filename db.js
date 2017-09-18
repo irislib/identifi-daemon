@@ -138,9 +138,10 @@ class IdentifiDB {
           q = q.then(() => this.ipfsUtils.addMessageToIpfsIndex(message));
         });
         const r = await util.timeoutPromise(q, 200000);
-        return typeof r === 'undefined' ? this.ipfsUtils.addIndexesToIpfs() : r.length;
+        if (typeof r === 'undefined') {
+          this.ipfsUtils.addIndexesToIpfs()
+        };
       }
-      await this.ipfsUtils.addIndexesToIpfs();
       this.ipfsIdentityIndexKeysToRemove = {};
       if (messages.length) {
         console.log('adding index root to ipfs');
