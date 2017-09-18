@@ -71,12 +71,33 @@ const getIpfs = ipfs.id()
     log('No local IPFS API found, starting embedded IPFS node');
     try {
       const IpfsLib = require('ipfs');
-      ipfs = new IpfsLib();
+      const Repo = require('ipfs-repo');
+      const repo = new Repo('/tmp/ipfs-repo');
+      return new Promise((resolve, reject) => {
+        repo.init({ cool: 'config' }, (err) => {
+          if (err) {
+            reject(err);
+          }
+          repo.open((err2) => {
+            if (err2) {
+              reject(err2);
+            }
+            console.log('ipfs repo is ready');
+          });
+          ipfs = new IpfsLib({
+            repo,
+            init: true,
+            start: true,
+            EXPERIMENTAL: { pubsub: true },
+          });
+          resolve(ipfs);
+        });
+      });
     } catch (e) {
       log(`instantiating ipfs node failed: ${e}`);
       ipfs = null;
+      return ipfs;
     }
-    return ipfs;
   });
 
 const loginOptions = [];

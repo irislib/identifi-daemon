@@ -22,8 +22,9 @@ hex = null
 m = null
 
 cleanup = ->
-  fs.unlink './identifi_test.db', (err) ->
-  fs.unlink './identifi_test.log', (err) ->
+  try
+    fs.unlink './identifi_test.db', (err) ->
+    fs.unlink './identifi_test.log', (err) ->
 
 resetPostgres = ->
   if config.db.client == 'pg'

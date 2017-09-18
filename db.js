@@ -111,6 +111,8 @@ class IdentifiDB {
       });
       if (messages.length) {
         console.log('', messages.length, 'new messages to index');
+      } else {
+        return;
       }
       /* rebuilding the indexes is more efficient than
       inserting large number of entries individually */
@@ -119,7 +121,7 @@ class IdentifiDB {
         // remove identity index entries that point to expired identity profiles
         Object.keys(this.ipfsIdentityIndexKeysToRemove).forEach((msg) => {
           this.ipfsIdentityIndexKeysToRemove[msg].forEach((key) => {
-            q.then(() => {
+            q = q.then(() => {
               const q2 = this.ipfsIdentitiesByDistance.delete(key);
               const q3 = this.ipfsIdentitiesBySearchKey.delete(key.substr(key.indexOf(':') + 1));
               return util.timeoutPromise(Promise.all([q2, q3]), 30000);
