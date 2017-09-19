@@ -286,16 +286,14 @@ class IpfsUtils {
       }));
       if (res._json.multihash) {
         indexRoot = res._json.multihash;
-        return this.db.knex('IndexedViewpoints')
+        await this.db.knex('IndexedViewpoints')
           .where({ name: this.db.MY_ID[0], value: this.db.MY_ID[1] })
-          .update('ipfs_index_root', res._json.multihash)
-          .return(res);
-      }
-      res = await Promise.resolve(res);
-      if (this.db.ipfs.name && res._json.multihash) {
-        console.log('publishing index', res._json.multihash);
-        const r = await this.db.ipfs.name.publish(res._json.multihash, {});
-        console.log('published index', r);
+          .update('ipfs_index_root', res._json.multihash);
+        if (this.db.ipfs.name) {
+          console.log('publishing index', res._json.multihash);
+          const r = await this.db.ipfs.name.publish(res._json.multihash, {});
+          console.log('published index', r);
+        }
       }
       return indexRoot;
     } catch (e) {
