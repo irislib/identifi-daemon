@@ -69,12 +69,14 @@
     "sqlite3": "^3.1.11"
   },
   "watch": {
-    "lint": "*.js"
+    "lint": "*.js",
+    "server": "*.js"
   },
   "scripts": {
-    "watch": "npm-watch",
+    "start": "npm-watch",
     "test": "./node_modules/.bin/mocha test/*.coffee --compilers coffee:coffee-script/register --require babel-register",
-    "lint": "./node_modules/.bin/eslint *.js"
+    "lint": "./node_modules/.bin/eslint *.js",
+    "server": "node server.js"
   },
   "bin": {
     "identifid": "identifid"
