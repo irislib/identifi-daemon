@@ -18,6 +18,7 @@ class IdentifiDB {
     this.MY_KEY = keyutil.getDefault();
     this.MY_ID = ['keyID', this.MY_KEY.hash];
     this.SQL_IFNULL = 'IFNULL';
+    this.IPFS_INDEX_WIDTH = IPFS_INDEX_WIDTH;
     this.ipfsIdentityIndexKeysToRemove = {};
     this.IndexedViewpoints = null;
   }
