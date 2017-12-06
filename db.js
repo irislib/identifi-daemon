@@ -929,9 +929,8 @@ class IdentifiDB {
       .where('m.public', dbTrue);
 
     let identityId;
-    let identityIdQuery = Promise.resolve();
     if (options.viewpoint && options.maxDistance > -1) {
-      identityIdQuery = this.knex('IdentityAttributes')
+      const res = await this.knex('IdentityAttributes')
         .where({
           name: id[0],
           value: id[1],
@@ -940,95 +939,87 @@ class IdentifiDB {
         })
         .select('identity_id');
 
-      identityIdQuery.then((res) => {
-        if (res.length) {
-          identityId = res[0].identity_id;
+      if (res.length) {
+        identityId = res[0].identity_id;
 
-          sent.select('ia.identity_id as identity_id', 'm.hash');
-          sent.innerJoin('IdentityAttributes as ia', (q) => {
-            q.on('author.name', '=', 'ia.name');
-            q.on('author.value', '=', 'ia.value');
-          });
-          sent.where('ia.identity_id', identityId);
-          sent.where('m.priority', '>', 0);
-          sent.groupBy('m.hash', 'ia.identity_id');
+        sent.select('ia.identity_id as identity_id', 'm.hash');
+        sent.innerJoin('IdentityAttributes as ia', (q) => {
+          q.on('author.name', '=', 'ia.name');
+          q.on('author.value', '=', 'ia.value');
+        });
+        sent.where('ia.identity_id', identityId);
+        sent.where('m.priority', '>', 0);
+        sent.groupBy('m.hash', 'ia.identity_id');
 
-          const sentSubquery = this.knex.raw(sent).wrap('(', ') s');
-          sent = this.knex('Messages as m')
-            .select(this.knex.raw(sentSql))
-            .innerJoin(sentSubquery, 'm.hash', 's.hash')
-            .groupBy('s.identity_id');
+        const sentSubquery = this.knex.raw(sent).wrap('(', ') s');
+        sent = this.knex('Messages as m')
+          .select(this.knex.raw(sentSql))
+          .innerJoin(sentSubquery, 'm.hash', 's.hash')
+          .groupBy('s.identity_id');
 
-          received.select('ia.identity_id as identity_id', 'm.hash as hash');
-          received.innerJoin('IdentityAttributes as ia', (q) => {
-            q.on('recipient.name', '=', 'ia.name');
-            q.on('recipient.value', '=', 'ia.value');
-          });
-          received.where('ia.identity_id', identityId);
-          received.groupBy('m.hash', 'ia.identity_id');
+        received.select('ia.identity_id as identity_id', 'm.hash as hash');
+        received.innerJoin('IdentityAttributes as ia', (q) => {
+          q.on('recipient.name', '=', 'ia.name');
+          q.on('recipient.value', '=', 'ia.value');
+        });
+        received.where('ia.identity_id', identityId);
+        received.groupBy('m.hash', 'ia.identity_id');
 
-          received.innerJoin('TrustDistances as td', (q) => {
-            q.on('td.start_attr_name', '=', this.knex.raw('?', options.viewpoint[0]));
-            q.andOn('td.start_attr_value', '=', this.knex.raw('?', options.viewpoint[1]));
-            q.andOn('td.end_attr_name', '=', 'ia.name');
-            q.andOn('td.end_attr_value', '=', 'ia.value');
-            if (options.maxDistance > 0) {
-              q.andOn('td.distance', '<=', options.maxDistance);
-            }
-          });
-
-          const receivedSubquery = this.knex.raw(received).wrap('(', ') s');
-          received = this.knex('Messages as m')
-            .select(this.knex.raw(receivedSql))
-            .innerJoin(receivedSubquery, 'm.hash', 's.hash')
-            .groupBy('s.identity_id');
-        }
-      });
-    }
-    return identityIdQuery.then(() => {
-      if (!identityId) {
-        sent.where({ 'author.name': id[0], 'author.value': id[1] });
-        sent.groupBy('author.name', 'author.value');
-        sent.select(this.knex.raw(sentSql));
-        received.where({ 'recipient.name': id[0], 'recipient.value': id[1] });
-        received.groupBy('recipient.name', 'recipient.value');
-        received.select(this.knex.raw(receivedSql));
-      }
-
-      return Promise.all([sent, received]).then((response) => {
-        const res = Object.assign({}, response[0][0], response[1][0]);
-        Object.keys(res).forEach((key) => {
-          console.log('key', key);
-          if (key.indexOf('sent_') === 0 || key.indexOf('received_') === 0) {
-            res[key] = parseInt(res[key]);
+        received.innerJoin('TrustDistances as td', (q) => {
+          q.on('td.start_attr_name', '=', this.knex.raw('?', options.viewpoint[0]));
+          q.andOn('td.start_attr_value', '=', this.knex.raw('?', options.viewpoint[1]));
+          q.andOn('td.end_attr_name', '=', 'ia.name');
+          q.andOn('td.end_attr_value', '=', 'ia.value');
+          if (options.maxDistance > 0) {
+            q.andOn('td.distance', '<=', options.maxDistance);
           }
         });
 
-        if (options.viewpoint && !options.maxDistance) {
-          const identityIds = [];
-          if (identityId) {
-            identityIds.push(identityId);
-          }
-          this.knex('IdentityStats')
-            .where('identity_id', 'in', identityIds)
-            .delete()
-            .then(() => {
-              if (identityId) {
-                this.knex('IdentityStats')
-                  .insert({
-                    identity_id: identityId,
-                    viewpoint_name: options.viewpoint[0],
-                    viewpoint_value: options.viewpoint[1],
-                    positive_score: res.received_positive || 0,
-                    negative_score: res.received_negative || 0,
-                  }).return();
-              }
-            });
-        }
+        const receivedSubquery = this.knex.raw(received).wrap('(', ') s');
+        received = this.knex('Messages as m')
+          .select(this.knex.raw(receivedSql))
+          .innerJoin(receivedSubquery, 'm.hash', 's.hash')
+          .groupBy('s.identity_id');
+      }
+    }
+    if (!identityId) {
+      sent.where({ 'author.name': id[0], 'author.value': id[1] });
+      sent.groupBy('author.name', 'author.value');
+      sent.select(this.knex.raw(sentSql));
+      received.where({ 'recipient.name': id[0], 'recipient.value': id[1] });
+      received.groupBy('recipient.name', 'recipient.value');
+      received.select(this.knex.raw(receivedSql));
+    }
 
-        return Promise.resolve(res);
-      });
+    const response = await Promise.all([sent, received]);
+    const res = Object.assign({}, response[0][0], response[1][0]);
+    Object.keys(res).forEach((key) => {
+      if (key.indexOf('sent_') === 0 || key.indexOf('received_') === 0) {
+        res[key] = parseInt(res[key]);
+      }
     });
+
+    if (options.viewpoint && !options.maxDistance) {
+      const identityIds = [];
+      if (identityId) {
+        identityIds.push(identityId);
+      }
+      await this.knex('IdentityStats')
+        .where('identity_id', 'in', identityIds)
+        .delete();
+      if (identityId) {
+        await this.knex('IdentityStats')
+          .insert({
+            identity_id: identityId,
+            viewpoint_name: options.viewpoint[0],
+            viewpoint_value: options.viewpoint[1],
+            positive_score: res.received_positive || 0,
+            negative_score: res.received_negative || 0,
+          });
+      }
+    }
+
+    return res;
   }
 
   async checkDefaultTrustList() {
