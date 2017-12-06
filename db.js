@@ -912,7 +912,10 @@ class IdentifiDB {
         q.on('author.is_recipient', '=', this.knex.raw('?', dbFalse));
       })
       .where('m.type', 'rating')
-      .where('m.public', dbTrue);
+      .where('m.public', dbTrue)
+      .where({ 'author.name': id[0], 'author.value': id[1] })
+      .groupBy('author.name', 'author.value')
+      .select(this.knex.raw(sentSql));
 
     let receivedSql = '';
     receivedSql += 'SUM(CASE WHEN m.rating > (m.min_rating + m.max_rating) / 2 THEN 1 ELSE 0 END) AS received_positive, ';
@@ -926,29 +929,10 @@ class IdentifiDB {
         q.on('recipient.is_recipient', '=', this.knex.raw('?', dbTrue));
       })
       .where('m.type', 'rating')
-      .where('m.public', dbTrue);
-
-    let identityId;
-    let identityIdQuery = Promise.resolve();
-    if (options.viewpoint && options.maxDistance > -1) {
-      identityIdQuery = this.knex('IdentityAttributes')
-        .where({
-          name: id[0],
-          value: id[1],
-          viewpoint_name: options.viewpoint[0],
-          viewpoint_value: options.viewpoint[1],
-        })
-        .select('identity_id');
-    }
-    await identityIdQuery;
-    if (!identityId) {
-      sent.where({ 'author.name': id[0], 'author.value': id[1] });
-      sent.groupBy('author.name', 'author.value');
-      sent.select(this.knex.raw(sentSql));
-      received.where({ 'recipient.name': id[0], 'recipient.value': id[1] });
-      received.groupBy('recipient.name', 'recipient.value');
-      received.select(this.knex.raw(receivedSql));
-    }
+      .where('m.public', dbTrue)
+      .where({ 'recipient.name': id[0], 'recipient.value': id[1] })
+      .groupBy('recipient.name', 'recipient.value')
+      .select(this.knex.raw(receivedSql));
 
     const response = await Promise.all([sent, received]);
     const res = Object.assign({}, response[0][0], response[1][0]);
@@ -958,23 +942,38 @@ class IdentifiDB {
       }
     });
 
-    if (options.viewpoint && !options.maxDistance) {
-      const identityIds = [];
-      if (identityId) {
-        identityIds.push(identityId);
+    let identityId;
+    const identityIds = [];
+    if (options.viewpoint && options.maxDistance > -1) {
+      const r = await this.knex('IdentityAttributes')
+        .where({
+          name: id[0],
+          value: id[1],
+          viewpoint_name: options.viewpoint[0],
+          viewpoint_value: options.viewpoint[1],
+        })
+        .select('identity_id');
+      if (r.length) {
+        identityId = r[0].identity_id;
+        r.forEach((row) => {
+          identityIds.push(row.identity_id);
+        });
       }
+    }
+
+    if (options.viewpoint && !options.maxDistance) {
       await this.knex('IdentityStats')
-        .where('identity_id', 'in', identityIds)
+        .whereIn('identity_id', identityIds)
         .delete();
       if (identityId) {
-        this.knex('IdentityStats')
+        await this.knex('IdentityStats')
           .insert({
             identity_id: identityId,
             viewpoint_name: options.viewpoint[0],
             viewpoint_value: options.viewpoint[1],
             positive_score: res.received_positive || 0,
             negative_score: res.received_negative || 0,
-          }).return();
+          });
       }
     }
 
