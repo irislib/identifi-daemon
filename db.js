@@ -8,7 +8,7 @@ const schema = require('./schema');
 
 const MY_TRUST_INDEX_DEPTH = 4;
 const IPFS_INDEX_WIDTH = 200;
-const REBUILD_INDEXES_IF_NEW_MSGS_GT = 30;
+const REBUILD_INDEXES_IF_NEW_MSGS_GT = 1;
 
 class IdentifiDB {
   constructor(knex) {
@@ -76,6 +76,8 @@ class IdentifiDB {
       });
       let i;
       const queries = [];
+      queries.push(this.setCachedIdentityProfile(message.signedData.author, ''));
+      queries.push(this.setCachedIdentityProfile(message.signedData.recipient, ''));
       for (i = 0; i < message.signedData.author.length; i += 1) {
         queries.push(trx('MessageAttributes').insert({
           message_hash: message.hash,
@@ -115,33 +117,29 @@ class IdentifiDB {
       } else {
         return;
       }
-      /* rebuilding the indexes is more efficient than
-      inserting large number of entries individually */
-      if (messages.length < REBUILD_INDEXES_IF_NEW_MSGS_GT) {
-        let q = Promise.resolve();
-        // remove identity index entries that point to expired identity profiles
-        Object.keys(this.ipfsIdentityIndexKeysToRemove).forEach((msg) => {
-          this.ipfsIdentityIndexKeysToRemove[msg].forEach((key) => {
-            q = q.then(() => {
-              const q2 = this.ipfsIdentitiesByDistance.delete(key);
-              const q3 = this.ipfsIdentitiesBySearchKey.delete(key.substr(key.indexOf(':') + 1));
-              return util.timeoutPromise(Promise.all([q2, q3]), 30000);
-            }).then(() => console.log('deleted old entry', key));
-            delete this.ipfsIdentityIndexKeysToRemove[msg];
-          });
+      let q = Promise.resolve();
+      // remove identity index entries that point to expired identity profiles
+      Object.keys(this.ipfsIdentityIndexKeysToRemove).forEach((msg) => {
+        this.ipfsIdentityIndexKeysToRemove[msg].forEach((key) => {
+          q = q.then(() => {
+            const q2 = this.ipfsIdentitiesByDistance.delete(key);
+            const q3 = this.ipfsIdentitiesBySearchKey.delete(key.substr(key.indexOf(':') + 1));
+            return util.timeoutPromise(Promise.all([q2, q3]), 30000);
+          }).then(() => console.log('deleted old entry', key));
+          delete this.ipfsIdentityIndexKeysToRemove[msg];
         });
-        messages.forEach((msg) => {
-          const message = Message.decode(msg);
-          const d = new Date(message.saved_at).toISOString();
-          if (d > this.lastIpfsIndexedMessageSavedAt) {
-            this.lastIpfsIndexedMessageSavedAt = d;
-          }
-          q = q.then(() => this.ipfsUtils.addMessageToIpfsIndex(message));
-        });
-        const r = await util.timeoutPromise(q, 200000);
-        if (typeof r === 'undefined') {
-          this.ipfsUtils.addIndexesToIpfs();
+      });
+      messages.forEach((msg) => {
+        const message = Message.decode(msg);
+        const d = new Date(message.saved_at).toISOString();
+        if (d > this.lastIpfsIndexedMessageSavedAt) {
+          this.lastIpfsIndexedMessageSavedAt = d;
         }
+        q = q.then(() => this.ipfsUtils.addMessageToIpfsIndex(message));
+      });
+      const r = await util.timeoutPromise(q, 200000);
+      if (typeof r === 'undefined') {
+        this.ipfsUtils.addIndexesToIpfs();
       }
       this.ipfsIdentityIndexKeysToRemove = {};
       if (messages.length) {
@@ -167,13 +165,31 @@ class IdentifiDB {
 
   async getIdentityStats(uniqueAttr, viewpoint) {
     return this.knex.from('IdentityAttributes').where({
-      name: uniqueAttr.name || uniqueAttr[0],
-      type: uniqueAttr.value || uniqueAttr[1],
+      name: uniqueAttr[0],
+      type: uniqueAttr[1],
       viewpoint_name: viewpoint[0],
       viewpoint_type: viewpoint[1],
     })
       .innerJoin('IdentityStats', 'IdentityAttributes.identity_id', 'IdentityStats.identity_id')
       .select('*');
+  }
+
+  async setCachedIdentityProfile(attrs, identityProfile) {
+    const queries = [];
+    attrs.forEach((attr) => {
+      if (this.isUniqueType(attr[0])) {
+        const q = this.knex('IdentityStats as ist')
+          .innerJoin('IdentityAttributes as ia', 'ia.identity_id', 'ist.identity_id')
+          .where({
+            'ia.name': attr[0],
+            'ia.value': attr[1],
+            'ia.viewpoint_name': this.MY_ID[0],
+            'ia.viewpoint_value': this.MY_ID[1],
+          }).update('ist.cached_identity_profile', identityProfile);
+        queries.push(q);
+      }
+    });
+    return Promise.all(queries);
   }
 
   async getIdentityProfile(attrs, useCache = false) {
