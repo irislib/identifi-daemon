@@ -1188,10 +1188,10 @@ class IdentifiDB {
     return this.knex
       .from('IdentityAttributes')
       .where({
-        viewpoint_name: viewpoint[0],
-        viewpoint_value: viewpoint[1],
-        name: identifier[0],
-        value: identifier[1],
+        'IdentityAttributes.viewpoint_name': viewpoint[0],
+        'IdentityAttributes.viewpoint_value': viewpoint[1],
+        'IdentityAttributes.name': identifier[0],
+        'IdentityAttributes.value': identifier[1],
       })
       .innerJoin('UniqueAttributeTypes', 'IdentityAttributes.name', 'UniqueAttributeTypes.name')
       .select('IdentityAttributes.identity_id');
