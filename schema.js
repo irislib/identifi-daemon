@@ -95,6 +95,7 @@ function init(db) {
     t.integer('negative_score').unsigned().notNullable().default(0);
     t.integer('sent_positive').unsigned().notNullable().default(0);
     t.integer('sent_negative').unsigned().notNullable().default(0);
+    t.string('cached_identity_profile').notNullable().default('');
     t.index(['viewpoint_name', 'viewpoint_value', 'distance']);
   }).catch(catcher));
 

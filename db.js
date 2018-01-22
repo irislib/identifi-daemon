@@ -165,7 +165,18 @@ class IdentifiDB {
     return [];
   }
 
-  async getIdentityProfile(attrs) {
+  async getIdentityStats(uniqueAttr, viewpoint) {
+    return this.knex.from('IdentityAttributes').where({
+      name: uniqueAttr.name || uniqueAttr[0],
+      type: uniqueAttr.value || uniqueAttr[1],
+      viewpoint_name: viewpoint[0],
+      viewpoint_type: viewpoint[1],
+    })
+      .innerJoin('IdentityStats', 'IdentityAttributes.identity_id', 'IdentityStats.identity_id')
+      .select('*');
+  }
+
+  async getIdentityProfile(attrs, useCache = false) {
     const identityProfile = { attrs };
     if (!attrs.length) {
       return identityProfile;
@@ -174,6 +185,17 @@ class IdentifiDB {
     for (let i = 0; i < attrs.length; i += 1) {
       if (this.isUniqueType(attrs[i].name)) {
         uniqueAttr = attrs[i];
+      }
+    }
+
+    const identityIdQuery = this.getIdentityID(uniqueAttr, this.MY_ID);
+
+    if (useCache) {
+      const res = await this.knex.from('IdentityStats')
+        .select('cached_identity_profile').whereIn('identity_id', identityIdQuery);
+      if (res.length > 0 && res[0].cached_identity_profile &&
+          res[0].cached_identity_profile.length > 0) {
+        return JSON.parse(res[0].cached_identity_profile);
       }
     }
 
@@ -221,6 +243,9 @@ class IdentifiDB {
     } catch (e) {
       console.log('adding', attrs, 'failed:', e);
     }
+    await this.knex('IdentityStats')
+      .update('cached_identity_profile', JSON.stringify(identityProfile))
+      .whereIn('identity_id', identityIdQuery);
     return identityProfile;
   }
 
@@ -1162,8 +1187,8 @@ class IdentifiDB {
     return this.knex
       .from('IdentityAttributes')
       .where({
-        viewpoint_name: viewpoint[0],
-        viewpoint_value: viewpoint[1],
+        viewpoint_name: viewpoint.name || viewpoint[0],
+        viewpoint_value: viewpoint.value || viewpoint[1],
         name: identifier[0],
         value: identifier[1],
       })

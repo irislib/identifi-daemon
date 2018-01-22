@@ -334,7 +334,7 @@ class IpfsUtils {
   }
 
   async addIdentityToIpfsIndex(attrs) {
-    const ip = await this.db.getIdentityProfile(attrs);
+    const ip = await this.db.getIdentityProfile(attrs, false);
     console.log('adding identityprofile to ipfs', ip);
     const r = await this.db.ipfs.files.add(Buffer.from(JSON.stringify(ip), 'utf8'));
     if (r.length) {
@@ -353,7 +353,7 @@ class IpfsUtils {
   }
 
   async getIndexKeysByIdentity(attrs) {
-    const identityProfile = await this.db.getIdentityProfile(attrs);
+    const identityProfile = await this.db.getIdentityProfile(attrs, true);
     const keys = [];
     const hash = crypto.createHash('md5').update(JSON.stringify(identityProfile)).digest('base64');
     this.constructor.getIdentityProfileIndexKeys(identityProfile, hash).forEach((key) => {
@@ -380,7 +380,7 @@ class IpfsUtils {
         if (i >= r.length) {
           return;
         }
-        const identityProfile = await this.db.getIdentityProfile(r[i]);
+        const identityProfile = await this.db.getIdentityProfile(r[i], true);
         const hash = crypto.createHash('md5').update(JSON.stringify(identityProfile)).digest('base64');
         identityProfilesByHash[hash] = identityProfile;
         this.constructor.getIdentityProfileIndexKeys(identityProfile, hash).forEach((key) => {
