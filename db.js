@@ -187,6 +187,7 @@ class IdentifiDB {
         uniqueAttr = attrs[i];
       }
     }
+    uniqueAttr = [uniqueAttr.name, uniqueAttr.val];
 
     const identityIdQuery = this.getIdentityID(uniqueAttr, this.MY_ID);
 
@@ -200,7 +201,7 @@ class IdentifiDB {
     }
 
     const received = await this.getMessages({
-      recipient: [uniqueAttr.name, uniqueAttr.val],
+      recipient: uniqueAttr,
       limit: 10000,
       orderBy: 'timestamp',
       direction: 'asc',
@@ -221,7 +222,7 @@ class IdentifiDB {
         identityProfile.received = receivedIndex.rootNode.hash;
       }
       const sent = await this.getMessages({
-        author: [uniqueAttr.name, uniqueAttr.val],
+        author: uniqueAttr,
         limit: 10000,
         orderBy: 'timestamp',
         direction: 'asc',
@@ -1187,8 +1188,8 @@ class IdentifiDB {
     return this.knex
       .from('IdentityAttributes')
       .where({
-        viewpoint_name: viewpoint.name || viewpoint[0],
-        viewpoint_value: viewpoint.value || viewpoint[1],
+        viewpoint_name: viewpoint[0],
+        viewpoint_value: viewpoint[1],
         name: identifier[0],
         value: identifier[1],
       })
