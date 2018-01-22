@@ -334,7 +334,7 @@ class IpfsUtils {
   }
 
   async addIdentityToIpfsIndex(attrs) {
-    const ip = await this.db.getIdentityProfile(attrs, false);
+    const ip = await this.db.getIdentityProfile(attrs, true);
     console.log('adding identityprofile to ipfs', ip);
     const r = await this.db.ipfs.files.add(Buffer.from(JSON.stringify(ip), 'utf8'));
     if (r.length) {
