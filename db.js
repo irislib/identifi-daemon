@@ -178,14 +178,15 @@ class IdentifiDB {
     const queries = [];
     attrs.forEach((attr) => {
       if (this.isUniqueType(attr[0])) {
-        const q = this.knex('IdentityStats as ist')
-          .innerJoin('IdentityAttributes as ia', 'ia.identity_id', 'ist.identity_id')
-          .where({
-            'ia.name': attr[0],
-            'ia.value': attr[1],
-            'ia.viewpoint_name': this.MY_ID[0],
-            'ia.viewpoint_value': this.MY_ID[1],
-          }).update('ist.cached_identity_profile', identityProfile);
+        const q = this.knex('IdentityStats as st')
+          .innerJoin('IdentityAttributes as ia', (qb) => {
+            qb.on('ia.name', '=', this.knex.raw(attr[0]));
+            qb.on('ia.value', '=', this.knex.raw(attr[1]));
+            qb.on('ia.viewpoint_name', '=', this.knex.raw(this.MY_ID[0]));
+            qb.on('ia.viewpoint_value', '=', this.knex.raw(this.MY_ID[1]));
+            qb.on('ia.identity_id', '=', 'st.identity_id');
+          })
+          .update('cached_identity_profile', identityProfile);
         queries.push(q);
       }
     });
@@ -569,15 +570,15 @@ class IdentifiDB {
     }
 
     // Find out existing identity_id for the identifier
-    const getExistingId = this.knex.from('IdentityAttributes as ia')
+    const getExistingId = this.knex.from('IdentityAttributes')
       .select('identity_id')
       .where({
-        'ia.name': options.id[0],
-        'ia.value': options.id[1],
+        name: options.id[0],
+        value: options.id[1],
         viewpoint_name: options.viewpoint[0],
         viewpoint_value: options.viewpoint[1],
       })
-      .innerJoin('UniqueAttributeTypes as uidt', 'uidt.name', 'ia.name');
+      .innerJoin('UniqueAttributeTypes as uidt', 'uidt.name', 'IdentityAttributes.name');
 
     const r = await getExistingId;
     let identityId;
