@@ -8,7 +8,7 @@ const schema = require('./schema');
 
 const MY_TRUST_INDEX_DEPTH = 4;
 const IPFS_INDEX_WIDTH = 200;
-const REBUILD_INDEXES_IF_NEW_MSGS_GT = 1;
+const REBUILD_INDEXES_IF_NEW_MSGS_GT = 0;
 
 class IdentifiDB {
   constructor(knex) {
