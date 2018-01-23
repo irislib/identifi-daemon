@@ -164,13 +164,13 @@ class IdentifiDB {
   }
 
   async getIdentityStats(uniqueAttr, viewpoint) {
-    return this.knex.from('IdentityAttributes').where({
-      name: uniqueAttr[0],
-      type: uniqueAttr[1],
-      viewpoint_name: viewpoint[0],
-      viewpoint_type: viewpoint[1],
+    return this.knex.from('IdentityAttributes as ia').where({
+      'ia.name': uniqueAttr[0],
+      'ia.type': uniqueAttr[1],
+      'ia.viewpoint_name': viewpoint[0],
+      'ia.viewpoint_type': viewpoint[1],
     })
-      .innerJoin('IdentityStats', 'IdentityAttributes.identity_id', 'IdentityStats.identity_id')
+      .innerJoin('IdentityStats', 'ia.identity_id', 'IdentityStats.identity_id')
       .select('*');
   }
 
@@ -570,15 +570,15 @@ class IdentifiDB {
     }
 
     // Find out existing identity_id for the identifier
-    const getExistingId = this.knex.from('IdentityAttributes')
+    const getExistingId = this.knex.from('IdentityAttributes as ia')
       .select('identity_id')
       .where({
-        name: options.id[0],
-        value: options.id[1],
-        viewpoint_name: options.viewpoint[0],
-        viewpoint_value: options.viewpoint[1],
+        'ia.name': options.id[0],
+        'ia.value': options.id[1],
+        'ia.viewpoint_name': options.viewpoint[0],
+        'ia.viewpoint_value': options.viewpoint[1],
       })
-      .innerJoin('UniqueAttributeTypes as uidt', 'uidt.name', 'IdentityAttributes.name');
+      .innerJoin('UniqueAttributeTypes as uidt', 'uidt.name', 'ia.name');
 
     const r = await getExistingId;
     let identityId;
